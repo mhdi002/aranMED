@@ -1,0 +1,40 @@
+INFO:     127.0.0.1:50550 - "GET /docs HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60392 - "GET /health HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:60417 - "GET / HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:61175 - "GET /api/health HTTP/1.1" 200 OK
+INFO:     127.0.0.1:61207 - "GET /api/templates HTTP/1.1" 200 OK
+INFO:     127.0.0.1:61208 - "GET /api/health HTTP/1.1" 200 OK
+INFO:     127.0.0.1:61338 - "GET /api/health HTTP/1.1" 200 OK
+INFO:     127.0.0.1:61338 - "POST /api/auth/login HTTP/1.1" 200 OK
+INFO:     127.0.0.1:61338 - "GET /api/templates HTTP/1.1" 200 OK
+INFO:     127.0.0.1:61359 - "POST /api/auth/login HTTP/1.1" 200 OK
+INFO:     127.0.0.1:61359 - "GET /api/templates HTTP/1.1" 200 OK
+INFO:     127.0.0.1:61360 - "POST /api/chat HTTP/1.1" 503 Service Unavailable
+INFO:     127.0.0.1:59964 - "GET /api/health HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59973 - "POST /api/auth/login HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59974 - "GET /api/templates HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59978 - "POST /api/transcribe HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59987 - "POST /api/transcribe HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59995 - "POST /api/transcribe HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60018 - "POST /api/transcribe HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60129 - "GET /api/health HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57309 - "GET /api/templates HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57310 - "GET /api/health HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60042 - "POST /api/report HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57313 - "POST /api/chat HTTP/1.1" 400 Bad Request
+INFO:     127.0.0.1:57314 - "POST /api/chat HTTP/1.1" 503 Service Unavailable
+INFO:     127.0.0.1:61924 - "GET /api/templates HTTP/1.1" 200 OK
+INFO:     127.0.0.1:61925 - "GET /api/health HTTP/1.1" 200 OK
+INFO:     127.0.0.1:61924 - "GET /api/templates HTTP/1.1" 200 OK
+INFO:     127.0.0.1:61925 - "GET /api/health HTTP/1.1" 200 OK
+INFO:     127.0.0.1:61931 - "GET /api/health HTTP/1.1" 200 OK
+INFO:     127.0.0.1:61935 - "GET /api/health HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60868 - "GET /api/health HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60871 - "POST /api/auth/login HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60872 - "GET /api/templates HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60873 - "POST /api/transcribe HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60878 - "POST /api/transcribe HTTP/1.1" 200 OK
+INFO:     127.0.0.1:61192 - "POST /api/transcribe HTTP/1.1" 200 OK
+INFO:     127.0.0.1:61195 - "POST /api/transcribe HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63126 - "GET /api/templates HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63127 - "GET /api/health HTTP/1.1" 200 OK

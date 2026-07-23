@@ -1,0 +1,17 @@
+INFO:     127.0.0.1:57146 - "GET /api/health HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49243 - "POST /api/auth/login HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49244 - "POST /api/chat HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50422 - "GET /api/health HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50441 - "GET /api/templates HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50442 - "GET /api/health HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50469 - "GET /api/templates HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50470 - "GET /api/health HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50502 - "GET /api/health HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50523 - "GET /api/templates HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50524 - "GET /api/health HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50609 - "GET /api/health HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50626 - "GET /api/templates HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50627 - "GET /api/health HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50609 - "POST /api/auth/login HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50609 - "POST /api/knowledge/ask HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58920 - "GET /api/health HTTP/1.1" 200 OK

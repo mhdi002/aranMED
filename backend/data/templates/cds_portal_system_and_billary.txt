@@ -1,0 +1,13 @@
+# template_id: cds_portal_system_and_billary
+# title: Color Doppler Sonography of Portal System & Hepatic System
+# source_name: Portal system and billary
+# source_file: Portal system and billary.rtf
+
+Color Doppler Sonography of Portal System & Hepatic System:
+According to gray scale, color flow mapping and spectral analysis of them, and also intra hepatic branches, the study reveals:
+
+Liver is normal in size and shape with normal parenchymal echo without s.o.l or intra hepatic bile duct dilatation.
+Portal vein is patent with normal diameter and shows normal color flow mapping (hepatopetal) with normal spectral wave form. Mean maximum velocity of portal spectral vein is ? cm/sec.
+Hepatic veins are patent with normal color flow as well as normal spectral wave form.
+Hepatic artery is patent with normal low resistant flow with no evidence of stenosis.
+Visualized parts of splenic and superior mesenteric vein are patent and unremarkable.

@@ -1,0 +1,31 @@
+INFO:     127.0.0.1:62613 - "GET /api/health HTTP/1.1" 200 OK
+INFO:     127.0.0.1:62661 - "GET /api/health HTTP/1.1" 200 OK
+INFO:     127.0.0.1:62661 - "POST /api/auth/login HTTP/1.1" 200 OK
+INFO:     127.0.0.1:62661 - "POST /api/transcribe HTTP/1.1" 200 OK
+INFO:     127.0.0.1:62661 - "POST /api/transcribe HTTP/1.1" 200 OK
+INFO:     127.0.0.1:62661 - "POST /api/transcribe HTTP/1.1" 200 OK
+INFO:     127.0.0.1:62661 - "POST /api/transcribe HTTP/1.1" 200 OK
+INFO:     127.0.0.1:62661 - "POST /api/transcribe HTTP/1.1" 200 OK
+INFO:     127.0.0.1:62661 - "POST /api/transcribe HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60441 - "GET /api/health HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60441 - "POST /api/auth/login HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60441 - "POST /api/transcribe HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60441 - "POST /api/transcribe HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60441 - "POST /api/transcribe HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60441 - "POST /api/transcribe HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60441 - "POST /api/transcribe HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60441 - "POST /api/transcribe HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59862 - "POST /api/auth/login HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59869 - "POST /api/transcribe HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56310 - "POST /api/auth/login HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56311 - "POST /api/transcribe HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60617 - "POST /api/transcribe HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60629 - "POST /api/transcribe HTTP/1.1" 200 OK
+INFO:     127.0.0.1:64772 - "POST /api/transcribe HTTP/1.1" 200 OK
+INFO:     127.0.0.1:64786 - "POST /api/transcribe HTTP/1.1" 200 OK
+INFO:     127.0.0.1:64881 - "POST /api/transcribe HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52371 - "GET /api/health HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52371 - "POST /api/report HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:52371 - "POST /api/report HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:61675 - "GET /api/templates HTTP/1.1" 200 OK
+INFO:     127.0.0.1:61675 - "POST /api/report HTTP/1.1" 200 OK

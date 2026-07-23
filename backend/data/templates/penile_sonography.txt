@@ -1,0 +1,9 @@
+# template_id: penile_sonography
+# title: Penile Sonography
+# source_name: Penile Sonography
+# source_file: Penile Sonography.rtf
+
+Penile Sonography:
+
+Tunicae albuginea of both corpus cavernosum and corpus spongiosum are intact with normal vascularity and no sign of collection or abscess is seen at present time.
+No evidence of edema is noted.

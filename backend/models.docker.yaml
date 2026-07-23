@@ -1,0 +1,94 @@
+# Docker / Linux server config — mounted by docker-compose instead of models.yaml.
+# Windows-only providers (CrispASR, VibeVoice, local GGUF vision) are disabled.
+#
+# LLM (Ollama):
+#   Default stock tag: qwen2.5:7b  (works with: ollama pull qwen2.5:7b)
+#   Override in .env:  OLLAMA_MODEL=qwen3.5-9b-custom  (requires your Modelfile)
+#
+# Both OLLAMA_HOST and OLLAMA_MODEL are set by docker-compose.yml.
+
+core: qwen2.5-7b [ollama]
+asr: whisper-large-v3 [hf_asr]
+
+models:
+- role: core
+  name: qwen2.5-7b
+  provider: ollama
+  enabled: true
+  default: true
+  config:
+    model: ${OLLAMA_MODEL}
+    api_base: ${OLLAMA_HOST}
+    temperature: 0.2
+    num_ctx: 8192
+
+# Optional: enable if you created a custom Modelfile and set OLLAMA_MODEL in .env
+- role: core
+  name: qwen3.5-9b-custom
+  provider: ollama
+  enabled: false
+  default: false
+  config:
+    model: qwen3.5-9b-custom
+    api_base: ${OLLAMA_HOST}
+    temperature: 0.2
+    num_ctx: 8192
+
+- role: asr
+  name: whisper-large-v3
+  provider: hf_asr
+  enabled: true
+  default: true
+  config:
+    model_id: "openai/whisper-large-v3"
+    device: "cuda"
+    dtype: "float16"
+    target_sr: 16000
+    chunk_length_s: ${WHISPER_CHUNK_LENGTH_S:-30}
+    stride_length_s: ${WHISPER_STRIDE_LENGTH_S:-0}
+    max_shortform_s: ${WHISPER_MAX_SHORTFORM_S:-30}
+    task: "transcribe"
+    force_language: false
+    output_english: true
+
+- role: asr
+  name: vibevoice-codeswitch
+  provider: codeswitch_asr
+  enabled: false
+  default: false
+  config: {}
+
+- role: asr
+  name: vibevoice-local
+  provider: crispasr
+  enabled: false
+  default: false
+  config: {}
+
+# Additive Triton ASR — enable when TRITON_URL points at a running server.
+# Prefer host :8002 (container :8000); :8001 is often MedRAG embed.
+- role: asr
+  name: whisper-triton
+  provider: triton_asr
+  enabled: true
+  default: false
+  config:
+    url: "${TRITON_URL}"
+    model_name: "${TRITON_MODEL:-whisper}"
+    protocol: "${TRITON_PROTOCOL:-http}"
+    timeout: "${TRITON_TIMEOUT_SEC:-300}"
+    target_sr: 16000
+    output_english: true
+
+- role: vision
+  name: radiology-infer-mini
+  provider: llamacpp_python
+  enabled: false
+  default: false
+  config: {}
+
+runtime:
+  max_warm_models: 2
+  vram_budget_gb: 18
+  history_keep_turns: 12
+  history_summary_trigger: 24

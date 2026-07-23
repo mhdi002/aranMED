@@ -1,0 +1,8 @@
+# template_id: cds_rt_lower_ext_art
+# title: Color Doppler sonography of Rt lower EXT Arteries
+# source_name: RT lower ext art
+# source_file: RT lower ext art.rtf
+
+Color Doppler sonography of Rt lower EXT Arteries:
+According to gray scale, color flow mapping and spectral analysis of RT Lower EXT Arteries, the study reveals:
+RT. side common femoral, superficial femoral& deep femoral & popliteal arteries till level of trifurcation and also distal part of posterior tibialis and dorsalis pedis arteries shows normal caliber with normal color flow encoding as well as normal spectral waveform, so There is no sign of stenosis or occlusion, also no sign of thrombosis or aneurysmal dilatation is seen.

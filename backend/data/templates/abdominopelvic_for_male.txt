@@ -1,0 +1,45 @@
+# template_id: abdominopelvic_for_male
+# title: Abdominopelvic Sonography
+# source_name: Abdominopelvic for male
+# source_file: Abdominopelvic for male.rtf
+
+Abdominopelvic Sonography:
+This study is suboptimal due to; however:
+Liver is normal in size and shows normal parenchymal echogenicity and no sign of space occupying lesion is noted.
+*Liver is normal in size and shows increased parenchymal echogenicity so correlation with LFT is recommended and no sign of space occupying lesion is noted.
+*Liver is normal in size and shows increased parenchymal echogenicity in favor of fatty liver (grade ) and no sign of space occupying lesion is noted.
+*Visualized part of liver shows normal parenchymal echogenicity and no sign of space occupying lesion is noted.
+*Visualized part of liver shows increased parenchymal echogenicity in favor of fatty liver (grade ) and no sign of space occupying lesion is noted.
+Intra hepatic biliary tree and CBD are not dilated.
+*Intra hepatic biliary tree and CBD are dilated.
+*IVC and portal vein and hepatic vein and artery are patent.
+Gall bladder is well distended with no stone, sludge or pericholecystic fluid or wall thickening.
+*Gall bladder is distended with no stone, sludge or pericholecystic fluid or wall thickening.
+*Gall bladder is semi distended with no stone, sludge or pericholecystic fluid or wall thickening.
+*Gall bladder is not seen due to previous resection so correlation with ******* is recommended.
+*Gall bladder is contracted.
+*Sonographic murphy sign is negative.
+Spleen is normal in size and shows normal parenchymal echo with no S.O.L.
+*Visualized part of spleen shows normal parenchymal echo with no S.O.L.
+*Spleen is prominent in size and shows normal parenchymal echo with no S.O.L.
+Visualized parts of pancreas and para aortic area are unremarkable.
+*Pancreas and Para aortic area could not be evaluated due to severe gas shadow.
+(Lt=XX, Rt=XX mm)
+Both kidneys are normal in size and show normal cortical parenchymal echogenicity and no sign of stone, stasis or perinephric collection is noted.
+*XX kidney is normal in size and shows normal cortical parenchymal echogenicity and no sign of stone, stasis or perinephric collection is noted.
+*Both kidneys are normal in size and show increased cortical parenchymal echogenicity suggestive of parenchymal damage so correlation with BUN\Cr is recommended and no sign of stone, stasis or perinephric collection is noted.
+*XX kidney is normal in size and shows increased cortical parenchymal echogenicity suggestive of parenchymal damage so correlation with BUN\Cr is recommended and no sign of stone, stasis or perinephric collection is noted.
+*XXX stasis is seen in XX kidney, associated with dilation of proximal part of XX ureter; however other parts cannot be evaluated due to gas shadow.
+Ureters are not dilated.
+*Lt ureter is not dilated.
+*Rt ureter is not dilated,
+*Proximal part of XX ureter is dilated however other parts cannot be evaluated due to gas shadow.
+Urinary bladder is well distended, with no stone or wall thickening.
+*Urinary bladder is empty so evaluation of pelvic organs is not possible.
+*Urinary bladder is near empty so evaluation of pelvic organs is not possible.
+*Urinary bladder is empty containing balloon of Foley catheter so evaluation of pelvic organs is not possible.
+*Urinary bladder is semi distended, with no stone or wall thickening.
+*Urinary bladder is semi distended and evidence of echogenic debris is seen in it suggestive of cystitis so correlation with U/A is recommended and no stone or wall thickening is noted.
+Uterus has normal size and echopattern with no sign of SOL .
+Both ovaries have normal size and echo pattern without solid or cystic lesion.
+No free fluid is seen in abdominopelvic cavity at present time.

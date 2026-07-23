@@ -1,0 +1,21 @@
+# template_id: ob
+# title: OB Sonography
+# source_name: OB
+# source_file: OB .rtf
+
+OB Sonography:
+Fetal Status:
+Single alive fetus is noted with cephalic position and adequate amniotic fluid.
+Placenta:
+Fetal measurement:
+BPD:		xx mm		compatible with xx weeks and xx days
+HC:		xx mm		compatible with xx weeks and xx days
+AC:		xx mm		compatible with xx weeks and xx days
+FL:		xx mm		compatible with xx weeks and xx days
+AUA:						xx weeks and xx days
+FHR:				bpm and
+EFW:				xx gr ± xx gr
+Normal heart beat and activity is seen.
+Normal color flow and spectral wave form is seen in both umbilical arteries with adequate diastolic flow. Normal umbilical vein is seen.
+Both MCA are normal in color flow and wave form. So no evidence for IUGR is demonstrated.
+Activity is normal.

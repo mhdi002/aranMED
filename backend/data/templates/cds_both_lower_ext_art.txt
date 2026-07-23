@@ -1,0 +1,9 @@
+# template_id: cds_both_lower_ext_art
+# title: Color doppler Sonography of both lower EXT Arteries
+# source_name: Both lower ext art
+# source_file: Both lower ext art.rtf
+
+Color doppler Sonography of both lower EXT Arteries:
+
+According to gray scale, color flow mapping and spectral analysis the study reveals:
+Both side common femoral, superficial femoral& deep femoral & popliteal arteries till level of trifurcation and also distal part of posterior tibialis and dorsalis pedis arteries shows normal caliber with normal color flow encoding as well as normal spectral waveform, so there is no sign of stenosis or occlusion, also no sign of thrombosis or aneurysmal dilatation is seen.

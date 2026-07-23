@@ -1,0 +1,25 @@
+# template_id: k_u_b
+# title: K.U.B. Sonography
+# source_name: K.U.B
+# source_file: K.U.B .rtf
+
+K.U.B. Sonography:
+(Lt=XX mm, Rt=XX mm)
+Both kidneys are normal in size and show normal cortical parenchymal echogenicity and no sign of stone, stasis or perinephric collection is noted.
+*XX kidney is normal in size and shows normal cortical parenchymal echogenicity and no sign of stone, stasis or perinephric collection is noted.
+*Both kidneys are normal in size and show increased cortical parenchymal echogenicity suggestive of parenchymal damage so correlation with BUN\Cr is recommended and no sign of stone, stasis or perinephric collection is noted.
+*XX kidney is normal in size and shows increased cortical parenchymal echogenicity suggestive of parenchymal damage so correlation with BUN\Cr is recommended and no sign of stone, stasis or perinephric collection is noted.
+*XX stasis is seen in XX kidney, associated with dilation of proximal part of XX ureter; however other parts cannot be evaluated due to gas shadow.
+Ureters are not dilated.
+*Lt ureter is not dilated.
+*Rt ureter is not dilated,
+*Proximal part of XX ureter is dilated however other parts cannot be evaluated due to gas shadow.
+Urinary bladder is well distended, with no stone or wall thickening.
+*Urinary bladder is distended, with no stone or wall thickening.
+*Urinary bladder is empty so evaluation of pelvic organs is not possible.
+*Urinary bladder is near empty so evaluation of pelvic organs is not possible.
+*Urinary bladder is empty containing balloon of Foley catheter so evaluation of pelvic organs is not possible.
+*Urinary bladder is semi distended, with no stone or wall thickening.
+*Urinary bladder is semi distended containing echogenic debris so correlation with U/A, U/C is recommended and no stone or wall thickening is noted.
+Prostate has normal size and echopattern with no sign of SOL.
+No free fluid is seen in abdominopelvic cavity at present time.

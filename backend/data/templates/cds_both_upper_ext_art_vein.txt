@@ -1,0 +1,13 @@
+# template_id: cds_both_upper_ext_art_vein
+# title: Color doppler Sonography of both upper extremity arteries and veins
+# source_name: Both upper ext art&vein
+# source_file: Both upper ext art&vein.rtf
+
+Color doppler Sonography of both upper extremity arteries and veins:
+
+According to gray scale color flow mapping and spectral analysis, the study reveals:
+
+Normal configuration and flow waves of the arterial and venous system of both upper extremity including both brachial, subclavian, axillary and ulnar and radial and cephalic and basilic veins are noted.
+No intra luminal clot is demonstrated.
+No abrupt change in flow velocity or spectral analysis is seen.
+Normal arterial flow pattern and velocities are noted in both side subclavian and axillary and brachial and radial and ulnar arteries are noted.

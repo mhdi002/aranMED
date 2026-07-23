@@ -1,0 +1,23 @@
+
+
+Name          : full_system_verify.json
+Length        : 8927
+LastWriteTime : 7/22/2026 11:54:40 AM
+
+Name          : full_system_verify.md
+Length        : 1320
+LastWriteTime : 7/22/2026 11:54:40 AM
+
+
+
+
+
+
+Id        : 11644
+CPU       : 0
+StartTime : 7/22/2026 11:57:13 AM
+Path      : C:\Users\mhf\Desktop\asr main\asr main\151-main\.venv\Scripts\python.exe
+
+
+
+

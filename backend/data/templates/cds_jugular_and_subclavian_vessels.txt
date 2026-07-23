@@ -1,0 +1,8 @@
+# template_id: cds_jugular_and_subclavian_vessels
+# title: Color doppler sonography of both sides jugular and subclavian vessels
+# source_name: Jugular and subclavian vessels
+# source_file: Jugular and subclavian vessels.rtf
+
+Color doppler sonography of both sides jugular and subclavian vessels:
+Both sided jugular veins are normal with normal cardiac phasicity without thrombosis. Both jugular veins are normal without thrombosis.
+Both Subclavian artery and vein are normal in diameter with normal color flow and wave form.

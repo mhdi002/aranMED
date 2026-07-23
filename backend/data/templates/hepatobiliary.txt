@@ -1,0 +1,23 @@
+# template_id: hepatobiliary
+# title: Hepatobiliary Sonography
+# source_name: HepatoBiliary
+# source_file: HepatoBiliary.rtf
+
+Hepatobiliary Sonography:
+This study is suboptimal due to however:
+Liver is normal in size and shows normal parenchymal echogenicity and no sign of space occupying lesion or bile ducts dilatation is noted.
+*Liver is normal in size and shows increased parenchymal echogenicity so correlation with LFT is recommended and no sign of space occupying lesion or bile ducts dilatation is noted.
+*Liver is normal in size and shows increased parenchymal echogenicity in favor of fatty liver (grade ) and no sign of space occupying lesion or bile ducts dilatation is noted.
+*Intra hepatic biliary tree and CBD are not dilated.
+*Intra hepatic biliary tree and CBD are dilated.
+*IVC and portal vein and hepatic vein and artery are patent.
+Gall bladder is well distended with no stone or wall thickening.
+*Gall bladder is semi distended with no stone or wall thickening.
+*Gall bladder is not seen due to previous resection.
+*Gall bladder is contracted.
+*No pericholecystic fluid is noted.
+*Sonographic Murphy sign is negative.
+Spleen is normal in size and shows normal parenchymal echo with no S.O.L.
+*Spleen is prominent in size and shows normal parenchymal echo with no S.O.L.
+Visualized parts of pancreas and para-aortic area are unremarkable.
+*Pancreas and Para aortic area could not be evaluated due to severe gas shadow.

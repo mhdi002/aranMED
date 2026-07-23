@@ -1,0 +1,8 @@
+# template_id: kidney_post_biopsy
+# title: Abdominopelvic Sonography Post kidney Biopsy
+# source_name: Kidney post biopsy
+# source_file: Kidney post biopsy.rtf
+
+Abdominopelvic Sonography Post kidney Biopsy:
+No hematoma or perinephric collection is seen around kidney.
+No free fluid is seen in abdominopelvic cavity.

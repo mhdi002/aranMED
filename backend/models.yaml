@@ -1,0 +1,112 @@
+﻿# Local dev / bare-metal config (Windows or Linux) — loaded by default when
+# ASR_AGENT_MODELS_YAML is unset. Docker deployments mount
+# models.docker.yaml instead (see docker-compose.yml).
+#
+# Every model-specific filesystem path below is read from an environment
+# variable (see .env.example) instead of being hardcoded, so this file works
+# unchanged across machines/OSes. Optional extra providers that need a path
+# which isn't set are left `enabled: false` — flip to `true` once you export
+# the matching env var.
+
+core: qwen3.5-9b [ollama]
+asr: whisper-large-v3 [hf_asr]
+vision: radiology-infer-mini [llamacpp_python]
+
+models:
+- role: core
+  name: qwen3.5-9b
+  provider: ollama
+  enabled: true
+  default: true
+  config:
+    model: ${OLLAMA_MODEL:-qwen3.5-9b:latest}
+    api_base: ${OLLAMA_HOST:-http://localhost:11434}
+    temperature: 0.2
+    num_ctx: 8192
+
+- role: asr
+  name: whisper-large-v3
+  provider: hf_asr
+  enabled: true
+  default: true
+  config:
+    model_id: "openai/whisper-large-v3"  # uses models/whisper-large-v3 when present locally
+    device: "${ASR_DEVICE:-auto}"
+    dtype: "${ASR_DTYPE:-float16}"
+    target_sr: 16000
+    chunk_length_s: ${WHISPER_CHUNK_LENGTH_S:-30}
+    stride_length_s: ${WHISPER_STRIDE_LENGTH_S:-0}
+    max_shortform_s: ${WHISPER_MAX_SHORTFORM_S:-30}
+    batch_size: 1
+    task: "transcribe"
+    force_language: false
+    output_english: true
+
+# Optional: VibeVoice GGUF code-switching ASR. Needs a local GGUF build of
+# CrispASR/VibeVoice — set these env vars and flip `enabled: true` to use it.
+- role: asr
+  name: vibevoice-codeswitch
+  provider: codeswitch_asr
+  enabled: false
+  default: false
+  config:
+    model_path: "${VIBEVOICE_MODEL_PATH}"
+    binary_path: "${CRISPASR_BINARY_PATH:-crispasr}"
+    lid_model: "${CRISPASR_LID_MODEL_PATH}"
+    target_sr: 16000
+    vibevoice_sr: 24000
+    window_ms: 300
+    gpu_device: 0
+    output_english: true
+
+# Optional: same VibeVoice GGUF model without LID-segment code-switching.
+- role: asr
+  name: vibevoice-local
+  provider: crispasr
+  enabled: false
+  default: false
+  config:
+    model_path: "${VIBEVOICE_MODEL_PATH}"
+    binary_path: "${CRISPASR_BINARY_PATH:-crispasr}"
+    target_sr: 24000
+    backend: vibevoice
+    force_language: false
+    language_mode: auto
+
+# Optional: NVIDIA Triton ASR (multi-request production). Additive only —
+# local whisper-large-v3 [hf_asr] stays the default. Set TRITON_URL (e.g.
+# http://127.0.0.1:8002) and leave enabled true; default stays hf_asr.
+- role: asr
+  name: whisper-triton
+  provider: triton_asr
+  enabled: true
+  default: false
+  config:
+    url: "${TRITON_URL}"
+    model_name: "${TRITON_MODEL:-whisper}"
+    protocol: "${TRITON_PROTOCOL:-http}"
+    timeout: "${TRITON_TIMEOUT_SEC:-300}"
+    target_sr: 16000
+    # Server: WHISPER_OUTPUT_ENGLISH=1 (task=translate). Client falls back via
+    # english_transcript if Persian script remains.
+    output_english: true
+
+# Optional: local GGUF vision model (Radiology-Infer-Mini). Needs the model +
+# mmproj GGUF files — set these env vars and flip `enabled: true` to use it.
+- role: vision
+  name: radiology-infer-mini
+  provider: llamacpp_python
+  enabled: false
+  default: false
+  config:
+    model_path: "${VISION_MODEL_PATH}"
+    mmproj_path: "${VISION_MMPROJ_PATH}"
+    n_ctx: 4096
+    n_gpu_layers: -1
+    vision_handler: qwen25
+
+runtime:
+  max_warm_models: 2
+  vram_budget_gb: 18
+  history_keep_turns: 12
+  history_summary_trigger: 24

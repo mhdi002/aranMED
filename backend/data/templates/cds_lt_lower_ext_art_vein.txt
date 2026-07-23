@@ -1,0 +1,13 @@
+# template_id: cds_lt_lower_ext_art_vein
+# title: Color doppler sonography of Lt lower extremity (veins and arteries)
+# source_name: LT lower ext art&vein
+# source_file: LT lower ext art&vein.rtf
+
+Color doppler sonography of Lt lower extremity (veins and arteries):
+According to gray scale color flow mapping and spectral analysis, this study reveals:
+
+Normal caliber of left side common femoral, superficial femoral and popliteal veins and also visualized parts of deep leg veins, with well compressibility and no definite clot within them.
+Color flow mapping and spectral analysis shows normal flow pattern and direction, associated with well changing of waveform with respiration.
+The calf muscle augmentation test is reactive; so there is no sign of D.V.T at the mentioned veins.
+ Left side saphenofemoral venous junction show normal caliber flow direction with no flow reversal during valsalva maneuver, also no superficial varicose vein seen.
+Left  side common femoral, superficial femoral& deep femoral & popliteal arteries till level of trifurcation and also distal part of  posterior tibialis and dorsalis pedis arteries shows normal caliber with normal color flow encoding as well as normal spectral waveform, so there is no sign of stenosis or occlusion, also no sign of thrombosis or aneurysmal dilatation is seen.

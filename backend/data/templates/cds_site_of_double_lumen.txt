@@ -1,0 +1,14 @@
+# template_id: cds_site_of_double_lumen
+# title: Color doppler sonography of site of double lumen
+# source_name: Site of double Lumen
+# source_file: Site of double Lumen.rtf
+
+Color doppler sonography of site of double lumen:
+According to gray scale, spectral analysis and color flow mapping, the study reveals:
+
+Normal color flow and flow wave is seen.
+Normal spectral analysis is detected with no stenosis or atherosclerotic change.
+No thrombosis is seen.
+No pseudo aneurysm is seen.
+No hematoma detected.
+No clot or DVT is noted.

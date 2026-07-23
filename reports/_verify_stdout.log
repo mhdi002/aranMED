@@ -1,0 +1,16 @@
+[PASS] health
+[PASS] auth_login
+[PASS] templates
+[PASS] english_asr
+[PASS] full_audio_coverage
+[PASS] report
+[PASS] embeddings_bge_m3
+[BLOCKED] medrag_ask_suite
+[PASS] report_rules_files
+[BLOCKED] knowledge_ask
+[PASS] ehr_build
+[PASS] medrag_import
+[PASS] clinical_safety_pytest
+[PASS] code_integrity
+Wrote C:\Users\mhf\Desktop\aranmed\reports\full_system_verify.json
+Wrote C:\Users\mhf\Desktop\aranmed\reports\full_system_verify.md

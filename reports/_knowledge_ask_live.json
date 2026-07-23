@@ -1,0 +1,85 @@
+﻿{
+    "answer":  "The primary sonographic criterion for acute appendicitis is an appendix measuring **â¥6 mm in diameter** that appears as a tubular structure with one blind end, lacks peristalsis, and cannot be compressed [2]. Additional diagnostic features include luminal distention, the presence of an appendicolith (often with acoustic shadowing), and a complex mass in the right lower quadrant (RLQ) or \"target sign\" appearance on transverse scans [3][4].\n\nSigns suggesting advanced or complicated appendicitis (such as gangrenous appendicitis or perforation) include asymmetric wall thickening, loss of mural lamination, abscess formation, free intraabdominal or pelvic fluid, and surrounding tissue edema [1][3]. The presence of an appendicolith is specifically noted as diagnostic for gangrenous appendicitis [1].\n\nSources used: [1], [2], [3], [4]\n\nSources:\n  [1] Ma__Mateers_Emergency_Ultrasound (p.342) score=0.918\n  [2] Ma__Mateers_Emergency_Ultrasound (p.341) score=-0.313\n  [3] Nelson Textbook of Pediatrics (p.376) score=-1.04\n  [4] Nelson Textbook of Pediatrics (p.376) score=-1.04",
+    "raw":  {
+                "answer":  "The primary sonographic criterion for acute appendicitis is an appendix measuring **â¥6 mm in diameter** that appears as a tubular structure with one blind end, lacks peristalsis, and cannot be compressed [2]. Additional diagnostic features include luminal distention, the presence of an appendicolith (often with acoustic shadowing), and a complex mass in the right lower quadrant (RLQ) or \"target sign\" appearance on transverse scans [3][4].\n\nSigns suggesting advanced or complicated appendicitis (such as gangrenous appendicitis or perforation) include asymmetric wall thickening, loss of mural lamination, abscess formation, free intraabdominal or pelvic fluid, and surrounding tissue edema [1][3]. The presence of an appendicolith is specifically noted as diagnostic for gangrenous appendicitis [1].\n\nSources used: [1], [2], [3], [4]",
+                "sources":  [
+                                {
+                                    "n":  1,
+                                    "title":  "Ma__Mateers_Emergency_Ultrasound",
+                                    "page":  342,
+                                    "specialty":  "emergency medicine",
+                                    "score":  0.918,
+                                    "source_corpus":  "library",
+                                    "chunk_id":  "Ma__Mateers_Emergency_Ultrasound::p342::0",
+                                    "cko_id":  null
+                                },
+                                {
+                                    "n":  2,
+                                    "title":  "Ma__Mateers_Emergency_Ultrasound",
+                                    "page":  341,
+                                    "specialty":  "emergency medicine",
+                                    "score":  -0.313,
+                                    "source_corpus":  "library",
+                                    "chunk_id":  "Ma__Mateers_Emergency_Ultrasound::p341::0",
+                                    "cko_id":  null
+                                },
+                                {
+                                    "n":  3,
+                                    "title":  "Nelson Textbook of Pediatrics",
+                                    "page":  376,
+                                    "specialty":  "pediatrics",
+                                    "score":  -1.04,
+                                    "source_corpus":  "mehrsys",
+                                    "chunk_id":  "Nelson_Textbook_of_Pediatrics_202007::p376::21",
+                                    "cko_id":  null
+                                },
+                                {
+                                    "n":  4,
+                                    "title":  "Nelson Textbook of Pediatrics",
+                                    "page":  376,
+                                    "specialty":  "pediatrics",
+                                    "score":  -1.04,
+                                    "source_corpus":  "mehrsys",
+                                    "chunk_id":  "Nelson_Textbook_of_Pediatrics_202007::p376::10",
+                                    "cko_id":  null
+                                }
+                            ],
+                "specialties":  [
+                                    "radiology"
+                                ],
+                "image_desc":  "",
+                "grounding":  {
+                                  "grounded":  0.7876923076923077,
+                                  "confidence":  "high",
+                                  "issues":  [
+
+                                             ],
+                                  "method":  "lexical",
+                                  "has_citations":  true,
+                                  "citation_coverage":  1.0
+                              },
+                "self_rag":  {
+                                 "iterations":  [
+                                                    {
+                                                        "iter":  0,
+                                                        "grounding":  0.7876923076923077,
+                                                        "confidence":  "high",
+                                                        "n_passages":  8,
+                                                        "final_action":  "accept"
+                                                    }
+                                                ],
+                                 "final_action":  "accept"
+                             },
+                "intent":  "clinical",
+                "rule_alerts":  [
+
+                                ],
+                "kg_facts":  [
+
+                             ]
+            },
+    "model":  "medicalrag",
+    "critical_alerts":  [
+
+                        ]
+}

@@ -1,0 +1,12 @@
+# template_id: cds_lt_upper_ext_art_vein
+# title: Color Doppler Sonography of Lt upper extremity vessels
+# source_name: LT upper ext art&vein
+# source_file: LT upper ext art&vein.rtf
+
+Color Doppler Sonography of Lt upper extremity vessels:
+According to gray scale color flow mapping and spectral analysis the study reveals:
+
+Normal configuration and flow waves of the arterial and venous system of Lt upper extremity including LT brachial, subclavian, axillary and ulnar and radial and cephalic and basilic veins are seen.
+No intra luminal clot is demonstrated.
+No abrupt change in flow velocity or spectral analysis is seen.
+Normal arterial flow pattern and velocities are noted in LT side subclavian and axillary and brachial and radial and ulnar is noted.

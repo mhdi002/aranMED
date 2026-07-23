@@ -1,0 +1,9 @@
+# template_id: dc_of_pneumocath
+# title: Pneumocath
+# source_name: DC of Pneumocath
+# source_file: DC of Pneumocath.rtf
+
+Pneumocath:
+After prep and drape under guide of sonography ,Pneumocath ( set biotech VIII ) was inserted without any complication.
+
+AF                Sincerely,Tousarkani, MD

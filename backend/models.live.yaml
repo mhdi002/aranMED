@@ -1,0 +1,24 @@
+models:
+  - role: core
+    name: live-core
+    provider: ollama
+    enabled: true
+    default: true
+    config:
+      host: http://127.0.0.1:11434
+      model: qwen3:14b
+      options: {num_ctx: 8192, temperature: 0.1}
+  - role: asr
+    name: fake-asr
+    provider: fake_asr
+    enabled: true
+    default: true
+    config: {text: "Mild bibasilar atelectasis. No focal consolidation."}
+  - role: vision
+    name: fake-vision
+    provider: fake_vision
+    enabled: true
+    default: true
+    config: {}
+runtime:
+  max_warm_models: 3

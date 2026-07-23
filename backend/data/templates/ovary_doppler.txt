@@ -1,0 +1,8 @@
+# template_id: ovary_doppler
+# title: Color Doppler Sonography of Both Ovaries
+# source_name: Ovary Doppler
+# source_file: Ovary Doppler.rtf
+
+Color Doppler Sonography of Both Ovaries:
+Both ovaries have normal size and echo-pattern and no sign of solid or cystic lesion is seen.
+Both ovaries show normal intra parenchymal artery and vein with normal color flow and wave form with no sign of torsion however sonography cannot be R/O partial torsion.

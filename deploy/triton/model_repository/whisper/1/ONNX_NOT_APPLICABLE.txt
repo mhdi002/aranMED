@@ -1,0 +1,1 @@
+Stock Whisper ONNX does not match WAV->TRANSCRIPT. Serving uses Triton Python backend model.py + whisper-large-v3 weights.

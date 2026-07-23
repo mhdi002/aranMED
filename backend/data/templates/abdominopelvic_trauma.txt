@@ -1,0 +1,24 @@
+# template_id: abdominopelvic_trauma
+# title: Abdominal & pelvic sonography (Trauma)
+# source_name: Abdominopelvic trauma
+# source_file: Abdominopelvic trauma.rtf
+
+Abdominal & pelvic sonography (Trauma):
+This study is suboptimal due to however:
+Liver is normal in size and parenchymal echogenicity with no sign of S.O.L. or laceration. Also no sign of contusion or hematoma formation is seen within the liver parenchyma.
+Spleen is normal in size and parenchymal echogenicity with no sign of laceration, contusion or hematoma formation.
+G.B is unremarkable.
+*Gall bladder is semi distended with no stone or wall thickening.
+*Gall bladder is not seen due to previous resection.
+Pancreas is normal in size and normal parenchymal echo without laceration or contusion or hematoma formation.
+*Pancreas and Para aortic area could not be evaluated due to severe gas shadow.
+Both kidneys are normal in size and cortical echogenecity with no sign of stone or stasis. Also no sign of laceration or hematoma is seen in its parenchyma. No sign of perinephric hematoma or collection is seen bilaterally.
+*Both kidneys are normal in size and show increased cortical parenchymal echogenicity suggestive of parenchymal damage so correlation with BUN\Cr is recommended and no sign of stone, stasis or perinephric collection is noted. Also no sign of laceration or hematoma is seen in its parenchyma. No sign of perinephric hematoma or collection is seen bilaterally.
+U.B is normal with no sign of wall thickening or stone.
+*Urinary bladder is empty so evaluation of pelvic organs is not possible.
+*Urinary bladder is near empty containing balloon of Foley catheter so evaluation of pelvic organs is not possible.
+*Urinary bladder is semi distended, with no stone or wall thickening.
+*Urinary bladder is semi distended and contains echogenic debris is seen in it suggestive of cystitis so correlation with U/A is recommended and no stone or wall thickening is noted.
+No free ascitic fluid or collection is detected.
+*No pericardial effusion is noted.
+We should notice that sonography is not highly sensitive for evaluation of hematoma, laceration and contusion of solid organs.

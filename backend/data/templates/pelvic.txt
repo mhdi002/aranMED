@@ -1,0 +1,17 @@
+# template_id: pelvic
+# title: Pelvic Sonography
+# source_name: Pelvic
+# source_file: Pelvic.rtf
+
+Pelvic Sonography:
+This study is suboptimal due to however:
+Urinary bladder is well distended, with no stone or wall thickening.
+*Urinary bladder is empty so evaluation of pelvic organs is not possible.
+*Urinary bladder is near empty containing balloon of Foley catheter so evaluation of pelvic organs is not possible.
+*Urinary bladder is semi distended, with no stone or wall thickening.
+*Urinary bladder is semi distended and evidence of echogenic debris is seen in it suggestive of cystitis so correlation with U/A is recommended and no stone or wall thickening is noted.
+Prostate has normal size and echopattern with no sign of discrete mass lesion.
+Seminal vesicles are grossly unremarkable.
+Uterus is normal in size and echo-pattern with no sign of mass lesion.
+Both ovaries have normal size and echo-pattern with no sign of solid or cystic lesion.
+No free fluid is seen in abdominopelvic cavity at present time.

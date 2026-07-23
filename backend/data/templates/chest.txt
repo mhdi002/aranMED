@@ -1,0 +1,14 @@
+# template_id: chest
+# title: Chest sonography
+# source_name: Chest
+# source_file: Chest.rtf
+
+Chest sonography:
+
+pleural effusion is seen in Lt side.
+pleural effusion is seen in Rt side.
+Bilaterally there is no pleural effusion.
+No pleural thickening is seen.
+Surface of bony parts and soft tissue components are grossly unremarkable.
+There is normal diaphragmatic movement.
+There is no gliding sign along M-MODE of pleura is seen. Therefore there is no sign of pneumothorax.

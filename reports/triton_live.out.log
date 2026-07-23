@@ -1,0 +1,15 @@
+INFO:     127.0.0.1:62023 - "GET /v2/health/ready HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60531 - "GET /v2/health/ready HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63962 - "POST /v2/models/whisper/infer HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49406 - "GET /v2/health/ready HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49479 - "POST /v2/models/whisper/infer HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53102 - "POST /v2/models/whisper/infer HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50295 - "GET /v2/health/ready HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50514 - "GET /v2/health/ready HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50685 - "POST /v2/models/whisper/infer HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50610 - "POST /v2/models/whisper/infer HTTP/1.1" 200 OK
+INFO:     127.0.0.1:64987 - "GET /v2/health/ready HTTP/1.1" 200 OK
+INFO:     127.0.0.1:65273 - "GET /v2/health/ready HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56291 - "GET /v2/health/ready HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50458 - "GET /v2/health/ready HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50554 - "GET /v2/health/ready HTTP/1.1" 200 OK

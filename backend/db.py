@@ -1,0 +1,133 @@
+"""SQLite database layer.
+
+A tiny, dependency-free persistence layer on top of stdlib :mod:`sqlite3`.
+We deliberately avoid an ORM to keep the install footprint small and the
+test setup obvious.
+
+Tables
+------
+* ``users``      — registered humans (id, username, email, password_hash,
+                   role: 'doctor'|'radiologist'|'student'|'resident'|'admin', created_at)
+* ``patients``   — EHR documents (id, owner_user_id, name, language,
+                   data JSON blob, created_at, updated_at)
+* ``alerts``     — alert history (id, patient_id, channel, recipient,
+                   body, sent_at, dry_run)
+* ``quizzes``    — saved education content (id, owner_user_id, kind, topic,
+                   language, data JSON, created_at)
+
+The DB file lives at ``backend/data/app.db`` by default; tests override it
+via :func:`set_db_path`.
+"""
+from __future__ import annotations
+
+import json
+import logging
+import sqlite3
+import threading
+import time
+from pathlib import Path
+from typing import Any, Iterator
+
+log = logging.getLogger("db")
+
+_DEFAULT_PATH = Path(__file__).resolve().parent / "data" / "app.db"
+_db_path: Path = _DEFAULT_PATH
+_lock = threading.Lock()
+
+
+def set_db_path(p: Path | str) -> None:
+    """Override the SQLite file (tests use this with a tmp_path)."""
+    global _db_path
+    _db_path = Path(p)
+    _db_path.parent.mkdir(parents=True, exist_ok=True)
+    _init_schema()
+
+
+def get_db_path() -> Path:
+    return _db_path
+
+
+def connect() -> sqlite3.Connection:
+    _db_path.parent.mkdir(parents=True, exist_ok=True)
+    conn = sqlite3.connect(_db_path, isolation_level=None, check_same_thread=False)
+    conn.row_factory = sqlite3.Row
+    conn.execute("PRAGMA foreign_keys = ON")
+    return conn
+
+
+_SCHEMA = """
+CREATE TABLE IF NOT EXISTS users (
+  id            INTEGER PRIMARY KEY AUTOINCREMENT,
+  username      TEXT    NOT NULL UNIQUE,
+  email         TEXT    UNIQUE,
+  password_hash TEXT    NOT NULL,
+  role          TEXT    NOT NULL DEFAULT 'doctor',
+  created_at    REAL    NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS patients (
+  id            TEXT    PRIMARY KEY,
+  owner_user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  name          TEXT,
+  language      TEXT    NOT NULL DEFAULT 'en',
+  data          TEXT    NOT NULL,
+  created_at    REAL    NOT NULL,
+  updated_at    REAL    NOT NULL
+);
+CREATE INDEX IF NOT EXISTS ix_patients_owner ON patients(owner_user_id);
+
+CREATE TABLE IF NOT EXISTS alerts (
+  id           INTEGER PRIMARY KEY AUTOINCREMENT,
+  patient_id   TEXT    NOT NULL REFERENCES patients(id) ON DELETE CASCADE,
+  channel      TEXT    NOT NULL,
+  recipient    TEXT    NOT NULL,
+  body         TEXT    NOT NULL,
+  sent_at      REAL    NOT NULL,
+  dry_run      INTEGER NOT NULL DEFAULT 0
+);
+CREATE INDEX IF NOT EXISTS ix_alerts_patient ON alerts(patient_id);
+
+CREATE TABLE IF NOT EXISTS quizzes (
+  id            INTEGER PRIMARY KEY AUTOINCREMENT,
+  owner_user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  kind          TEXT    NOT NULL,
+  topic         TEXT    NOT NULL,
+  language      TEXT    NOT NULL DEFAULT 'en',
+  data          TEXT    NOT NULL,
+  created_at    REAL    NOT NULL
+);
+CREATE INDEX IF NOT EXISTS ix_quizzes_owner ON quizzes(owner_user_id);
+"""
+
+
+def _init_schema() -> None:
+    with _lock, connect() as c:
+        c.executescript(_SCHEMA)
+
+
+# Initialise default DB at import time so casual scripts work.
+_init_schema()
+
+
+# ---------------------------------------------------------------------------
+# Helpers
+# ---------------------------------------------------------------------------
+def now() -> float:
+    return time.time()
+
+
+def row_to_dict(row: sqlite3.Row | None) -> dict | None:
+    return dict(row) if row is not None else None
+
+
+def loads_json(s: str | None) -> Any:
+    if s is None:
+        return None
+    try:
+        return json.loads(s)
+    except Exception:  # noqa: BLE001
+        return None
+
+
+def dumps_json(o: Any) -> str:
+    return json.dumps(o, ensure_ascii=False, separators=(",", ":"))

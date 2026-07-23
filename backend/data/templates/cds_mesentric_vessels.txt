@@ -1,0 +1,12 @@
+# template_id: cds_mesentric_vessels
+# title: Color doppler Sonography of Mesenteric Vessels
+# source_name: Mesentric vessels
+# source_file: Mesentric vessels.rtf
+
+Color doppler Sonography of Mesenteric Vessels:
+According to gray scale, color flow mapping and spectral analysis of main branches superior mesenteric artery and visualized part of celiac trunk and superior mesenteric vein, the study reveals:
+
+Normal caliber of mentioned vessels is noted with no definite plaque thrombosis or occlusion. Color flow mapping shows normal flow encoding with no aliasing or flow reversal.
+According to spectral analysis peak systolic velocity and end-diastolic velocities of SMA are within normal range and there is no significant rise of PSV of SMA.
+Comparing to PSV of abdominal aorta (ratio < 3.5) so there is no sign of significant stenosis or occlusion at the mentioned arteries.
+Visualized parts of superior mesenteric and splenic veins show normal caliber with normal hepatopetal flow, without any evidence of thrombosis.

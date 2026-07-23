@@ -1,0 +1,11 @@
+# template_id: scrotal
+# title: Scrotal Sonography
+# source_name: Scrotal
+# source_file: Scrotal  .rtf
+
+Scrotal Sonography:
+
+Both testicles are normal in size and echopattern with no sign of solid or cystic lesion.
+Both epididymides are normal in size and echopattern.
+There is no sign of hydrocele or scrotal mass bilaterally.
+No sign of varicocele or herniated bowel loops is seen.

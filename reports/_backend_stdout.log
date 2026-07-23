@@ -1,0 +1,20 @@
+INFO:     127.0.0.1:50112 - "GET /api/health HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50133 - "GET /api/templates HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50134 - "GET /api/health HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50849 - "GET /api/health HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50867 - "POST /api/auth/login HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50868 - "GET /api/templates HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50869 - "POST /api/report HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59119 - "POST /api/auth/login HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59119 - "POST /api/report HTTP/1.1" 200 OK
+INFO:     127.0.0.1:61168 - "GET /api/health HTTP/1.1" 200 OK
+INFO:     127.0.0.1:61186 - "POST /api/auth/login HTTP/1.1" 200 OK
+INFO:     127.0.0.1:61187 - "GET /api/templates HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63812 - "GET /api/health HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55478 - "GET /api/health HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55496 - "POST /api/auth/login HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55497 - "GET /api/templates HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55498 - "POST /api/transcribe HTTP/1.1" 500 Internal Server Error
+INFO:     127.0.0.1:55499 - "POST /api/transcribe HTTP/1.1" 200 OK
+INFO:     127.0.0.1:61369 - "POST /api/transcribe HTTP/1.1" 500 Internal Server Error
+INFO:     127.0.0.1:61370 - "POST /api/transcribe HTTP/1.1" 200 OK

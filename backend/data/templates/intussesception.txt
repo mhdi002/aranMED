@@ -1,0 +1,6 @@
+# template_id: intussesception
+# title: Intussesception
+# source_name: Intussesception
+# source_file: Intussesception.rtf
+
+No sonographic sign of intussusception is seen at present time however if clinically indicated follow up sonography is recommended.

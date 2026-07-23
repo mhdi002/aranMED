@@ -1,0 +1,14 @@
+# template_id: abdominopelvic_for_female
+# title: Abdominopelvic for female
+# source_name: Abdominopelvic for female
+# source_file: Abdominopelvic for female.rtf
+
+SPIRAL BRAIN CT-SCAN WITHOUT CONTRAST:
+Multiple axial images through the brain demonstrate:
+
+No evidence of abnormal density or S.O.L is noted in the cerebral hemispheres.
+There is no sign of hydrocephalus.
+No shift of mid line structures is noted.
+No extra axial fluid collection is seen.
+No sign of hemorrhagic process or abnormal calcification is seen.
+The skull base and posterior fossa are grossly normal.

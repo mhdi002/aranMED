@@ -1,0 +1,6 @@
+﻿# Ollama Modelfile for the local vision GGUF (Radiology-Infer-Mini). Ollama's
+# FROM directive needs a literal path, so there is no env-var substitution
+# here — place your GGUF under ./models/ (already gitignored) or point this
+# at your own absolute path, then:
+#   ollama create radiology-infer-mini -f Modelfile
+FROM ./models/Radiology-Infer-Mini-Q8_0.gguf

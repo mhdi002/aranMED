@@ -1,0 +1,91 @@
+services:
+  qdrant:
+    image: qdrant/qdrant:latest
+    container_name: medrag-qdrant
+    ports:
+      - "${QDRANT_PORT:-6333}:6333"
+    volumes:
+      # Prefer MEDRAG_QDRANT_STORAGE / MEDRAG_DATA_DIR/qdrant_storage on bare metal.
+      - ${MEDRAG_QDRANT_STORAGE:-./qdrant_storage}:/qdrant/storage
+    restart: unless-stopped
+
+  # Production LLM — OpenAI-compatible API. Requires NVIDIA Container Toolkit.
+  #   docker compose --profile vllm up -d
+  # Env: VLLM_MODEL, VLLM_PORT, VLLM_MAX_MODEL_LEN, VLLM_GPU_MEM_UTIL, HF_TOKEN, HF_HOME
+  vllm:
+    profiles: ["vllm"]
+    image: vllm/vllm-openai:latest
+    container_name: medrag-vllm
+    ports:
+      - "${VLLM_PORT:-8000}:8000"
+    environment:
+      - HUGGING_FACE_HUB_TOKEN=${HF_TOKEN:-}
+    volumes:
+      - ${HF_HOME:-./.cache/huggingface}:/root/.cache/huggingface
+    command:
+      - "--model"
+      - "${VLLM_MODEL}"
+      - "--host"
+      - "0.0.0.0"
+      - "--port"
+      - "8000"
+      - "--max-model-len"
+      - "${VLLM_MAX_MODEL_LEN:-2048}"
+      - "--gpu-memory-utilization"
+      - "${VLLM_GPU_MEM_UTIL:-0.55}"
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: 1
+              capabilities: [gpu]
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/v1/models"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 180s
+
+  # Embeddings — separate vLLM process (OpenAI /v1/embeddings). Profile: vllm-embed.
+  # On 8GB GPUs prefer sequential: stop LLM before starting embed, or lower both util.
+  #   docker compose --profile vllm-embed up -d
+  # Env: VLLM_EMBED_MODEL, VLLM_EMBED_PORT, VLLM_EMBED_GPU_MEM_UTIL, VLLM_EMBED_MAX_MODEL_LEN
+  vllm-embed:
+    profiles: ["vllm-embed"]
+    image: vllm/vllm-openai:latest
+    container_name: medrag-vllm-embed
+    ports:
+      - "${VLLM_EMBED_PORT:-8001}:8001"
+    environment:
+      - HUGGING_FACE_HUB_TOKEN=${HF_TOKEN:-}
+    volumes:
+      - ${HF_HOME:-./.cache/huggingface}:/root/.cache/huggingface
+    command:
+      - "--model"
+      - "${VLLM_EMBED_MODEL}"
+      - "--task"
+      - "${VLLM_EMBED_TASK:-embed}"
+      - "--host"
+      - "0.0.0.0"
+      - "--port"
+      - "8001"
+      - "--max-model-len"
+      - "${VLLM_EMBED_MAX_MODEL_LEN:-512}"
+      - "--gpu-memory-utilization"
+      - "${VLLM_EMBED_GPU_MEM_UTIL:-0.25}"
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: 1
+              capabilities: [gpu]
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8001/v1/models"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 180s

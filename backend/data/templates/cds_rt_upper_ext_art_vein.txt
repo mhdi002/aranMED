@@ -1,0 +1,12 @@
+# template_id: cds_rt_upper_ext_art_vein
+# title: Color doppler sonography of Rt upper EXT arteries and veins
+# source_name: RT upper ext art&vein
+# source_file: RT upper ext art&vein.rtf
+
+Color doppler sonography of Rt upper EXT arteries and veins:
+According to gray scale color flow mapping and spectral analysis the study reveals:
+
+Normal configuration and flow waves of the arterial and venous system of RT upper extremity including both brachial, subclavian, axillary and ulnar and radial and cephalic and basilic veins are noted.
+No intra luminal clot is demonstrated.
+No abrupt change in flow velocity or spectral analysis is seen.
+Normal arterial flow pattern and velocities are noted in RT. side subclavian and axillary and brachial and radial and ulnar is noted.

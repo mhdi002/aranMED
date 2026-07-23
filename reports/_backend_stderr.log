@@ -1,0 +1,63 @@
+2026-07-22 14:11:19,078 [INFO] registry: loading registry from C:\Users\mhf\Desktop\aranmed\backend\models.yaml
+2026-07-22 14:11:19,083 [INFO] registry: registry: 3 providers, defaults={'core': 'qwen3.5-9b', 'asr': 'whisper-large-v3'}
+INFO:     Started server process [8416]
+INFO:     Waiting for application startup.
+2026-07-22 14:11:19,121 [INFO] templates: Templates dir C:\Users\mhf\Desktop\aranmed\backend\data\templates (56 local .txt)
+2026-07-22 14:11:19,123 [INFO] api: registry roles=['core', 'asr'] defaults={'core': 'qwen3.5-9b', 'asr': 'whisper-large-v3'}
+INFO:     Application startup complete.
+INFO:     Uvicorn running on http://0.0.0.0:8010 (Press CTRL+C to quit)
+2026-07-22 14:11:25,327 [INFO] httpx: HTTP Request: GET http://127.0.0.1:11434/api/tags "HTTP/1.1 200 OK"
+2026-07-22 14:11:28,746 [INFO] httpx: HTTP Request: GET http://127.0.0.1:11434/api/tags "HTTP/1.1 200 OK"
+2026-07-22 14:16:36,177 [INFO] httpx: HTTP Request: GET http://127.0.0.1:11434/api/tags "HTTP/1.1 200 OK"
+2026-07-22 14:23:52,879 [INFO] httpx: HTTP Request: POST http://127.0.0.1:8080/ask "HTTP/1.1 200 OK"
+2026-07-22 14:23:53,085 [INFO] httpx: HTTP Request: POST http://127.0.0.1:11434/api/show "HTTP/1.1 200 OK"
+2026-07-22 14:24:07,012 [INFO] httpx: HTTP Request: POST http://127.0.0.1:11434/api/chat "HTTP/1.1 200 OK"
+2026-07-22 14:47:41,044 [INFO] httpx: HTTP Request: POST http://127.0.0.1:8080/ask "HTTP/1.1 200 OK"
+2026-07-22 14:47:56,874 [INFO] httpx: HTTP Request: POST http://127.0.0.1:11434/api/chat "HTTP/1.1 200 OK"
+2026-07-22 14:48:11,349 [INFO] httpx: HTTP Request: GET http://127.0.0.1:11434/api/tags "HTTP/1.1 200 OK"
+2026-07-22 14:52:14,396 [INFO] httpx: HTTP Request: GET http://127.0.0.1:11434/api/tags "HTTP/1.1 200 OK"
+2026-07-22 14:57:27,759 [INFO] httpx: HTTP Request: GET http://127.0.0.1:11434/api/tags "HTTP/1.1 200 OK"
+2026-07-22 14:57:28,510 [INFO] httpx: HTTP Request: GET http://127.0.0.1:8080/health "HTTP/1.1 200 OK"
+2026-07-22 14:57:28,767 [ERROR] api: ASR failed
+Traceback (most recent call last):
+  File "C:\Users\mhf\Desktop\aranmed\backend\app.py", line 227, in transcribe
+    asr = await registry.get_asr(name=model)
+          ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\mhf\Desktop\aranmed\backend\registry.py", line 168, in get_asr
+    p = await self._get(role, name)
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\mhf\Desktop\aranmed\backend\registry.py", line 180, in _get
+    await inst.ensure_loaded()
+  File "C:\Users\mhf\Desktop\aranmed\backend\providers\base.py", line 57, in ensure_loaded
+    await self._load()
+  File "C:\Users\mhf\Desktop\aranmed\backend\providers\triton_asr.py", line 69, in _load
+    raise RuntimeError(
+RuntimeError: TRITON_URL is not set. Configure it in .env / models.yaml to use the Triton ASR provider.
+2026-07-22 14:57:51,268 [INFO] provider.hf_asr: Loading Whisper C:\Users\mhf\Desktop\aranmed\models\whisper-large-v3 on cuda:0 (torch.float16)
+[transformers] `torch_dtype` is deprecated! Use `dtype` instead!
+Loading weights:   0%|          | 0/1259 [00:00<?, ?it/s]Loading weights:   9%|9         | 116/1259 [00:00<00:01, 1133.37it/s]Loading weights:  18%|#8        | 230/1259 [00:00<00:00, 1048.95it/s]Loading weights:  27%|##6       | 339/1259 [00:00<00:00, 1063.21it/s]Loading weights:  37%|###7      | 468/1259 [00:00<00:00, 1146.40it/s]Loading weights: 100%|##########| 1259/1259 [00:00<00:00, 2573.51it/s]
+2026-07-22 14:58:04,367 [INFO] provider.hf_asr: Whisper transcribe task=translate force_lang=False len=22.4s
+[transformers] A custom logits processor of type <class 'transformers.generation.logits_process.SuppressTokensLogitsProcessor'> has been passed to `.generate()`, but it was also created in `.generate()`, given its parameterization. The custom <class 'transformers.generation.logits_process.SuppressTokensLogitsProcessor'> will take precedence. Please check the docstring of <class 'transformers.generation.logits_process.SuppressTokensLogitsProcessor'> to see related `.generate()` flags.
+[transformers] A custom logits processor of type <class 'transformers.generation.logits_process.SuppressTokensAtBeginLogitsProcessor'> has been passed to `.generate()`, but it was also created in `.generate()`, given its parameterization. The custom <class 'transformers.generation.logits_process.SuppressTokensAtBeginLogitsProcessor'> will take precedence. Please check the docstring of <class 'transformers.generation.logits_process.SuppressTokensAtBeginLogitsProcessor'> to see related `.generate()` flags.
+2026-07-22 14:58:09,813 [INFO] provider.hf_asr: Whisper done: 241 chars
+2026-07-22 14:58:09,815 [INFO] api: Transcription result: For the patient, we will perform a hepato biliary sonography. Liver normal size, normal parasympathetic echo, gallus mediscentum normal, proximal part CBD normal, medial distal part gas shadow, visual
+2026-07-22 14:58:09,865 [INFO] registry: registry: evicting qwen3.5-9b (LRU)
+2026-07-22 14:58:09,866 [ERROR] api: ASR failed
+Traceback (most recent call last):
+  File "C:\Users\mhf\Desktop\aranmed\backend\app.py", line 227, in transcribe
+    asr = await registry.get_asr(name=model)
+          ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\mhf\Desktop\aranmed\backend\registry.py", line 168, in get_asr
+    p = await self._get(role, name)
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\mhf\Desktop\aranmed\backend\registry.py", line 180, in _get
+    await inst.ensure_loaded()
+  File "C:\Users\mhf\Desktop\aranmed\backend\providers\base.py", line 57, in ensure_loaded
+    await self._load()
+  File "C:\Users\mhf\Desktop\aranmed\backend\providers\triton_asr.py", line 69, in _load
+    raise RuntimeError(
+RuntimeError: TRITON_URL is not set. Configure it in .env / models.yaml to use the Triton ASR provider.
+2026-07-22 14:58:10,057 [INFO] provider.hf_asr: Whisper transcribe task=translate force_lang=False len=57.0s
+[transformers] Ignoring clean_up_tokenization_spaces=True for BPE tokenizer WhisperTokenizer. The clean_up_tokenization post-processing step is designed for WordPiece tokenizers and is destructive for BPE (it strips spaces before punctuation). Set clean_up_tokenization_spaces=False to suppress this warning, or set clean_up_tokenization_spaces_for_bpe_even_though_it_will_corrupt_output=True to force cleanup anyway.
+2026-07-22 14:58:19,135 [INFO] provider.hf_asr: Whisper done: 690 chars
+2026-07-22 14:58:19,136 [INFO] api: Transcription result: Hello, welcome to Ali Bakhsh, Dehaghanipur. Let's do a portable CPR session. You can do this in a stable position, due to poor quality of the device. However, the liver should be of normal size, with 

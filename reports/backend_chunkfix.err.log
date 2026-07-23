@@ -1,0 +1,67 @@
+2026-07-22 11:30:48,603 [INFO] registry: loading registry from C:\Users\mhf\Desktop\asr main\asr main\151-main\backend\models.yaml
+2026-07-22 11:30:48,607 [INFO] registry: registry: 3 providers, defaults={'core': 'qwen3.5-9b', 'asr': 'whisper-large-v3'}
+INFO:     Started server process [12812]
+INFO:     Waiting for application startup.
+2026-07-22 11:30:48,623 [INFO] templates: Templates dir C:\Users\mhf\Desktop\asr main\asr main\151-main\backend\data\templates (56 local .txt)
+2026-07-22 11:30:48,624 [INFO] api: registry roles=['core', 'asr'] defaults={'core': 'qwen3.5-9b', 'asr': 'whisper-large-v3'}
+INFO:     Application startup complete.
+INFO:     Uvicorn running on http://0.0.0.0:8010 (Press CTRL+C to quit)
+2026-07-22 11:39:15,075 [INFO] httpx: HTTP Request: GET http://127.0.0.1:11434/api/tags "HTTP/1.1 200 OK"
+2026-07-22 11:50:07,820 [INFO] httpx: HTTP Request: GET http://127.0.0.1:11434/api/tags "HTTP/1.1 200 OK"
+2026-07-22 11:50:13,577 [INFO] httpx: HTTP Request: GET http://127.0.0.1:11434/api/tags "HTTP/1.1 200 OK"
+2026-07-22 11:51:18,307 [INFO] httpx: HTTP Request: GET http://127.0.0.1:11434/api/tags "HTTP/1.1 200 OK"
+2026-07-22 11:51:38,604 [WARNING] api: MedicalRAG text chat unavailable: MedicalRAG /ask failed: All connection attempts failed
+2026-07-22 11:53:11,819 [INFO] httpx: HTTP Request: GET http://127.0.0.1:11434/api/tags "HTTP/1.1 200 OK"
+2026-07-22 11:53:14,107 [WARNING] provider.triton_asr: tritonclient not installed — using raw HTTP /v2 infer at http://127.0.0.1:8002
+2026-07-22 11:53:14,182 [INFO] provider.triton_asr: Triton ASR request model=whisper duration=22.4s samples=359083 timeout=300s
+2026-07-22 11:53:17,966 [INFO] httpx: HTTP Request: POST http://127.0.0.1:8002/v2/models/whisper/infer "HTTP/1.1 200 OK"
+2026-07-22 11:53:17,970 [INFO] provider.triton_asr: Triton ASR done: 383 chars (audio was 22.4s)
+2026-07-22 11:53:17,970 [INFO] api: Transcription result: For the patient, we will perform a hepato-biliary surgery on the uterus. The liver should be of normal size, normal parasympathetic echo, the gallus and midi stent should be normal, the proximal part 
+2026-07-22 11:53:20,539 [INFO] provider.hf_asr: Loading Whisper C:\Users\mhf\Desktop\asr main\asr main\151-main\models\whisper-large-v3 on cuda:0 (torch.float16)
+2026-07-22 11:53:22,621 [INFO] provider.hf_asr: Whisper transcribe task=translate force_lang=False len=22.4s
+2026-07-22 11:53:25,067 [INFO] provider.hf_asr: Whisper done: 241 chars
+2026-07-22 11:53:25,067 [INFO] api: Transcription result: For the patient, we will perform a hepato biliary sonography. Liver normal size, normal parasympathetic echo, gallus mediscentum normal, proximal part CBD normal, medial distal part gas shadow, visual
+2026-07-22 11:53:25,193 [INFO] provider.triton_asr: Triton ASR request model=whisper duration=57.0s samples=911360 timeout=300s
+2026-07-22 11:53:31,708 [INFO] httpx: HTTP Request: POST http://127.0.0.1:8002/v2/models/whisper/infer "HTTP/1.1 200 OK"
+2026-07-22 11:53:31,722 [INFO] provider.triton_asr: Triton ASR done: 690 chars (audio was 57.0s)
+2026-07-22 11:53:31,722 [INFO] api: Transcription result: Hello, welcome to Ali Bakhsh, Dehaghanipur. Let's do a portable CPR session. You can do this in a stable position, due to poor quality of the device. However, the liver should be of normal size, with 
+2026-07-22 11:53:31,826 [INFO] provider.hf_asr: Whisper transcribe task=translate force_lang=False len=57.0s
+Whisper did not predict an ending timestamp, which can happen if audio is cut off in the middle of a word. Also make sure WhisperTimeStampLogitsProcessor was used during generation.
+2026-07-22 11:53:36,888 [INFO] provider.hf_asr: Whisper done: 690 chars
+2026-07-22 11:53:36,888 [INFO] api: Transcription result: Hello, welcome to Ali Bakhsh, Dehaghanipur. Let's do a portable CPR session. You can do this in a stable position, due to poor quality of the device. However, the liver should be of normal size, with 
+2026-07-22 11:53:39,084 [INFO] report_rules: MedRAG naming-rules consult skipped: MedicalRAG /ask failed: All connection attempts failed
+2026-07-22 11:53:39,089 [INFO] registry: registry: evicting whisper-triton (LRU)
+2026-07-22 11:53:39,250 [INFO] httpx: HTTP Request: POST http://127.0.0.1:11434/api/show "HTTP/1.1 200 OK"
+2026-07-22 11:53:58,663 [INFO] httpx: HTTP Request: GET http://127.0.0.1:11434/api/tags "HTTP/1.1 200 OK"
+2026-07-22 11:54:18,974 [INFO] httpx: HTTP Request: GET http://127.0.0.1:11434/api/tags "HTTP/1.1 200 OK"
+2026-07-22 11:54:28,467 [INFO] httpx: HTTP Request: POST http://127.0.0.1:11434/api/chat "HTTP/1.1 200 OK"
+2026-07-22 11:54:30,691 [WARNING] api: MedicalRAG text chat unavailable: MedicalRAG /ask failed: All connection attempts failed
+2026-07-22 11:54:40,111 [INFO] httpx: HTTP Request: GET http://127.0.0.1:11434/api/tags "HTTP/1.1 200 OK"
+2026-07-22 11:54:43,245 [INFO] httpx: HTTP Request: GET http://127.0.0.1:11434/api/tags "HTTP/1.1 200 OK"
+2026-07-22 11:54:57,524 [INFO] httpx: HTTP Request: GET http://127.0.0.1:11434/api/tags "HTTP/1.1 200 OK"
+2026-07-22 11:54:59,984 [INFO] httpx: HTTP Request: GET http://127.0.0.1:11434/api/tags "HTTP/1.1 200 OK"
+2026-07-22 11:57:13,797 [INFO] httpx: HTTP Request: GET http://127.0.0.1:11434/api/tags "HTTP/1.1 200 OK"
+2026-07-22 11:57:16,125 [INFO] registry: registry: evicting whisper-large-v3 (LRU)
+2026-07-22 11:57:16,701 [WARNING] provider.triton_asr: tritonclient not installed — using raw HTTP /v2 infer at http://127.0.0.1:8002
+2026-07-22 11:57:16,810 [INFO] provider.triton_asr: Triton ASR request model=whisper duration=22.4s samples=359083 timeout=300s
+2026-07-22 11:57:21,081 [INFO] httpx: HTTP Request: POST http://127.0.0.1:8002/v2/models/whisper/infer "HTTP/1.1 200 OK"
+2026-07-22 11:57:21,085 [INFO] provider.triton_asr: Triton ASR done: 383 chars (audio was 22.4s)
+2026-07-22 11:57:21,085 [INFO] api: Transcription result: For the patient, we will perform a hepato-biliary surgery on the uterus. The liver should be of normal size, normal parasympathetic echo, the gallus and midi stent should be normal, the proximal part 
+2026-07-22 11:57:21,104 [INFO] registry: registry: evicting qwen3.5-9b (LRU)
+2026-07-22 11:57:21,106 [INFO] provider.hf_asr: Loading Whisper C:\Users\mhf\Desktop\asr main\asr main\151-main\models\whisper-large-v3 on cuda:0 (torch.float16)
+2026-07-22 11:57:29,737 [INFO] provider.hf_asr: Whisper transcribe task=translate force_lang=False len=22.4s
+2026-07-22 11:57:51,923 [INFO] provider.hf_asr: Whisper done: 241 chars
+2026-07-22 11:57:51,923 [INFO] api: Transcription result: For the patient, we will perform a hepato biliary sonography. Liver normal size, normal parasympathetic echo, gallus mediscentum normal, proximal part CBD normal, medial distal part gas shadow, visual
+2026-07-22 11:57:52,045 [INFO] provider.triton_asr: Triton ASR request model=whisper duration=57.0s samples=911360 timeout=300s
+2026-07-22 11:57:58,553 [INFO] httpx: HTTP Request: POST http://127.0.0.1:8002/v2/models/whisper/infer "HTTP/1.1 200 OK"
+2026-07-22 11:57:58,566 [INFO] provider.triton_asr: Triton ASR done: 690 chars (audio was 57.0s)
+2026-07-22 11:57:58,567 [INFO] api: Transcription result: Hello, welcome to Ali Bakhsh, Dehaghanipur. Let's do a portable CPR session. You can do this in a stable position, due to poor quality of the device. However, the liver should be of normal size, with 
+2026-07-22 11:57:58,699 [INFO] provider.hf_asr: Whisper transcribe task=translate force_lang=False len=57.0s
+Whisper did not predict an ending timestamp, which can happen if audio is cut off in the middle of a word. Also make sure WhisperTimeStampLogitsProcessor was used during generation.
+2026-07-22 11:58:58,325 [INFO] provider.hf_asr: Whisper done: 690 chars
+2026-07-22 11:58:58,326 [INFO] api: Transcription result: Hello, welcome to Ali Bakhsh, Dehaghanipur. Let's do a portable CPR session. You can do this in a stable position, due to poor quality of the device. However, the liver should be of normal size, with 
+2026-07-22 11:59:00,540 [INFO] report_rules: MedRAG naming-rules consult skipped: MedicalRAG /ask failed: All connection attempts failed
+2026-07-22 11:59:00,545 [INFO] registry: registry: evicting whisper-triton (LRU)
+2026-07-22 11:59:00,706 [INFO] httpx: HTTP Request: POST http://127.0.0.1:11434/api/show "HTTP/1.1 200 OK"
+2026-07-22 11:59:44,189 [INFO] httpx: HTTP Request: POST http://127.0.0.1:11434/api/chat "HTTP/1.1 200 OK"
+2026-07-22 11:59:51,835 [INFO] httpx: HTTP Request: GET http://127.0.0.1:11434/api/tags "HTTP/1.1 200 OK"

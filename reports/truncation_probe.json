@@ -1,0 +1,68 @@
+[
+  {
+    "file": "Feb 3, 5.12 PM​.m4a",
+    "dur": 22.4,
+    "model": "whisper-triton",
+    "asr": "whisper-triton",
+    "chars": 257,
+    "secs": 38.6,
+    "start": "برای بیمار ساری رحیمی یک هپاتو بیلیاری سونا بزنید. لیویه را نرمل سایز، نرمل پارانشیم اکو، گالوستی میدیستنت را نرمل، پروگزیمال پارت سی بیدیو را نرمل، میدیو دیستال پارت گست شدو، ویژوال پارت پانچراست را نرمل بزنید و همینطور اسپلین هم نرمل بزنید. ما چکر کریمیم.",
+    "end": "برای بیمار ساری رحیمی یک هپاتو بیلیاری سونا بزنید. لیویه را نرمل سایز، نرمل پارانشیم اکو، گالوستی میدیستنت را نرمل، پروگزیمال پارت سی بیدیو را نرمل، میدیو دیستال پارت گست شدو، ویژوال پارت پانچراست را نرمل بزنید و همینطور اسپلین هم نرمل بزنید. ما چکر کریمیم.",
+    "full": "برای بیمار ساری رحیمی یک هپاتو بیلیاری سونا بزنید. لیویه را نرمل سایز، نرمل پارانشیم اکو، گالوستی میدیستنت را نرمل، پروگزیمال پارت سی بیدیو را نرمل، میدیو دیستال پارت گست شدو، ویژوال پارت پانچراست را نرمل بزنید و همینطور اسپلین هم نرمل بزنید. ما چکر کریمیم."
+  },
+  {
+    "file": "Feb 3, 5.12 PM​.m4a",
+    "dur": 22.4,
+    "model": "default(hf)",
+    "asr": "whisper-large-v3",
+    "chars": 241,
+    "secs": 13.0,
+    "start": "For the patient, we will perform a hepato biliary sonography. Liver normal size, normal parasympathetic echo, gallus mediscentum normal, proximal part CBD normal, medial distal part gas shadow, visual part pancreas normal, and spleen normal.",
+    "end": "For the patient, we will perform a hepato biliary sonography. Liver normal size, normal parasympathetic echo, gallus mediscentum normal, proximal part CBD normal, medial distal part gas shadow, visual part pancreas normal, and spleen normal.",
+    "full": "For the patient, we will perform a hepato biliary sonography. Liver normal size, normal parasympathetic echo, gallus mediscentum normal, proximal part CBD normal, medial distal part gas shadow, visual part pancreas normal, and spleen normal."
+  },
+  {
+    "file": "Feb 3, 5.15 PM​.m4a",
+    "dur": 57.0,
+    "model": "whisper-triton",
+    "asr": "whisper-triton",
+    "chars": 686,
+    "secs": 67.7,
+    "start": "بیمار علی بخش دهانی پور سلام لطفا برای بیمار علی بخش دهانی پور یه سانه پرتابل از CPR بزنیم سانه بزنید استادی استاب اپتیمال due to poor quality of device however liver on normal size normal paranchine galle, stem and distent on normal proximal part stability normal middle distal part gas shadow pancr",
+    "end": "d increased paranchal microgenesis so correlation with Buenkrat is recommended bladder cannot be delineated داخل پرانتیز لطفا بزنید previous resection no free fluid و یه incidental finding هم لطفا براش بزنید bilateral pleural effusion یه کالر وین اندام تتانی سمت راست هم دارن نوربان بزنید متحکر کریمی",
+    "full": "بیمار علی بخش دهانی پور سلام لطفا برای بیمار علی بخش دهانی پور یه سانه پرتابل از CPR بزنیم سانه بزنید استادی استاب اپتیمال due to poor quality of device however liver on normal size normal paranchine galle, stem and distent on normal proximal part stability normal middle distal part gas shadow pancreas parvort gas shadow spleen on normal left kidney normal right kidney normal size and increased paranchal microgenesis so correlation with Buenkrat is recommended bladder cannot be delineated داخل پرانتیز لطفا بزنید previous resection no free fluid و یه incidental finding هم لطفا براش بزنید bilateral pleural effusion یه کالر وین اندام تتانی سمت راست هم دارن نوربان بزنید متحکر کریمی"
+  },
+  {
+    "file": "Feb 3, 5.15 PM​.m4a",
+    "dur": 57.0,
+    "model": "default(hf)",
+    "asr": "whisper-large-v3",
+    "chars": 731,
+    "secs": 6.1,
+    "start": "Hello, welcome to Ali Bakhsh, Dehganipur. Let's do a portable CPR. You can do this with 3-4 people, due to poor quality of device. However, the liver is normal size, normal paranascheme, gall, stem and distal are normal, proximal part and stability are normal, middle and distal part are gas shadow, ",
+    "end": "ic origin is T, so correlation between B and R is recommended. The bladder cannot be delineated. In parentheses, please type previous resection. No free fluid and an incidental finding, please type bilateral pleural effusion. They have a vein color, tetanus, on the right side. Please type normally..",
+    "full": "Hello, welcome to Ali Bakhsh, Dehganipur. Let's do a portable CPR. You can do this with 3-4 people, due to poor quality of device. However, the liver is normal size, normal paranascheme, gall, stem and distal are normal, proximal part and stability are normal, middle and distal part are gas shadow, pancreas and paravar are gas shadow, spleen is normal, left kidney is normal, right kidney is normal size and increased paranaschemic origin is T, so correlation between B and R is recommended. The bladder cannot be delineated. In parentheses, please type previous resection. No free fluid and an incidental finding, please type bilateral pleural effusion. They have a vein color, tetanus, on the right side. Please type normally.."
+  },
+  {
+    "file": "Feb 3, 5.38 PM​.m4a",
+    "dur": 41.9,
+    "model": "whisper-triton",
+    "asr": "whisper-triton",
+    "chars": 379,
+    "secs": 60.9,
+    "start": "سلام لطفاً برای بیمار امده حوشیاری عبدو پلوی که از نظر بررسی فریفلوی تایب بفرماید که مائلد انتروال لوب فریفلوید ایستین ابدو پلوی که ویدیوی و خط بعدیش هم اویدنس آف تو هایپوکوک استریکچر ویدیوی انترنال روتیکولیشن و نو واسکولاریتی میجیرده باوت پنجا در پنجا ویدیوی در پنجا و سی در پنجا و یک در پریامبلیکال",
+    "end": "ید که مائلد انتروال لوب فریفلوید ایستین ابدو پلوی که ویدیوی و خط بعدیش هم اویدنس آف تو هایپوکوک استریکچر ویدیوی انترنال روتیکولیشن و نو واسکولاریتی میجیرده باوت پنجا در پنجا ویدیوی در پنجا و سی در پنجا و یک در پریامبلیکال ایریا سیگستیف هماتوما ورسوس اردیه استیجی کالکشن فورمیشن شدی کنسیدرد متحکر کریم",
+    "full": "سلام لطفاً برای بیمار امده حوشیاری عبدو پلوی که از نظر بررسی فریفلوی تایب بفرماید که مائلد انتروال لوب فریفلوید ایستین ابدو پلوی که ویدیوی و خط بعدیش هم اویدنس آف تو هایپوکوک استریکچر ویدیوی انترنال روتیکولیشن و نو واسکولاریتی میجیرده باوت پنجا در پنجا ویدیوی در پنجا و سی در پنجا و یک در پریامبلیکال ایریا سیگستیف هماتوما ورسوس اردیه استیجی کالکشن فورمیشن شدی کنسیدرد متحکر کریم"
+  },
+  {
+    "file": "Feb 3, 5.38 PM​.m4a",
+    "dur": 41.9,
+    "model": "default(hf)",
+    "asr": "whisper-large-v3",
+    "chars": 404,
+    "secs": 3.7,
+    "start": "The patient is Hamad Hoshyari from the hospital of Abdo Pelvik. According to the FreeFluid type study, Mild Interval Loop FreeFluid is seen in Abdo Pelvik cavity. Evidence of two hypoechoic structures with internal roticulation and no vascularity measured about 50 in 50 and 30 in 51 in the pre-umbli",
+    "end": "ild Interval Loop FreeFluid is seen in Abdo Pelvik cavity. Evidence of two hypoechoic structures with internal roticulation and no vascularity measured about 50 in 50 and 30 in 51 in the pre-umblical area suggestive of hematoma versus early stage collection formation should be considered. Thank you.",
+    "full": "The patient is Hamad Hoshyari from the hospital of Abdo Pelvik. According to the FreeFluid type study, Mild Interval Loop FreeFluid is seen in Abdo Pelvik cavity. Evidence of two hypoechoic structures with internal roticulation and no vascularity measured about 50 in 50 and 30 in 51 in the pre-umblical area suggestive of hematoma versus early stage collection formation should be considered. Thank you."
+  }
+]

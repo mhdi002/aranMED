@@ -1,0 +1,49 @@
+# Triton Whisper ASR — Python backend (WAV FP32 → TRANSCRIPT BYTES).
+# Matches backend/providers/triton_asr.py I/O (WAV + optional LANGUAGE → TRANSCRIPT).
+#
+# Why python (not onnxruntime_onnx): stock Whisper ONNX exports encoder/decoder
+# logits graphs, not end-to-end WAV→string. The client contract requires a
+# string TRANSCRIPT, which the Triton Python backend provides.
+#
+# Place model.py under ./1/. Weights are loaded from WHISPER_MODEL_DIR
+# (mounted at runtime) or default openai/whisper-large-v3.
+
+name: "whisper"
+backend: "python"
+max_batch_size: 8
+
+input [
+  {
+    name: "WAV"
+    data_type: TYPE_FP32
+    dims: [ -1 ]
+  },
+  {
+    name: "LANGUAGE"
+    data_type: TYPE_STRING
+    dims: [ 1 ]
+    optional: true
+  }
+]
+
+output [
+  {
+    name: "TRANSCRIPT"
+    data_type: TYPE_STRING
+    dims: [ 1 ]
+  }
+]
+
+instance_group [
+  {
+    count: 1
+    # Prefer GPU when VRAM is free; set WHISPER_TRITON_KIND=KIND_CPU via a
+    # second config if the host GPU is saturated (e.g. MedRAG embed + vLLM).
+    kind: KIND_CPU
+  }
+]
+
+dynamic_batching {
+  preferred_batch_size: [ 1, 2, 4, 8 ]
+  max_queue_delay_microseconds: 10000
+}

@@ -1,0 +1,22 @@
+
+> aranmed-frontend@1.0.0 dev
+> node server.js
+
+> Ready on http://0.0.0.0:3000 (timeout: 300s)
+> API proxy -> http://127.0.0.1:8010
+ ○ Compiling /login ...
+ ✓ Compiled /login in 5.1s (348 modules)
+ GET /login 200 in 5404ms
+ GET /login 200 in 15ms
+ ○ Compiling / ...
+ ✓ Compiled / in 853ms (370 modules)
+ GET / 200 in 3906ms
+ GET / 200 in 5004ms
+ GET / 200 in 3687ms
+ GET / 200 in 3453ms
+ GET / 200 in 2835ms
+ ○ Compiling /login ...
+ ✓ Compiled /login in 594ms (348 modules)
+ GET /login 200 in 713ms
+ ✓ Compiled / in 69ms (370 modules)
+ GET / 200 in 3430ms

@@ -1,0 +1,176 @@
+{
+  "when": "2026-07-22T18:16:15.253519+00:00",
+  "sample": {
+    "path": "C:\\Users\\mhf\\Desktop\\Feb 3, 5.12 PM​.m4a",
+    "name": "Feb 3, 5.12 PM​.m4a",
+    "bytes": 725762
+  },
+  "honesty_note": "Prior clinical_safety tests used synthetic TEXT transcripts + unit tests / fake LLM paths — NOT real audio through Whisper/Triton. This run uses real m4a.",
+  "health": {
+    "status": 200,
+    "body": {
+      "ok": true,
+      "service": "aranmed",
+      "asr_model": "whisper-large-v3",
+      "ollama_model": "qwen3.5-9b",
+      "core_model": "qwen3.5-9b",
+      "vision_model": null,
+      "ollama_available": true,
+      "ollama_models": [
+        "fredrezones55/chandra-ocr-2:latest",
+        "qwen3-vl:4b",
+        "qwen3.5-9b:latest"
+      ],
+      "medrag": {
+        "ok": false,
+        "url": "http://127.0.0.1:8080",
+        "detail": "All connection attempts failed"
+      },
+      "vram_used_gb": 2.88
+    }
+  },
+  "transcription": {
+    "source": "REAL_AUDIO",
+    "model_requested": "whisper-triton",
+    "asr_model": "whisper-triton",
+    "elapsed_s": 14.57,
+    "text": "برای بیمار ساری رحیمی یک هپاتو بیلیاری سونا بزنید. لیویه را نرمل سایز، نرمل پارانشیم اکو، گالوستی میدیستنت را نرمل، پروگزیمال پارت سی بیدیو را نرمل، میدیو دیستال پارت گست شدو، ویژوال پارت پانچراست را نرمل بزنید و همینطور اسپلین هم نرمل بزنید. ما چکر کریمیم.",
+    "text_len": 257
+  },
+  "audio_has_critical_phrase": false,
+  "wrong_template_id_chosen": "brain",
+  "real_audio_mismatch_report": {
+    "source": "REAL_AUDIO_TRANSCRIPT",
+    "http": 200,
+    "elapsed_s": 68.38,
+    "template_id": "brain",
+    "transcript_preview": "برای بیمار ساری رحیمی یک هپاتو بیلیاری سونا بزنید. لیویه را نرمل سایز، نرمل پارانشیم اکو، گالوستی میدیستنت را نرمل، پروگزیمال پارت سی بیدیو را نرمل، میدیو دیستال پارت گست شدو، ویژوال پارت پانچراست را نرمل بزنید و همینطور اسپلین هم نرمل بزنید. ما چکر کریمیم.",
+    "template_mismatch": {
+      "selected_template_id": "brain",
+      "selected_official_title": "Brain Sonography",
+      "spoken_template": null,
+      "spoken_resolved": null,
+      "matched_template_id": null,
+      "mismatch": false,
+      "naming_violations": [],
+      "selected_wins": true,
+      "message": null
+    },
+    "critical_alerts": [],
+    "report_preview": "Brain Sonography:\n\nBoth cerebral hemispheres have normal parenchymal echogenicity with no sign of solid or cystic mass.\nAlso no sign of calcification or hemorrhage is seen.\nAll midline structures are preserved.\nAll ventricles are normal in size with no sign of dilatation or intra ventricular hemorrhage.\nBrain stem and cerebellum are grossly normal in echo with no sign of mass or hemorrhage.\nNo ext"
+  },
+  "critical_path": {
+    "source": "SYNTHETIC_TEXT",
+    "note": "Real audio transcript had no critical phrases; critical_alerts verified via synthetic transcript POST /api/report only.",
+    "http": 200,
+    "elapsed_s": 26.04,
+    "transcript": "Using template Brain Sonography. Findings: large right tension pneumothorax with mediastinal shift — immediately life-threatening. Impression: tension pneumothorax.",
+    "template_id": "chest",
+    "template_mismatch": {
+      "selected_template_id": "chest",
+      "selected_official_title": "Chest sonography",
+      "spoken_template": "template Brain Sonography",
+      "spoken_resolved": "template Brain Sonography",
+      "matched_template_id": "brain",
+      "mismatch": true,
+      "naming_violations": [],
+      "selected_wins": true,
+      "message": "Spoken exam/template «template Brain Sonography» differs from selected UI template «chest» (Chest sonography). Selected template structure was used."
+    },
+    "critical_alerts": [
+      {
+        "code": "tension_pneumothorax",
+        "severity": "critical",
+        "label": "Tension Pneumothorax",
+        "excerpt": "tension pneumothorax",
+        "source": "local_triage",
+        "message": "Critical / potentially life-threatening finding detected (tension pneumothorax): «tension pneumothorax»"
+      },
+      {
+        "code": "lethal_or_critical_flag",
+        "severity": "critical",
+        "label": "Lethal Or Critical Flag",
+        "excerpt": "immediately life-threatening",
+        "source": "local_triage",
+        "message": "Critical / potentially life-threatening finding detected (lethal or critical flag): «immediately life-threatening»"
+      }
+    ]
+  },
+  "hybrid_real_audio_plus_critical_phrase": {
+    "source": "SAME_FILE_ENGLISH_ASR_PLUS_SYNTHETIC_CRITICAL_PHRASE",
+    "note": "English ASR of the same Desktop m4a (prior hf_asr) + appended critical phrase.",
+    "http": 200,
+    "elapsed_s": 25.06,
+    "template_id": "chest",
+    "transcript_preview": "For the patient, we will perform a hepato biliary sonography. Liver normal size, normal parasympathetic echo, gallus mediscentum normal, proximal part CBD normal, medial distal part gas shadow, visual part pancreas normal and spleen also normal. Impression: tension pneumothorax — immediately life-threatening.",
+    "template_mismatch": {
+      "selected_template_id": "chest",
+      "selected_official_title": "Chest sonography",
+      "spoken_template": null,
+      "spoken_resolved": null,
+      "matched_template_id": null,
+      "mismatch": false,
+      "naming_violations": [],
+      "selected_wins": true,
+      "message": null
+    },
+    "critical_alerts": [
+      {
+        "code": "tension_pneumothorax",
+        "severity": "critical",
+        "label": "Tension Pneumothorax",
+        "excerpt": "tension pneumothorax",
+        "source": "local_triage",
+        "message": "Critical / potentially life-threatening finding detected (tension pneumothorax): «tension pneumothorax»"
+      },
+      {
+        "code": "lethal_or_critical_flag",
+        "severity": "critical",
+        "label": "Lethal Or Critical Flag",
+        "excerpt": "immediately life-threatening",
+        "source": "local_triage",
+        "message": "Critical / potentially life-threatening finding detected (lethal or critical flag): «immediately life-threatening»"
+      }
+    ]
+  },
+  "when_completed": "2026-07-22T18:25:52.583532+00:00",
+  "local_assess_real_persian_plus_cue": {
+    "source": "REAL_AUDIO_TRANSCRIPT_PLUS_SPOKEN_TEMPLATE_CUE",
+    "note": "assess_template_mismatch() in-process (same code path as API safety layer); no LLM.",
+    "template_id": "chest",
+    "transcript_preview": "Using template Brain Sonography. برای بیمار ساری رحیمی یک هپاتو بیلیاری سونا بزنید. لیویه را نرمل سایز، نرمل پارانشیم اکو، گالوستی میدیستنت را نرمل، پروگزیمال پارت سی بیدیو را نرمل، میدیو دیستال پارت گست شدو، ویژوال پارت پانچراست را نرمل بزنید و همینطور اسپلین هم نرمل بزنید. ما چکر کریمیم.",
+    "template_mismatch": {
+      "selected_template_id": "chest",
+      "selected_official_title": "Chest sonography",
+      "spoken_template": "template Brain Sonography",
+      "spoken_resolved": "template Brain Sonography",
+      "matched_template_id": "brain",
+      "mismatch": true,
+      "naming_violations": [],
+      "selected_wins": true,
+      "message": "Spoken exam/template «template Brain Sonography» differs from selected UI template «chest» (Chest sonography). Selected template structure was used."
+    },
+    "local_critical_triage_on_raw_asr": []
+  },
+  "real_audio_mismatch_forced": {
+    "source": "SAME_FILE_ENGLISH_ASR_FROM_PRIOR_HF_PASS_PLUS_SPOKEN_CUE",
+    "note": "This E2E whisper-triton pass returned Persian. Posting the full Persian body to /api/report crashed the backend worker (connection reset, no Python traceback). For a live API mismatch=true proof we used the English transcript of the SAME Desktop m4a captured earlier via hf_asr in backend logs, plus the spoken-template cue. Local assess_template_mismatch on Persian+cue also yields mismatch=true.",
+    "http": 200,
+    "elapsed_s": 26.37,
+    "template_id": "chest",
+    "transcript_preview": "Using template Brain Sonography. For the patient, we will perform a hepato biliary sonography. Liver normal size, normal parasympathetic echo, gallus mediscentum normal, proximal part CBD normal, medial distal part gas shadow, visual part pancreas normal and spleen also normal.",
+    "template_mismatch": {
+      "selected_template_id": "chest",
+      "selected_official_title": "Chest sonography",
+      "spoken_template": "template Brain Sonography",
+      "spoken_resolved": "template Brain Sonography",
+      "matched_template_id": "brain",
+      "mismatch": true,
+      "naming_violations": [],
+      "selected_wins": true,
+      "message": "Spoken exam/template «template Brain Sonography» differs from selected UI template «chest» (Chest sonography). Selected template structure was used."
+    },
+    "critical_alerts": [],
+    "report_preview": "Chest sonography:\n\npleural effusion is seen in Lt side.\npleural effusion is seen in Rt side.\nBilaterally there is no pleural effusion.\nNo pleural thickening is seen.\nSurface of bony parts and soft tissue components are grossly unremarkable.\nThere is normal diaphragmatic movement.\nThere is no gliding sign along M-MODE of pleura is seen. Therefore there is no sign of pneumothorax.\n\nNOTE: Dictation a"
+  }
+}

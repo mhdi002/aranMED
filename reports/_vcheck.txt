@@ -1,0 +1,6 @@
+---stdout---
+---stderr---
+---alive---
+pid 11644 running
+---artifacts---
+json=True

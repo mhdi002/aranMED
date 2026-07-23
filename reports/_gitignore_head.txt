@@ -1,0 +1,40 @@
+# ---- Python ----
+.venv/
+.venv-*/
+__pycache__/
+*.pyc
+.pytest_cache/
+.run/
+
+# ---- Node / Next.js ----
+frontend/node_modules/
+frontend/.next/
+frontend/out/
+
+# ---- Secrets & local config ----
+.env
+.claude/
+cloudflare/config.yml
+
+# ---- Local data (user accounts, uploads, transcripts) ----
+backend/data/app.db
+.uploads/
+results/
+backend/models.test.yaml
+
+# ---- Model weights (multi-GB, download separately) ----
+models/whisper-large-v3/model.safetensors
+models/whisper-large-v3/*.part
+models/**/*.gguf
+models/**/*.bin
+models/**/*.pt
+
+# ---- Audio test fixtures (may contain PHI — keep local only) ----
+*.m4a
+*.mp3
+*.wav
+*.webm
+
+# ---- OS noise ----
+.DS_Store
+Thumbs.db

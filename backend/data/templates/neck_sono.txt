@@ -1,0 +1,12 @@
+# template_id: neck_sono
+# title: Neck Sonography
+# source_name: Neck sono
+# source_file: Neck sono.rtf
+
+Neck Sonography:
+
+Thyroid gland is normal in size and echo without S.O.L.
+Salivary glands are normal.
+No significant lymphadenopathy is seen.
+External border of laryngeal cartilages are intact.
+No sign of cystic or solid mass is seen in visualized part of neck.

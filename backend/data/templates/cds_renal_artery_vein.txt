@@ -1,0 +1,19 @@
+# template_id: cds_renal_artery_vein
+# title: Color Doppler Sonography of Both sides Renal Vessels
+# source_name: RENAL artery-vein
+# source_file: RENAL artery-vein.rtf
+
+Color Doppler Sonography of Both sides Renal Vessels:
+
+(Lt=XX, Rt=XX mm)
+Both kidneys are normal in size and show normal cortical parenchymal echogenicity and no sign of stone, stasis or perinephric collection is noted.
+*XX kidney is normal in size and shows normal cortical parenchymal echogenicity and no sign of stone, stasis or perinephric collection is noted.
+*Both kidneys are normal in size and show increased cortical parenchymal echogenicity suggestive of parenchymal damage so correlation with BUN\Cr is recommended and no sign of stone, stasis or perinephric collection is noted.
+*XX kidney is normal in size and shows increased cortical parenchymal echogenicity suggestive of parenchymal damage so correlation with BUN\Cr is recommended and no sign of stone, stasis or perinephric collection is noted.
+
+According to gray scale, color flow mapping and spectral analysis of both main renal arteries , the study reveal:
+Normal caliber of them associated with normal color flow mapping and no sign of aliasing or turbulent flow. Spectral analysis shows normal spectral waveform, including normal peak systolic velocities.
+
+According to spectral analysis of both sides intra renal arterial branches the study shows:
+Normal spectral waveform with no sign of tardus parvus effect (acceleration times are within normal range). Resistive indices are within normal range (R.I: XX) and there is no significant difference between them bilaterally. So according to all mentioned findings there is no sign of significant narrowing at both sides main renal arteries.
+Both sides’ main renal veins traced with normal caliber and normal color encoding and also normal spectral waveform without evidence of thrombosis.

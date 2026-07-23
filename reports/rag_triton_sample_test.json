@@ -1,0 +1,130 @@
+{
+  "suite": "rag_triton_sample_test",
+  "followup": true,
+  "asr_fix": "Whisper long-form (>30s) return_timestamps in Triton compat + model.py; timeout default 300s",
+  "summary": {
+    "asr_triton": "3/3 PASS after fix",
+    "asr_hf": "3/3 PASS",
+    "rag_radiology": "still FAIL timed out @900s"
+  },
+  "results": [
+    {
+      "test": "medrag_health",
+      "result": "PASS",
+      "seconds": 33.3,
+      "status": 200,
+      "chunks": 446549,
+      "llm_ok": true,
+      "embed_ok": true
+    },
+    {
+      "test": "rag_clinical",
+      "result": "PASS",
+      "seconds": 756.1,
+      "status": 200,
+      "answer_preview": "Based on the provided context, the first-line antibiotics for community-acquired pneumonia (CAP) in adults include **amoxicillin**, **macrolides** (specifically clarithromycin or azithromycin), and **respiratory fluoroquinolones** (such as ",
+      "n_sources": 4,
+      "intent": "clinical"
+    },
+    {
+      "test": "rag_radiology",
+      "result": "FAIL",
+      "seconds": 900.2,
+      "error": "timed out",
+      "note": "retried with 900s timeout; still timed out"
+    },
+    {
+      "test": "rag_drug",
+      "result": "PASS",
+      "seconds": 426.4,
+      "status": 200,
+      "answer_preview": "Based on the provided context, the next step for a patient with an INR of 4.2 is to **hold or lower the next warfarin dose** and **monitor INR every 12–24 hours** depending on bleeding severity.\n\n*   **Hold or lower next dose:** The context",
+      "n_sources": 4,
+      "intent": "drug"
+    },
+    {
+      "test": "aranmed_knowledge_ask",
+      "result": "PASS",
+      "seconds": 420.9,
+      "status": 200,
+      "answer_preview": "Based on the provided context, the indications for chest CT in suspected pneumonia include:\n\n*   **Suspected complications:** CT with IV contrast is indicated for suspected complications such as empyema, pneumothorax, or bronchopleural fist"
+    },
+    {
+      "test": "triton_ready",
+      "result": "PASS",
+      "status": 200
+    },
+    {
+      "test": "triton_transcribe::Feb 3, 5.12 PM​.m4a",
+      "result": "PASS",
+      "seconds": 60.6,
+      "status": 200,
+      "asr_model": "whisper-triton",
+      "text_len": 257,
+      "text_preview": "برای بیمار ساری رحیمی یک هپاتو بیلیاری سونا بزنید. لیویه را نرمل سایز، نرمل پارانشیم اکو، گالوستی میدیستنت را نرمل، پروگزیمال پارت سی بیدیو را نرمل، میدیو دیستال پارت گست شدو، ویژوال پارت پانچراست را نرمل بزنید و همینطور اسپلین هم نرمل بزنی",
+      "bytes": 725762,
+      "error": null,
+      "followup": true
+    },
+    {
+      "test": "hf_asr_transcribe::Feb 3, 5.12 PM​.m4a",
+      "result": "PASS",
+      "seconds": 13.4,
+      "status": 200,
+      "asr_model": "whisper-large-v3",
+      "text_len": 241,
+      "text_preview": "For the patient, we will perform a hepato biliary sonography. Liver normal size, normal parasympathetic echo, gallus mediscentum normal, proximal part CBD normal, medial distal part gas shadow, visual part pancreas normal, and spleen normal",
+      "bytes": 725762,
+      "error": null,
+      "followup": true
+    },
+    {
+      "test": "triton_transcribe::Feb 3, 5.15 PM​.m4a",
+      "result": "PASS",
+      "seconds": 112.4,
+      "status": 200,
+      "asr_model": "whisper-triton",
+      "text_len": 686,
+      "text_preview": "بیمار علی بخش دهانی پور سلام لطفا برای بیمار علی بخش دهانی پور یه سانه پرتابل از CPR بزنیم سانه بزنید استادی استاب اپتیمال due to poor quality of device however liver on normal size normal paranchine galle, stem and distent on normal proxim",
+      "bytes": 1841484,
+      "error": null,
+      "followup": true
+    },
+    {
+      "test": "hf_asr_transcribe::Feb 3, 5.15 PM​.m4a",
+      "result": "PASS",
+      "seconds": 42.9,
+      "status": 200,
+      "asr_model": "whisper-large-v3",
+      "text_len": 731,
+      "text_preview": "Hello, welcome to Ali Bakhsh, Dehganipur. Let's do a portable CPR. You can do this with 3-4 people, due to poor quality of device. However, the liver is normal size, normal paranascheme, gall, stem and distal are normal, proximal part and s",
+      "bytes": 1841484,
+      "error": null,
+      "followup": true
+    },
+    {
+      "test": "triton_transcribe::Feb 3, 5.38 PM​.m4a",
+      "result": "PASS",
+      "seconds": 74.8,
+      "status": 200,
+      "asr_model": "whisper-triton",
+      "text_len": 379,
+      "text_preview": "سلام لطفاً برای بیمار امده حوشیاری عبدو پلوی که از نظر بررسی فریفلوی تایب بفرماید که مائلد انتروال لوب فریفلوید ایستین ابدو پلوی که ویدیوی و خط بعدیش هم اویدنس آف تو هایپوکوک استریکچر ویدیوی انترنال روتیکولیشن و نو واسکولاریتی میجیرده باوت ",
+      "bytes": 1353928,
+      "error": null,
+      "followup": true
+    },
+    {
+      "test": "hf_asr_transcribe::Feb 3, 5.38 PM​.m4a",
+      "result": "PASS",
+      "seconds": 8.5,
+      "status": 200,
+      "asr_model": "whisper-large-v3",
+      "text_len": 404,
+      "text_preview": "The patient is Hamad Hoshyari from the hospital of Abdo Pelvik. According to the FreeFluid type study, Mild Interval Loop FreeFluid is seen in Abdo Pelvik cavity. Evidence of two hypoechoic structures with internal roticulation and no vascu",
+      "bytes": 1353928,
+      "error": null,
+      "followup": true
+    }
+  ]
+}

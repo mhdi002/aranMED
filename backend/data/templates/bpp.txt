@@ -1,0 +1,13 @@
+# template_id: bpp
+# title: BPP
+# source_name: BPP
+# source_file: BPP.rtf
+
+Bio Physical Profile Sonography:
+
+AFI:				2/2
+Tone:				2/2
+Movement:			2/2
+Breathing:			2/2
+
+Total score:			8/8

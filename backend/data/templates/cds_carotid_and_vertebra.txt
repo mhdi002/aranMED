@@ -1,0 +1,17 @@
+# template_id: cds_carotid_and_vertebra
+# title: Color doppler Sonography of Both sides carotid and Vertebral arteries
+# source_name: Carotid and vertebra
+# source_file: Carotid and vertebra.rtf
+
+Color doppler Sonography of Both sides carotid and Vertebral arteries:
+According to gray scale, spectral analysis and color flow mapping of both side CCA and ECA and ICA, this study reveals:
+I.M.T. RT: xx
+I.M.T. LT: xx
+Mentioned vessels have normal caliber with no evidence of intima thickening or atheromatous plaque formation.
+Evidence of calcified non-calcified plaque
+Color flow mapping shows normal color flow encoding with no sign of aliasing, turbulence or flow reversal.
+Spectral analysis shows normal arterial spectral waveform including normal peak systolic and end-diastolic velocities and also resistive indices, with no sign of broadening or significant rise of P.S.V through vessels.
+So there is no sign of significant narrowing at the course of both carotid arteries.
+Visualized parts of both sides vertebral arteries shows normal with no sign of hypoplasia or atheromatous plaque formation. Color flow mapping shows normal flow direction with no sign of aliasing or flow reversal.
+Spectral analysis shows normal arterial spectral waveform with no sign of broadening, so there is no sign of significant narrowing at the visualized part of both sides’ vertebral arteries.
+y.d

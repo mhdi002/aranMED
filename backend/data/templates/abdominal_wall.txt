@@ -1,0 +1,9 @@
+# template_id: abdominal_wall
+# title: Abdominal Wall Soft Tissue Sonography
+# source_name: Abdominal wall
+# source_file: Abdominal wall.rtf
+
+Abdominal Wall Soft Tissue Sonography:
+At present time no sign of collection formation is seen.
+No sign of mass lesion is see.
+No sign of abdominal wall defect is detected.

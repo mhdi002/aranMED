@@ -1,0 +1,13 @@
+# template_id: scrotal_doppler
+# title: Color Doppler sonography of both scrotal sacs
+# source_name: SCROTAL doppler
+# source_file: SCROTAL doppler  .rtf
+
+Color Doppler sonography of both scrotal sacs:
+According to gray scale, color flow mapping and spectral analysis the study reveals:
+
+Both testes show normal color flow and spectral analysis of both arteries and veins. Peak systolic velocities and end diastolic velocities of bilateral testicular arteries are within normal range. Bilateral intra parenchymal veins also show normal wave form.
+However we should notice that normal color doppler sonography cannot R/O partial torsion or torsion/detorsion so, correlation with PE is recommended.
+
+XX testis shows normal color flow and spectral analysis of both artery and vein. Peak systolic velocities and end diastolic velocities of XX testicular artery is within normal range. XX intra parenchymal vein also show normal wave form.
+However we should notice that normal color doppler sonography cannot R/O partial torsion or torsion/detorsion so, correlation with PE is recommended.

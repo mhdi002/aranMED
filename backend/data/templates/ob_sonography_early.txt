@@ -1,0 +1,12 @@
+# template_id: ob_sonography_early
+# title: OB Sonography (Early Stage)
+# source_name: OB Sonography early
+# source_file: OB Sonography early .docx
+
+OB Sonography (Early Stage):
+Single alive embryo with active heart beat is detected in uterus.
+Gestational age based on CRL: XX mm compatible with X weeks and X days.
+Normal appearance of yolk sac also is noted.
+There is no perigestational hematoma at present time.
+Both ovaries have normal size and echo-pattern with no sign of solid or cystic lesion.
+No free fluid in pelvic cavity is seen.

@@ -1,0 +1,11 @@
+# template_id: t_v_s
+# title: Transvaginal Sonography
+# source_name: T.V.S
+# source_file: T.V.S.rtf
+
+Transvaginal Sonography:
+
+Uterus is normal in size and echopattern with no sign of mass.
+Endometrial thickness is mm.
+Both ovaries have normal size and echopattern with no sign of solid or cystic lesion.
+No free fluid or collection in pelvic cavity is seen.

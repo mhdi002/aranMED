@@ -1,0 +1,1 @@
+EasyOCR fa+en boxes on scanned page 11 of پرانترنی_میاندوره_آذر_140۴_کامران_احمدی.pdf (125 boxes). Not Chandra model boxes (Chandra returns HTML/text without coordinates).

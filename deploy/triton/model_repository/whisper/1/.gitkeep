@@ -1,0 +1,3 @@
+# Placeholder version directory for Triton model artifacts.
+# Drop model.onnx (or TensorRT plan) here before starting Triton.
+# See docs/MICROSERVICES.md.

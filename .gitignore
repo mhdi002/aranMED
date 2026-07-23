@@ -1,0 +1,80 @@
+# ---- Secrets & local config ----
+.env
+.env.*
+!.env.example
+.claude/
+cloudflare/config.yml
+
+# ---- Python ----
+.venv/
+.venv-*/
+venv/
+__pycache__/
+*.py[cod]
+*$py.class
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+*.egg-info/
+.eggs/
+dist/
+build/
+.run/
+
+# ---- Node / Next.js ----
+frontend/node_modules/
+frontend/.next/
+frontend/out/
+
+# ---- Local data (user accounts, uploads, transcripts) ----
+backend/data/app.db
+.uploads/
+results/
+backend/models.test.yaml
+
+# ---- Model weights (multi-GB, download separately) ----
+models/whisper-large-v3/model.safetensors
+models/whisper-large-v3/*.part
+models/**/*.gguf
+models/**/*.bin
+models/**/*.pt
+models/**/*.onnx
+
+# ---- Audio test fixtures (may contain PHI — keep local only) ----
+*.m4a
+*.mp3
+*.wav
+*.webm
+
+# ---- MedRAG working / vector data (keep folder structure, ignore corpora) ----
+data/**
+!data/.gitkeep
+!data/README.md
+catalog.db
+*.db
+*.sqlite
+*.sqlite3
+qdrant_storage/**
+!qdrant_storage/.gitkeep
+!qdrant_storage/README.md
+data/qdrant_archives/
+qdrant_data/
+qdrant_expand_data/
+qdrant_expand2_data/
+qdrant_expand3_data/
+qdrant_standards_data/
+bin/
+.cache/
+**/.cache/
+huggingface/
+**/huggingface/
+
+# ---- Large / generated reports (local artifacts) ----
+reports/*.zip
+
+# ---- OS noise ----
+.DS_Store
+Thumbs.db
+Desktop.ini

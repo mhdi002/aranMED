@@ -1,0 +1,7 @@
+2026-07-22 08:46:34,440 [INFO] registry: loading registry from C:\Users\mhf\Desktop\asr main\asr main\151-main\backend\models.yaml
+2026-07-22 08:46:34,445 [INFO] registry: registry: 3 providers, defaults={'core': 'qwen3.5-9b', 'asr': 'whisper-large-v3'}
+INFO:     Started server process [19528]
+INFO:     Waiting for application startup.
+2026-07-22 08:46:36,728 [INFO] api: registry roles=['core', 'asr'] defaults={'core': 'qwen3.5-9b', 'asr': 'whisper-large-v3'}
+INFO:     Application startup complete.
+INFO:     Uvicorn running on http://127.0.0.1:8010 (Press CTRL+C to quit)

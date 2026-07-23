@@ -1,0 +1,8 @@
+{"question": "What is the recommended first-line antibiotic regimen for community-acquired pneumonia in a hospitalized adult?", "must_any": ["antibiotic", "pneumonia", "community"]}
+{"question": "In a patient with new-onset atrial fibrillation, how is stroke risk stratified and when is anticoagulation indicated?", "must_any": ["atrial fibrillation", "anticoagulation", "stroke"]}
+{"question": "What are the diagnostic criteria for diabetic ketoacidosis and the initial fluid and insulin management?", "must_any": ["diabetic ketoacidosis", "insulin", "fluid"]}
+{"question": "Describe the management of an acute ST-elevation myocardial infarction including reperfusion time targets.", "must_any": ["myocardial infarction", "reperfusion", "stemi"]}
+{"question": "What are the indications for and target ranges of preoperative fasting before elective surgery?", "must_any": ["fasting", "surgery", "preoperative"]}
+{"question": "How is severe sepsis/septic shock managed in the first hour according to guidelines?", "must_any": ["sepsis", "septic shock", "fluid"]}
+{"question": "What is the stepwise pharmacologic management of chronic heart failure with reduced ejection fraction?", "must_any": ["heart failure", "ejection fraction", "ace inhibitor"]}
+{"question": "What are the red-flag features of headache that warrant urgent neuroimaging?", "must_any": ["headache", "neuroimaging", "red flag"]}

@@ -1,0 +1,261 @@
+{
+  "started_utc": "2026-07-22T22:55:52.932285+00:00",
+  "finished_utc": "2026-07-22T23:58:37.309873+00:00",
+  "base": "http://127.0.0.1:8010",
+  "skip_asr": false,
+  "note": "Restored from live no-SKIP_ASR run (exit=1). A concurrent SKIP_ASR=1 run at 23:15Z had overwritten the files.",
+  "services": {
+    "backend_8010": true,
+    "frontend_3000": true,
+    "medrag_8080": true,
+    "triton_8002": true,
+    "embed_8001": true,
+    "qdrant_6333": true,
+    "vllm_8000": true,
+    "ollama_11434": true,
+    "embed_device": "cuda",
+    "whisper_device": "cuda",
+    "triton_url": "http://127.0.0.1:8002"
+  },
+  "checks": [
+    {
+      "name": "health",
+      "status": "PASS",
+      "detail": {
+        "ok": true,
+        "service": "aranmed"
+      }
+    },
+    {
+      "name": "auth_login",
+      "status": "PASS",
+      "detail": {
+        "http": 200
+      }
+    },
+    {
+      "name": "templates",
+      "status": "PASS",
+      "detail": {
+        "count": 56,
+        "http": 200
+      }
+    },
+    {
+      "name": "english_asr",
+      "status": "PASS",
+      "detail": {
+        "file": "C:\\Users\\mhf\\Desktop\\Feb 3, 5.12 PM.m4a",
+        "whisper-triton": {
+          "http": 200,
+          "secs": 39.2,
+          "chars": 383,
+          "has_persian": false,
+          "asr_model": "whisper-triton",
+          "preview": "For the patient, we will perform a hepato-biliary surgery on the uterus. The liver should be of normal size, normal parasympathetic echo, the gallus and midi stent should be normal, the proximal part of the CBD should be normal, the midi di"
+        },
+        "whisper-large-v3": {
+          "http": 200,
+          "secs": 72.8,
+          "chars": 241,
+          "has_persian": false,
+          "asr_model": "whisper-large-v3",
+          "preview": "For the patient, we will perform a hepato biliary sonography. Liver normal size, normal parasympathetic echo, gallus mediscentum normal, proximal part CBD normal, medial distal part gas shadow, visual part pancreas normal, and spleen normal"
+        }
+      }
+    },
+    {
+      "name": "full_audio_coverage",
+      "status": "PASS",
+      "detail": {
+        "file": "C:\\Users\\mhf\\Desktop\\Feb 3, 5.15 PM.m4a",
+        "key": "5.15",
+        "whisper-triton": {
+          "http": 200,
+          "secs": 16.7,
+          "chars": 690,
+          "has_persian": false,
+          "start_anchor_ok": true,
+          "end_anchor_ok": true,
+          "preview_start": "Hello, welcome to Ali Bakhsh, Dehaghanipur. Let's do a portable CPR session.",
+          "preview_end": "Please do bilateral pleural effusion. They have a very thin vein on the right side. Please do normal effusion. Thank you."
+        },
+        "whisper-large-v3": {
+          "http": 200,
+          "secs": 158.5,
+          "chars": 690,
+          "has_persian": false,
+          "start_anchor_ok": true,
+          "end_anchor_ok": true
+        }
+      }
+    },
+    {
+      "name": "report",
+      "status": "PASS",
+      "detail": {
+        "http": 200,
+        "template_id": "hepatobiliary",
+        "has_report": true,
+        "has_critical_alerts": true,
+        "has_template_mismatch": true,
+        "critical_alerts": [],
+        "report_preview": "Hepatobiliary Sonography:\nThis study is optimal.\nLiver is normal in size and shows normal parenchymal echogenicity..."
+      }
+    },
+    {
+      "name": "embeddings_bge_m3",
+      "status": "PASS",
+      "detail": {
+        "embed_8001": {
+          "http": 200
+        }
+      }
+    },
+    {
+      "name": "medrag_ask_suite",
+      "status": "PASS",
+      "detail": {
+        "chunks": 446576,
+        "clinical": {
+          "http": 200,
+          "chars": 695,
+          "preview": "Based on the provided context, the signs and symptoms of acute appendicitis include abdominal pain, nausea, vomiting, anorexia, and fever.\n\n*   **Abdominal pain, nausea, vomiting, anorexia, and fever:** These are the specific signs and symptoms found to be highly sensitive for appendicitis in childr",
+          "secs": 476.5,
+          "error": null
+        },
+        "radiology": {
+          "http": 200,
+          "chars": 1088,
+          "preview": "Ultrasound findings for pleural effusion include:\n*   **Anechoic fluid:** Free-flowing fluid appears anechoic and shifts to the most dependent region of the pleural cavity; this cyclic movement can be detected as a sinusoid tracing in M-mode [4].\n*   **Complex/Septated fluid:** The presence of septa",
+          "secs": 418.3,
+          "error": null
+        },
+        "drug": {
+          "http": 200,
+          "chars": 373,
+          "preview": "The usual adult maximum daily dose of acetaminophen is 3.25 grams, though some sources historically cite a limit of 4 grams [2][3]. For acute administration in adults weighing \u226550 kg, dosing can be up to 75 mg/kg/24 hr or capped at 4 g/24 hr, with a maximum single dose of 1000 mg (or 650\u20131000 mg dep",
+          "secs": 173.8,
+          "error": null
+        }
+      }
+    },
+    {
+      "name": "report_rules_files",
+      "status": "PASS",
+      "detail": {
+        "missing": []
+      }
+    },
+    {
+      "name": "knowledge_ask",
+      "status": "PASS",
+      "detail": {
+        "http": 200,
+        "secs": 310.8,
+        "response": {
+          "session_id": "a25896518b1e4130a901bd6a46841005",
+          "answer": "The provided context does not contain information regarding the appearance or characteristics of pleural effusion specifically on ultrasound; it exclusively describes findings on chest radiography (meniscus sign, blunting of costophrenic sulci) and lateral decubitus views [1][2][3][4]. Therefore, based strictly on the provided text, a description of pleural effusion on ultrasound cannot be given.\n\nSources used: [1], [2], [3], [4]\n\nSources:\n  [1] Radiology Secrets Plus (p.28) score=0.317\n  [2] Radiology Secrets Plus (p.28) score=0.317\n  [3] Radiology Secrets Plus (p.28) score=0.317\n  [4] Radiology Secrets Plus (p.28) score=0.317",
+          "tool_calls": [],
+          "state": {
+            "medrag": true,
+            "sources": [
+              {
+                "n": 1,
+                "title": "Radiology Secrets Plus",
+                "page": 28,
+                "specialty": "radiology",
+                "score": 0.317,
+                "source_corpus": "mehrsys",
+                "chunk_id": "Radiology_Secrets_Plus_201807::p28::2",
+                "cko_id": null
+              },
+              {
+                "n": 2,
+                "title": "Radiology Secrets Plus",
+                "page": 28,
+                "specialty": "radiology",
+                "score": 0.317,
+                "source_corpus": "mehrsys",
+                "chunk_id": "Radiology_Secrets_Plus_201807::p28::10",
+                "cko_id": null
+              },
+              {
+                "n": 3,
+                "title": "Radiology Secrets Plus",
+                "page": 28,
+                "specialty": "radiology",
+                "score": 0.317,
+                "source_corpus": "mehrsys",
+                "chunk_id": "Radiology_Secrets_Plus_201807::p28::7",
+                "cko_id": null
+              },
+              {
+                "n": 4,
+                "title": "Radiology Secrets Plus",
+                "page": 28,
+                "specialty": "radiology",
+                "score": 0.317,
+                "source_corpus": "mehrsys",
+                "chunk_id": "Radiology_Secrets_Plus_201807::p28::0",
+                "cko_id": null
+              }
+            ]
+          },
+          "model": "medicalrag",
+          "critical_alerts": []
+        }
+      }
+    },
+    {
+      "name": "ehr_build",
+      "status": "PASS",
+      "detail": {
+        "http": 200
+      }
+    },
+    {
+      "name": "medrag_import",
+      "status": "PASS",
+      "detail": {
+        "returncode": 0
+      }
+    },
+    {
+      "name": "clinical_safety_pytest",
+      "status": "PASS",
+      "detail": {
+        "returncode": 0,
+        "summary": "7 passed"
+      }
+    },
+    {
+      "name": "code_integrity",
+      "status": "PASS",
+      "detail": {
+        "pass": true
+      }
+    }
+  ],
+  "pass_count": 12,
+  "fail_count": 2,
+  "blocked_count": 0,
+  "post_verify": {
+    "vllm_models_http": 200,
+    "vllm_chat_ok": true,
+    "vllm_chat_reply": "OK",
+    "medrag_ask_clinical": "TIMEOUT_400s_no_answer"
+  },
+  "retest_note": "medrag_ask_suite + knowledge_ask retested with MedRAG up; MEDRAG_LLM_ENABLE_THINKING=0 via process env",
+  "totals": {
+    "PASS": 14,
+    "FAIL": 0,
+    "BLOCKED": 0
+  },
+  "finalize_note": "MedRAG /ask + /api/knowledge/ask live PASS; MEDRAG_TIMEOUT_SEC=1200; Ollama unloaded; see full_system_verify.md",
+  "knowledge_ask_live": {
+    "chars": 1080,
+    "n_sources": 4,
+    "preview": "The primary sonographic criterion for acute appendicitis is an appendix measuring **\u00e2\u0089\u00a56 mm in diameter** that appears as a tubular structure with one blind end, lacks peristalsis, and cannot be compressed [2]. Additional diagnostic feature"
+  }
+}

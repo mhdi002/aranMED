@@ -1,0 +1,20 @@
+# template_id: bilateral_breasts_and_axillary_sonography_2
+# title: Bilateral Breasts and Axillary Sonography
+# source_name: Bilateral Breasts and Axillary Sonography 2
+# source_file: Bilateral Breasts and Axillary Sonography 2.docx
+
+Bilateral Breasts and Axillary Sonography:
+Indication:     A 38 years old female for evaluation of palpable mass in Lt breast
+Family history:   positive in first degree (her mother)
+Previous mammography for comparison dated 1404/07/13
+OVERALL BREASTS COMPOSITION:
+heterogeneous (fibro glandular) ACR C
+Findings:
+Evidence of a round shape irregular border with duct extension hypoechoic mass measuring about 8.5x5.5mm is seen in Lt breast located at 11 o'clock that distance from nipple about 7mm and from skin surface about 12mm B IVa.
+Another oval shape hypoechoic mass structure with duct extension measuring about 7.5x3mm is seen in Lt breast located at 11 o'clock that distance from nipple about 8cm B IVa.
+No definite architectural distortion is noted.
+No skin thickening or nipple retraction is seen.
+No significant axillary lymph node is seen.
+Assessment: BIRADS IV a.
+Recommendation: tru-cut biopsy of Lt breast mass is recommended.
+y.d      SINCERELY : AFRAKHTEH   .MD

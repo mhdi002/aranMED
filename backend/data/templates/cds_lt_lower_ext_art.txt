@@ -1,0 +1,8 @@
+# template_id: cds_lt_lower_ext_art
+# title: Color doppler sonography of Lt lower extremity arteries
+# source_name: LT lower ext art
+# source_file: LT lower ext art.rtf
+
+Color doppler sonography of Lt lower extremity arteries:
+According to gray scale, color flow mapping and spectral analysis, the reveals:
+Lt side common femoral, superficial femoral& deep femoral & popliteal arteries till level of trifurcation and also distal part of posterior tibialis and dorsalis pedis arteries shows normal caliber with normal color flow encoding as well as normal spectral waveform, so there is no sign of stenosis or occlusion, also no sign of thrombosis or aneurysmal dilatation is seen.

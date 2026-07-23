@@ -1,0 +1,69 @@
+[
+  {
+    "key": "5.12",
+    "dur": 22.4,
+    "before": {"triton_chars": 257, "hf_chars": 241, "note": "short-form OK"},
+    "after": {
+      "triton": {"chars": 258, "secs": 7.0, "coverage": "full"},
+      "hf": {"chars": 241, "secs": 23.9, "coverage": "full"}
+    },
+    "pass_triton": true,
+    "pass_hf": true
+  },
+  {
+    "key": "5.15",
+    "dur": 57.0,
+    "before": {
+      "triton_chars": 686,
+      "hf_chars": 731,
+      "last_ts_sec": 28.0,
+      "note": "internal long-form seek stopped ~28s into 57s file"
+    },
+    "after": {
+      "triton": {
+        "chars": 537,
+        "secs": 13.4,
+        "coverage": "full",
+        "start_anchor": "patient / CPR / portable",
+        "end_anchor": "pleural / vein closing"
+      },
+      "hf": {
+        "chars": 690,
+        "secs": 49.2,
+        "coverage": "full",
+        "start_anchor": "Hello, welcome to Ali Bakhsh",
+        "end_anchor": "pleural effusion / Thank you"
+      }
+    },
+    "pass_triton": true,
+    "pass_hf": true,
+    "note": "Char count can be lower than partial baseline; start+end anchors confirm full-file coverage"
+  },
+  {
+    "key": "5.38",
+    "dur": 41.9,
+    "before": {
+      "triton_chars": 379,
+      "hf_chars": 404,
+      "last_ts_sec": 14.0,
+      "note": "internal long-form seek stopped ~14s into 42s file"
+    },
+    "after": {
+      "triton": {
+        "chars": 403,
+        "secs": 9.8,
+        "coverage": "full",
+        "end_anchor": "hematoma versus early stage collection"
+      },
+      "hf": {
+        "chars": 398,
+        "secs": 41.0,
+        "coverage": "full",
+        "start_anchor": "Hamad Hoshyari / Abdo Pelvik",
+        "end_anchor": "hematoma versus early stage collection"
+      }
+    },
+    "pass_triton": true,
+    "pass_hf": true
+  }
+]

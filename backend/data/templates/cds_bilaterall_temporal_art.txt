@@ -1,0 +1,6 @@
+# template_id: cds_bilaterall_temporal_art
+# title: Bilaterall temporal art
+# source_name: Bilaterall temporal art
+# source_file: Bilaterall temporal art.rtf
+
+

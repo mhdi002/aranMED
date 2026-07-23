@@ -1,0 +1,20 @@
+{"question": "What are the ECG findings in hyperkalemia?", "must_any": ["peaked t", "tented", "sine wave", "widened qrs"]}
+{"question": "What is the mechanism of action of beta-blockers?", "must_any": ["beta-adrenergic", "beta adrenergic", "catecholamine", "adrenergic receptor"]}
+{"question": "What are the diagnostic criteria for preeclampsia?", "must_any": ["proteinuria", "blood pressure", "hypertension", "140/90"]}
+{"question": "Describe the pathophysiology of acute myocardial infarction.", "must_any": ["coronary", "plaque", "thrombus", "ischemia", "occlusion"]}
+{"question": "What is the first-line treatment for anaphylaxis?", "must_any": ["epinephrine", "adrenaline"]}
+{"question": "What are the components of the Glasgow Coma Scale?", "must_any": ["eye opening", "verbal", "motor response"]}
+{"question": "What is the most common cause of community-acquired pneumonia?", "must_any": ["streptococcus pneumoniae", "pneumococc", "s. pneumoniae"]}
+{"question": "How is diabetic ketoacidosis managed?", "must_any": ["insulin", "fluid", "potassium"]}
+{"question": "What is the difference between type I and type II statistical error?", "must_any": ["null hypothesis", "false positive", "false negative", "type i", "type ii"]}
+{"question": "What are the signs of increased intracranial pressure?", "must_any": ["papilledema", "headache", "vomiting", "cushing"]}
+{"question": "What is the treatment for status epilepticus?", "must_any": ["benzodiazepine", "lorazepam", "diazepam", "phenytoin"]}
+{"question": "What are the features of nephrotic syndrome?", "must_any": ["proteinuria", "edema", "hypoalbuminemia", "hyperlipidemia"]}
+{"question": "What is the classic presentation of appendicitis?", "must_any": ["mcburney", "right lower quadrant", "rebound", "periumbilical"]}
+{"question": "How do you interpret an anion gap?", "must_any": ["sodium", "bicarbonate", "chloride", "metabolic acidosis"]}
+{"question": "What are the risk factors for breast cancer?", "must_any": ["brca", "estrogen", "family history", "age"]}
+{"question": "What is the mechanism of warfarin?", "must_any": ["vitamin k", "clotting factor", "epoxide reductase"]}
+{"question": "What are the stages of pressure ulcer?", "must_any": ["stage", "erythema", "full thickness", "necrosis"]}
+{"question": "What is the pathophysiology of asthma?", "must_any": ["bronchoconstriction", "inflammation", "airway", "hyperresponsiveness"]}
+{"question": "How is community-acquired pneumonia severity assessed?", "must_any": ["curb-65", "curb", "psi", "pneumonia severity"]}
+{"question": "What are the features of Cushing syndrome?", "must_any": ["cortisol", "moon face", "buffalo hump", "striae"]}

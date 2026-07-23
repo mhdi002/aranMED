@@ -1,0 +1,9 @@
+# template_id: appendix
+# title: Appendix
+# source_name: Appendix
+# source_file: Appendix.rtf
+
+A tubular blind ended non compressible structure with connection to cecum is seen in R.L.Q of abdomen with diameter of about XX mm. these findings are suggestive for acute appendicitis. Bowel loops show normal peristaltism and no sign of phlegmon or abscess is seen.
+
+
+At present time there is no sonographic evidence of acute appendicitis but retrocecal appendicitis cannot be ruled out so correlation with P/E and lab data is recommended.

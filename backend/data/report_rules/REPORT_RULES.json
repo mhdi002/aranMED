@@ -1,0 +1,21 @@
+{
+  "official_titles": {
+    "chest": "Chest sonography",
+    "brain": "Brain Sonography",
+    "soft_tissue": "Soft tissue sonography",
+    "neck_sono": "Neck sonography"
+  },
+  "aliases": {
+    "neck ct": "SPIRAL CT SCAN OF NECK SOFT TISSUE",
+    "ct neck": "SPIRAL CT SCAN OF NECK SOFT TISSUE",
+    "mri brain": "Brain Sonography",
+    "brain mri": "Brain Sonography",
+    "chest ct": "Chest sonography",
+    "ct chest": "Chest sonography"
+  },
+  "forbidden_titles": [
+    "neck ct",
+    "ct neck"
+  ],
+  "notes": "Insurance/hospital naming sidecar. Selected UI template always wins for structure. Coordinates with backend/data/report_rules/hospital_insurance_report_titles.*"
+}

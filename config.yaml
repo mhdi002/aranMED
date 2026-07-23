@@ -1,0 +1,185 @@
+# Paths are relative to project root unless absolute.
+# Prefer env overrides for machine-specific locations (see .env.example):
+#   MEDRAG_ROOT, MEDRAG_DATA_DIR, MEDRAG_MEHRSYS_DIR, MEDRAG_STANDARDS_DIR,
+#   MEDRAG_LIBRARY_DIR, MEDRAG_EXAM_DIR, MEDRAG_CATALOG_DB,
+#   MEDRAG_QDRANT_STORAGE, QDRANT_URL, MEDRAG_QDRANT_MODE
+paths:
+  # Relative placeholders only — override with MEDRAG_EXAM_DIR / MEDRAG_LIBRARY_DIR in .env.
+  # Do not put absolute Windows paths here.
+  exam_books_dir: "."
+  library_dir: "data/library"
+  # Offline ClinicalKey-style packs — set MEDRAG_MEHRSYS_DIR
+  mehrsys_books_dir: ""
+  # Iranian SOPs / standards — set MEDRAG_STANDARDS_DIR
+  standards_dir: ""
+  standards_extracted: "data/standards_extracted"
+  catalog_db: "catalog.db"
+  manifest: "data/manifest.jsonl"
+  text_out: "data/text"
+  ocr_out: "data/ocr_markdown"
+  chunks: "data/chunks.jsonl"
+  data_dir: "data"
+  # Live Qdrant *server* storage. Override via MEDRAG_QDRANT_STORAGE.
+  qdrant_storage: "qdrant_storage"
+  # Legacy local-mode archives (server mode does not open these). Target layout under data/.
+  qdrant_archives_dir: "data/qdrant_archives"
+  qdrant_data: "data/qdrant_archives/qdrant_data"
+  qdrant_standards_data: "data/qdrant_archives/qdrant_standards_data"
+  qdrant_expand_data: "data/qdrant_archives/qdrant_expand_data"
+  qdrant_expand2_data: "data/qdrant_archives/qdrant_expand2_data"
+  qdrant_expand3_data: "data/qdrant_archives/qdrant_expand3_data"
+  # Server write target → collection medical_library_expand (no local RAM load)
+  embed_write_store: "expand"
+  reports_dir: "reports"
+  eval_dir: "eval"
+
+ocr:
+  provider: "chandra"
+  model: "fredrezones55/chandra-ocr-2:latest"
+  prompt: "OCR this image to HTML."
+  render_dpi: 200
+  jpeg_quality: 95              # faster transfer than PNG, same quality at 200 DPI
+  keep_alive: -1                # keep model in VRAM between pages
+  num_ctx: 6144
+  num_predict: 3500
+  prefetch_pages: true          # render next page while GPU OCRs current
+  skip_blank_pages: true
+
+# Exam corpus OCR policy
+exam:
+  skip_en_books: true                    # EN PDFs in exam folder → use library instead
+  skip_fa_textbook_if_en_covers: true    # skip FA textbook OCR when EN same specialty exists
+
+vlm:
+  provider: "ollama"
+  model: "qwen3-vl:4b"
+  endpoint: "http://localhost:11434"
+
+embeddings:
+  # local = FlagEmbedding; vllm|openai = OpenAI-compatible /v1/embeddings
+  # Env: MEDRAG_EMBED_PROVIDER, MEDRAG_EMBED_BASE_URL / VLLM_EMBED_BASE_URL,
+  #      MEDRAG_EMBED_MODEL, MEDRAG_EMBED_API_KEY, MEDRAG_EMBED_BATCH
+  provider: "vllm"
+  model: "BAAI/bge-m3"
+  base_url: "http://localhost:8001/v1"
+  api_key: ""
+  timeout: 120
+  device: "cuda"
+  # RTX 3070 8GB: lower batch when sharing GPU with LLM; raise for local-only embeds
+  batch_size: 32
+  max_length: 384
+  # Dense-only via vLLM OpenAI API (no sparse/ColBERT). Keep false for hybrid local too if VRAM tight.
+  sparse_enabled: false
+
+reranker:
+  model: "BAAI/bge-reranker-v2-m3"
+  enabled: true
+  # RTX 3070 8GB: keep cpu when LLM+embed(+ASR) share one GPU (~1–1.5GB CE).
+  # Prefer MEDRAG_RERANK_DEVICE=cuda only if vLLM is stopped or util is very low.
+  # Env: MEDRAG_RERANK_DEVICE
+  device: "cpu"
+
+vector_db:
+  provider: "qdrant"
+  # server = Docker/native Qdrant on :6333 (REQUIRED for large embeds — no process RAM load)
+  # local  = on-disk path per store (legacy; OOMs as stores grow past ~6–9GB)
+  mode: "server"
+  # Local-mode main store only (ignored when mode=server). Prefer archives layout.
+  storage_path: "data/qdrant_archives/qdrant_data"
+  url: "http://localhost:6333"
+  # Base name; server mode creates medical_library_{main,standards,expand,…}
+  collection: "medical_library"
+  dense_dim: 1024
+
+# Production LLM: vLLM OpenAI-compatible API (multi-request, continuous batching).
+# Switch with llm.provider / MEDRAG_LLM_PROVIDER: vllm | ollama | openai
+# Env: MEDRAG_LLM_BASE_URL / VLLM_BASE_URL, MEDRAG_LLM_MODEL, MEDRAG_LLM_API_KEY
+llm:
+  provider: "vllm"
+  model: "Qwen/Qwen3.5-4B"             # must match --model served by vLLM
+  base_url: "http://localhost:8000/v1"
+  api_key: ""                          # optional; vLLM usually ignores
+  timeout: 300
+  max_retries: 1
+  fallback_provider: "ollama"          # clear error if empty and vLLM down
+  fallback_endpoint: "http://localhost:11434"
+  fallback_model: "qwen3.5-9b:latest"
+  # Generation knobs (env: MEDRAG_LLM_*) — keep small for 8GB / remote vLLM
+  temperature: 0.1
+  max_tokens: 768
+  top_p: 0.8
+  # Qwen3.5 defaults to <think> CoT — disable for clean RAG answers
+  enable_thinking: false
+  strip_thinking: true
+  # Ollama native context window (ignored by vLLM; use VLLM_MAX_MODEL_LEN there)
+  num_ctx: 4096
+
+# Legacy alias — merged under llm: (llm wins on overlapping keys)
+generator:
+  provider: "vllm"
+  model: "Qwen/Qwen3.5-4B"
+  endpoint: "http://localhost:8000/v1"
+
+# FastAPI bind (medrag-serve). Env: MEDRAG_API_HOST, MEDRAG_API_PORT
+api:
+  host: "0.0.0.0"
+  port: 8080
+
+chunking:
+  textbook_tokens: 800
+  textbook_overlap: 120
+  qbank_target_chars: 2600
+  qbank_overlap_chars: 300
+  min_chunk_chars: 200
+
+retrieval:
+  top_k_search: 50
+  top_k_final: 8
+  max_chunks_per_book: 2
+  # Smaller gen window = less prompt VRAM + less CoT/filler; env MEDRAG_GEN_CONTEXT
+  gen_context: 4
+  gen_chars_per_chunk: 1100
+  rrf_k: 60
+  rerank_enabled: true
+  min_rerank_score: 0.22          # fused score (≈[0,1] with ColBERT) below → broaden
+  # CE logits: negative top hit → broaden (was -1.0 = effectively muted)
+  min_ce_score: 0.0
+  # Query understanding
+  query_rewrite: true              # LLM expands/rephrases for retrieval
+  multi_query: true                # 2-3 search variants fused via RRF
+  hyde: false                      # hypothetical doc embedding (slower, +recall)
+  # Ranking diversity
+  mmr_enabled: true
+  mmr_lambda: 0.7                  # 1=relevance only, 0=diversity only
+  # Index-time contextual retrieval (Anthropic-style headers)
+  contextual_headers: true
+  parent_child: true               # expand child chunk → parent window at gen time
+  # Generation quality
+  compress_context: true           # sentence-level extractive compression
+  grounding_check: true            # post-gen faithfulness gate
+  grounding_min_score: 0.45
+  # Free local FlagEmbedding/reranker CUDA before LLM generate (8GB sequential)
+  unload_local_before_generate: true
+  # ColBERT needs local FlagEmbedding — disable when embeddings.provider=vllm|openai
+  colbert_enabled: false
+  colbert_top_k: 30                # hybrid pool size to ColBERT-rerank
+  colbert_weight: 0.35             # blend: (1-w)*cross-encoder + w*ColBERT
+  # Self-RAG corrective loop
+  self_rag_enabled: true
+  self_rag_max_iters: 2           # max retrieve→generate correction cycles
+  self_rag_grounding_threshold: 0.45
+  type_weights:
+    guideline: 1.15
+    standard: 1.20
+    legal: 1.18
+    textbook: 1.10
+    exam: 1.00
+    qbank: 0.95
+  # Clinical Knowledge OS (AranMed MVP)
+  intent_routing: true
+  rule_engine: true
+  kg_expansion: true
+  kg_max_facts: 8
+
+telegram:
+  token: ""

@@ -1,0 +1,22 @@
+# template_id: breast_axillary_sono
+# title: Family history:   negative for breast cancer in first and second degree relatives.
+# source_name: Breast + axillary  sono
+# source_file: Breast + axillary  sono.rtf
+
+Bilateral Breasts and Axilarry Sonography:
+Indication:     A XX years old
+
+Family history:   negative for breast cancer in first and second degree relatives.
+
+OVERALL BREASTS COMPOSITION:
+XX Homogeneous / heterogeneous (predominantly fatty / fibro glandular)
+
+Findings:
+Bilaterally no cyst or mass is seen.
+No tissue distortion is noted.
+
+Assessment: BIRADS 0 , further imaging required
+Assessment: BIRADS I, normal sonography.
+Assessment: BIRADS II, benign non cancerous findings
+Assessment: BIRADS III, probably benign lesion appropriate follow up breast ultrasound after 6 months is suggested.
+Assessment: BIRADS IV A, low suspicious for malignancy.

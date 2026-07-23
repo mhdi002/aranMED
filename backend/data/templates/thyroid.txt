@@ -1,0 +1,8 @@
+# template_id: thyroid
+# title: Thyroid Sonography
+# source_name: Thyroid
+# source_file: Thyroid.rtf
+
+Thyroid Sonography:
+
+Both thyroid lobes and also isthmus are normal in size with normal parenchymal echogenicity with no sign of solid or cystic lesion. Also no sign of gross calcification is seen within the thyroid parenchyma. There is no sign of adjacent cervical lymphadenopathy or mass lesion.

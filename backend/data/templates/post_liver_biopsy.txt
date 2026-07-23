@@ -1,0 +1,8 @@
+# template_id: post_liver_biopsy
+# title: Abdominopelvic Sonography Post Liver Biopsy
+# source_name: Post liver Biopsy
+# source_file: Post liver Biopsy.rtf
+
+Abdominopelvic Sonography Post Liver Biopsy:
+No hematoma or perihepatic fluid is seen around liver.
+No free fluid is seen in abdominopelvic cavity.

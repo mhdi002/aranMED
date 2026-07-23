@@ -1,0 +1,13 @@
+# template_id: brain
+# title: Brain Sonography
+# source_name: Brain
+# source_file: Brain .rtf
+
+Brain Sonography:
+
+Both cerebral hemispheres have normal parenchymal echogenicity with no sign of solid or cystic mass.
+Also no sign of calcification or hemorrhage is seen.
+All midline structures are preserved.
+All ventricles are normal in size with no sign of dilatation or intra ventricular hemorrhage.
+Brain stem and cerebellum are grossly normal in echo with no sign of mass or hemorrhage.
+No extra axial hematoma or fluid collection is detected.

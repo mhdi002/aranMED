@@ -1,0 +1,49 @@
+INFO:     127.0.0.1:54720 - "GET /api/health HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63688 - "POST /api/auth/login HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63698 - "GET /api/templates HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63640 - "GET /api/health HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63926 - "POST /api/auth/login HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63958 - "POST /api/transcribe HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49409 - "GET /api/health HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49451 - "GET /api/health HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49473 - "POST /api/auth/login HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49474 - "GET /api/templates HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49475 - "POST /api/transcribe HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50624 - "POST /api/transcribe HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53101 - "POST /api/transcribe HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63699 - "POST /api/report HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54845 - "POST /api/transcribe HTTP/1.1" 200 OK
+INFO:     127.0.0.1:61620 - "POST /api/report HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60181 - "POST /api/chat HTTP/1.1" 503 Service Unavailable
+INFO:     127.0.0.1:60878 - "GET /api/health HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60894 - "POST /api/auth/login HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60898 - "GET /api/templates HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60899 - "POST /api/report HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54629 - "GET /api/health HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54995 - "POST /api/chat HTTP/1.1" 503 Service Unavailable
+INFO:     127.0.0.1:60563 - "POST /api/ehr/build HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50276 - "GET /api/templates HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50277 - "GET /api/health HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50515 - "GET /api/health HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50664 - "GET /api/health HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50682 - "POST /api/auth/login HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50683 - "GET /api/templates HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50684 - "POST /api/transcribe HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52528 - "POST /api/transcribe HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50609 - "POST /api/transcribe HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63693 - "POST /api/transcribe HTTP/1.1" 200 OK
+INFO:     127.0.0.1:65166 - "GET /api/health HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63501 - "POST /api/report HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56020 - "POST /api/chat HTTP/1.1" 503 Service Unavailable
+INFO:     127.0.0.1:58591 - "GET /api/health HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58621 - "GET /api/health HTTP/1.1" 200 OK
+INFO:     127.0.0.1:65146 - "POST /api/auth/login HTTP/1.1" 200 OK
+INFO:     127.0.0.1:65147 - "GET /api/templates HTTP/1.1" 200 OK
+INFO:     127.0.0.1:64182 - "POST /api/ehr/build HTTP/1.1" 200 OK
+INFO:     127.0.0.1:65251 - "GET /api/templates HTTP/1.1" 200 OK
+INFO:     127.0.0.1:65252 - "GET /api/health HTTP/1.1" 200 OK
+INFO:     127.0.0.1:65148 - "POST /api/report HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57120 - "POST /api/chat HTTP/1.1" 503 Service Unavailable
+INFO:     127.0.0.1:61509 - "POST /api/ehr/build HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56272 - "GET /api/templates HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56273 - "GET /api/health HTTP/1.1" 200 OK

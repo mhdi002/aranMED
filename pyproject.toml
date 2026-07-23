@@ -1,0 +1,43 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "medrag"
+version = "1.0.0"
+description = "Unified medical RAG: Chandra OCR + column-aware extraction + Qdrant hybrid search"
+readme = "README.md"
+requires-python = ">=3.10"
+dependencies = [
+    "aiohttp>=3.13",
+    "rapidfuzz>=3.0",
+    "qdrant-client>=1.9",
+    "FlagEmbedding>=1.2",
+    "sentence-transformers>=3.0",
+    "transformers>=4.40",
+    "torch>=2.4",
+    "PyMuPDF>=1.24",
+    "ebooklib>=0.18",
+    "watchdog>=4.0",
+    "fastapi>=0.110",
+    "uvicorn>=0.29",
+    "requests>=2.31",
+    "pyyaml>=6.0",
+    "streamlit>=1.30",
+    "python-telegram-bot>=20.0",
+]
+
+[project.optional-dependencies]
+dev = ["pytest>=7.0"]
+
+[project.scripts]
+medrag-query = "medrag.interfaces.cli:main"
+medrag-serve = "medrag.interfaces.api:serve"
+medrag-pipeline = "medrag.run_pipeline:main"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["src"]

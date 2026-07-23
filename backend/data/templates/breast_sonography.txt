@@ -1,0 +1,17 @@
+# template_id: breast_sonography
+# title: Breast sonography
+# source_name: Breast sonography
+# source_file: Breast sonography.docx
+
+Breast sonography:
+Indication: screening
+Familial history: negative
+Composition: homogeneously glandular
+Findings:
+Evidence of an oval shape hypoechoic parallel circumscribe with no posterior feature mass measuring about 6x3mm is seen in 7 o'clock of posterior third of RT breast with about 2.5cm distance from nipple.
+Evidence of two oval shape isoechoic parallel circumscribed with no posterior featured mass are noted at 12 and 7 o'clock of LT breast both about 2cm from nipple respectively measuring about 13.5x5mm and 14x5.5mm, possibly representing benign lesion, correlation with F/U sonography is recommended (BIRADS III)
+Conclusion and recommendation based on ACR:
+BIRADS III and F/U sonography after 6months
+Sincerely; Dr.Dousty MD
+Typed by
+Y.Dolatkhah

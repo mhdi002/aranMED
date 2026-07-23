@@ -1,0 +1,13 @@
+# template_id: cds_transplanted_kidney
+# title: Color Doppler Sonography of Transplanted kidney
+# source_name: Transplanted Kidney
+# source_file: Transplanted Kidney.rtf
+
+Color Doppler Sonography of Transplanted kidney:
+
+According to gray scale, color flow mapping and spectral analysis of transplanted main renal vessels the study reveal:
+Transplanted kidney is
+Normal caliber of them associated with normal color flow mapping and no sign of aliasing or turbulent flow.
+Spectral analysis shows normal spectral waveform, including normal peak systolic velocities.
+According to spectral analysis of Transplanted intra renal arterial branches the study shows normal spectral waveform with no sign of tardus parvus effect (acceleration times are within normal range). The Resistive indices are within normal range (R.I ) and there is no significant difference between them bilaterally, so according to all mentioned findings there is no sign of significant narrowing at transplanted main renal arteries.
+Transplanted main renal veins traced with normal caliber and normal color encoding and also normal spectral waveform without evidence of thrombosis.

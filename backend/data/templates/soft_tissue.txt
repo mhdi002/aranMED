@@ -1,0 +1,10 @@
+# template_id: soft_tissue
+# title: Soft Tissue Sonography of
+# source_name: Soft tissue
+# source_file: Soft tissue.rtf
+
+Soft Tissue Sonography of     :
+
+No evidence of soft tissue swelling or fat inflammation is noted
+No evidence of collection or abscess formation is detected.
+No soft tissue swelling or edema is noted

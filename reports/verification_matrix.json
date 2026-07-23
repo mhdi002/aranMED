@@ -1,0 +1,92 @@
+[
+  {
+    "test": "A0 GET /api/health",
+    "result": "PASS",
+    "evidence": "service=aranmed asr=whisper-large-v3 ollama_available=true; nested medrag.ok often false because adapter probes /health with 3s timeout while MedRAG /health takes ~30s"
+  },
+  {
+    "test": "A1 POST /api/transcribe (hf_asr)",
+    "result": "PASS",
+    "evidence": "HTTP 200 after Triton config; asr_model=whisper-large-v3; default ASR unchanged"
+  },
+  {
+    "test": "A2 Triton ASR path",
+    "result": "PASS",
+    "evidence": "whisper-triton enabled (hf_asr remains default); TRITON_URL=http://127.0.0.1:8002; GET /v2/health/ready 200; POST /api/transcribe model=whisper-triton HTTP 200 asr_model=whisper-triton. Official nvcr.io/nvidia/tritonserver:24.08-py3 pull returned 403 Forbidden (NGC auth required) after Docker Desktop install + GPU smoke OK; served via deploy/triton/compat_http_server.py (Triton HTTP v2 WAV/TRANSCRIPT wire-compatible) + deploy/.../whisper Python-backend model.py for production Triton once NGC login works. Stock ONNX skipped (wrong I/O for WAV→TRANSCRIPT)."
+  },
+  {
+    "test": "A3 hf_asr.py unchanged",
+    "result": "PASS",
+    "evidence": "file not edited; additive providers/triton_asr.py only"
+  },
+  {
+    "test": "B0 login admin/admin",
+    "result": "PASS",
+    "evidence": "form OAuth2 login 200 bearer token"
+  },
+  {
+    "test": "B1 POST /api/ehr/build",
+    "result": "PASS",
+    "evidence": "patient_id=ali-reza (prior session)"
+  },
+  {
+    "test": "B2 GET /api/ehr",
+    "result": "PASS",
+    "evidence": "records include ali-reza"
+  },
+  {
+    "test": "B3 POST /api/ehr/{id}/ask",
+    "result": "PASS",
+    "evidence": "ali-reza ask HTTP 200 via MedRAG in ~651s after MEDRAG_TIMEOUT_SEC=900; answer returned (low grounding on EHR-shaped query)"
+  },
+  {
+    "test": "C1 POST /api/knowledge/ask",
+    "result": "PASS",
+    "evidence": "HTTP 200 ~585s warm; pneumonia answer with library sources"
+  },
+  {
+    "test": "C2 MedRAG GET /health",
+    "result": "PASS",
+    "evidence": "HTTP 200 ~31s; chunks=446549 llm=vllm ok embeddings=vllm/bge-m3 ok; medrag-serve on :8080"
+  },
+  {
+    "test": "D1 POST /api/education/mcq",
+    "result": "PASS",
+    "evidence": "content+data on warm retry (prior session)"
+  },
+  {
+    "test": "D2 POST /api/education/explain",
+    "result": "PASS",
+    "evidence": "MedRAG preferred; Ollama fallback OK (prior session)"
+  },
+  {
+    "test": "D3 POST /api/education/case",
+    "result": "PASS",
+    "evidence": "content+data (prior session)"
+  },
+  {
+    "test": "E1 radiology knowledge ask",
+    "result": "PASS",
+    "evidence": "specialty=radiology HTTP 200 ~624s; CXR lobar pneumonia findings with sources"
+  },
+  {
+    "test": "E2 POST /api/chat text-only",
+    "result": "PASS",
+    "evidence": "clean 503 when MedRAG down (prior session)"
+  },
+  {
+    "test": "Frontend /login",
+    "result": "PASS",
+    "evidence": "HTTP 200 on :3000 earlier; leave Next process running"
+  },
+  {
+    "test": "Adapter import",
+    "result": "PASS",
+    "evidence": "backend.integrations.medrag_client"
+  },
+  {
+    "test": "Triton config.pbtxt",
+    "result": "PASS",
+    "evidence": "deploy/triton/model_repository/whisper/config.pbtxt template present"
+  }
+]

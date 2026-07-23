@@ -1,0 +1,24 @@
+# Keep Docker build context small
+.venv
+**/__pycache__
+**/*.pyc
+.git
+.run
+*.md
+results
+test_results*.txt
+frontend/node_modules
+frontend/.next
+backend/data/app.db
+.env
+.env.*
+!.env.example
+cloudflare
+.claude
+.uploads
+.pytest_cache
+models
+*.m4a
+*.mp3
+*.wav
+*.webm

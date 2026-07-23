@@ -1,0 +1,10 @@
+# template_id: nephrostomy_tube_insertion
+# title: Nephrostomy Tube Insertion Under Guide of Sonography
+# source_name: Nephrostomy tube insertion
+# source_file: Nephrostomy tube insertion.rtf
+
+Nephrostomy Tube Insertion Under Guide of Sonography:
+
+After routine prep & drep, under guide of sonography, local anesthesia was done and nephrostomy tube (gaje VIII ) was inserted in Rt pelvicalyceal system and clear urine was aspirated and connected to bag.
+No complications was seen during procedure.
+Orders were attached.

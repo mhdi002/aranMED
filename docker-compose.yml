@@ -1,0 +1,83 @@
+# GPU server stack: Ollama (LLM) + aranmed backend (Whisper) + Next.js frontend
+#
+# Prerequisites:
+#   - NVIDIA driver + nvidia-container-toolkit
+#   - docker compose v2
+# MedicalRAG (src/medrag) and Triton are separate processes —
+#     set MEDRAG_API_URL / TRITON_URL in .env (see docs/MICROSERVICES.md)
+#
+# Quick start:
+#   cp .env.example .env
+#   make docker-install    # pulls stock LLM qwen2.5:7b by default
+#   make docker-run
+
+services:
+  ollama:
+    image: ollama/ollama:latest
+    container_name: aranmed-ollama
+    ports: ["11434:11434"]
+    volumes: ["ollama:/root/.ollama"]
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: all
+              capabilities: [gpu]
+    restart: unless-stopped
+
+  backend:
+    build:
+      context: .
+      target: backend
+      args:
+        TORCH_INDEX: ${TORCH_INDEX:-https://download.pytorch.org/whl/cu128}
+    container_name: aranmed-backend
+    depends_on:
+      ollama:
+        condition: service_started
+    env_file:
+      - .env
+    environment:
+      OLLAMA_HOST: http://ollama:11434
+      OLLAMA_MODEL: ${OLLAMA_MODEL:-qwen2.5:7b}
+      MEDRAG_API_URL: ${MEDRAG_API_URL:-}
+      MEDRAG_TIMEOUT_SEC: ${MEDRAG_TIMEOUT_SEC:-120}
+      TRITON_URL: ${TRITON_URL:-}
+      TRITON_MODEL: ${TRITON_MODEL:-whisper}
+      HF_HOME: /models
+      PORT: "8010"
+      HOST: 0.0.0.0
+    volumes:
+      - hf-cache:/models
+      - ./backend/models.docker.yaml:/app/backend/models.yaml:ro
+      - ./backend/data:/app/backend/data
+    ports: ["8010:8010"]
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: all
+              capabilities: [gpu]
+    restart: unless-stopped
+
+  frontend:
+    build:
+      context: .
+      target: frontend
+    container_name: aranmed-frontend
+    depends_on:
+      backend:
+        condition: service_healthy
+    environment:
+      BACKEND_URL: http://backend:8010
+      HOST: 0.0.0.0
+      PORT: "3000"
+      NODE_ENV: production
+    ports: ["3000:3000"]
+    restart: unless-stopped
+
+volumes:
+  ollama:
+  hf-cache:

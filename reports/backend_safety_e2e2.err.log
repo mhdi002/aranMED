@@ -1,0 +1,16 @@
+2026-07-22 11:22:04,251 [INFO] registry: loading registry from C:\Users\mhf\Desktop\asr main\asr main\151-main\backend\models.yaml
+2026-07-22 11:22:04,251 [INFO] registry: registry: 3 providers, defaults={'core': 'qwen3.5-9b', 'asr': 'whisper-large-v3'}
+INFO:     Started server process [4908]
+INFO:     Waiting for application startup.
+2026-07-22 11:22:04,294 [INFO] templates: Templates dir C:\Users\mhf\Desktop\asr main\asr main\151-main\backend\data\templates (56 local .txt)
+2026-07-22 11:22:04,294 [INFO] api: registry roles=['core', 'asr'] defaults={'core': 'qwen3.5-9b', 'asr': 'whisper-large-v3'}
+INFO:     Application startup complete.
+INFO:     Uvicorn running on http://127.0.0.1:8010 (Press CTRL+C to quit)
+2026-07-22 11:22:11,270 [INFO] httpx: HTTP Request: GET http://127.0.0.1:11434/api/tags "HTTP/1.1 200 OK"
+2026-07-22 11:22:11,519 [INFO] httpx: HTTP Request: GET http://127.0.0.1:11434/api/tags "HTTP/1.1 200 OK"
+2026-07-22 11:22:11,768 [INFO] httpx: HTTP Request: GET http://127.0.0.1:11434/api/tags "HTTP/1.1 200 OK"
+2026-07-22 11:22:14,992 [INFO] httpx: HTTP Request: GET http://127.0.0.1:11434/api/tags "HTTP/1.1 200 OK"
+2026-07-22 11:22:18,325 [INFO] httpx: HTTP Request: POST http://127.0.0.1:11434/api/show "HTTP/1.1 200 OK"
+2026-07-22 11:22:43,275 [INFO] httpx: HTTP Request: POST http://127.0.0.1:11434/api/chat "HTTP/1.1 200 OK"
+2026-07-22 11:22:43,514 [INFO] httpx: HTTP Request: GET http://127.0.0.1:11434/api/tags "HTTP/1.1 200 OK"
+2026-07-22 11:23:07,385 [INFO] httpx: HTTP Request: GET http://127.0.0.1:11434/api/tags "HTTP/1.1 200 OK"

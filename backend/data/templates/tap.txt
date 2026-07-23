@@ -1,0 +1,8 @@
+# template_id: tap
+# title: XX Tap under Guide of Sonography
+# source_name: Tap
+# source_file: Tap.rtf
+
+XX Tap under Guide of Sonography:
+
+After prep and drape, under guide of sonography, XX fluid was aspirated and sample was sent to lab.

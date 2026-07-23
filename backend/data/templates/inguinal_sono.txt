@@ -1,0 +1,10 @@
+# template_id: inguinal_sono
+# title: Soft tissue sonography of Both Inguinal Regions
+# source_name: Inguinal sono
+# source_file: Inguinal sono.rtf
+
+Soft tissue sonography of Both Inguinal Regions:
+
+No evidence of herniated bowel loops in the both sides inguinal region is seen.
+No evidence of collection or hematoma formation is seen.
+There is normal parenchymal echogenicity of soft tissue of both side inguinal regions.

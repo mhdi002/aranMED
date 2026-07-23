@@ -1,0 +1,20 @@
+# Cloudflare Tunnel — share ASR-Agent with one public link
+#
+# Quick start (no Cloudflare account):
+#   scripts\start_public.ps1
+#
+# Named tunnel (stable custom domain — requires Cloudflare account):
+#   1. Install cloudflared: winget install Cloudflare.cloudflared
+#   2. cloudflared tunnel login
+#   3. cloudflared tunnel create asr-agent
+#   4. Copy tunnel UUID into config.yml below
+#   5. cloudflared tunnel route dns asr-agent your-subdomain.example.com
+#   6. scripts\start_public.ps1 -NamedTunnel
+
+tunnel: YOUR_TUNNEL_UUID
+credentials-file: C:\Users\YOUR_USER\.cloudflared\YOUR_TUNNEL_UUID.json
+
+ingress:
+  - hostname: asr.yourdomain.com
+    service: http://127.0.0.1:3000
+  - service: http_status:404
