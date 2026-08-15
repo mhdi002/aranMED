@@ -68,3 +68,9 @@ REPORT_RULES_MEDRAG = os.getenv("REPORT_RULES_MEDRAG", "1").strip().lower() not 
 
 HOST = os.getenv("HOST", "0.0.0.0")
 PORT = int(os.getenv("PORT", "8010"))
+
+# Clinical Data Fabric (docs/core/CLINICAL_DATA_FABRIC_v1.md). POST /api/chat
+# (the agent tool-calling path that builds EHR records via BuildEHRTool) is
+# unauthenticated, so there is no per-request user to own a persisted
+# record — this names the account those records are attributed to instead.
+EHR_TOOL_SYSTEM_OWNER_USERNAME = os.getenv("EHR_TOOL_SYSTEM_OWNER_USERNAME", "admin")

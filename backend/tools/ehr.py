@@ -2,15 +2,19 @@
 
 These tools let the core LLM turn raw, free-form patient information
 (possibly bilingual Persian + English) into a clean, structured EHR record,
-persist it to a small JSON store, and read it back.  The same record then
-feeds the medication-alert tools in :mod:`tools.alerts`.
+persist it, and read it back. The same record then feeds the
+medication-alert tools in :mod:`tools.alerts`.
 
-Storage layout
----------------
-``backend/data/ehr/<patient_id>.json`` — one file per patient.  Each file is a
-dict with top-level keys ``patient``, ``encounter``, ``medications``,
-``problems``, ``allergies``, ``vitals``, ``notes`` and bookkeeping
-(``id``, ``language``, ``created_at``, ``updated_at``).
+Storage: the SQLite ``patients`` table (``backend/store.py`` /
+``backend/db.py``) — the same canonical store the ``/api/ehr/*`` REST
+routes use. This used to be a separate one-file-per-patient JSON store at
+``backend/data/ehr/<patient_id>.json`` with no owner concept; see
+docs/core/CLINICAL_DATA_FABRIC_v1.md for why/how it was folded in.
+``POST /api/chat`` (the only entry point that reaches these tools) carries
+no authenticated user, so records built here are attributed to a
+configured system-owner account (``config.EHR_TOOL_SYSTEM_OWNER_USERNAME``)
+rather than a per-request user — the same effective namespace the old
+ownerless file store had.
 """
 from __future__ import annotations
 
@@ -19,22 +23,16 @@ import logging
 import re
 import time
 import uuid
-from pathlib import Path
 from typing import Any
+
+import config
+import db
+import store
+from auth import ensure_default_admin
 
 from .base import Tool, ToolContext, ToolResult, tool
 
 log = logging.getLogger("tools.ehr")
-
-# --------------------------------------------------------------------------
-# Storage helpers
-# --------------------------------------------------------------------------
-_DATA_DIR = Path(__file__).resolve().parents[1] / "data" / "ehr"
-
-
-def _store_dir() -> Path:
-    _DATA_DIR.mkdir(parents=True, exist_ok=True)
-    return _DATA_DIR
 
 
 def _slugify(name: str) -> str:
@@ -42,45 +40,50 @@ def _slugify(name: str) -> str:
     return base or uuid.uuid4().hex[:8]
 
 
-def _record_path(patient_id: str) -> Path:
-    safe = re.sub(r"[^a-zA-Z0-9_-]+", "", patient_id)
-    return _store_dir() / f"{safe}.json"
+def _system_owner_user_id() -> int:
+    """Resolve config.EHR_TOOL_SYSTEM_OWNER_USERNAME to a users.id.
+
+    Seeds the default admin (idempotent, no-op if any user already exists)
+    so this works standalone in unit tests too, not only behind a full app
+    startup. See docs/core/CLINICAL_DATA_FABRIC_v1.md.
+    """
+    username = config.EHR_TOOL_SYSTEM_OWNER_USERNAME.strip().lower()
+    with db.connect() as c:
+        row = c.execute("SELECT id FROM users WHERE username=?", (username,)).fetchone()
+    if row is not None:
+        return row["id"]
+    ensure_default_admin()
+    with db.connect() as c:
+        row = c.execute("SELECT id FROM users WHERE username=?", (username,)).fetchone()
+    if row is None:
+        raise RuntimeError(
+            f"EHR system-owner user '{username}' not found — set "
+            "EHR_TOOL_SYSTEM_OWNER_USERNAME to an existing username"
+        )
+    return row["id"]
 
 
+# --------------------------------------------------------------------------
+# Storage helpers — thin wrappers over backend/store.py (see module docstring)
+# --------------------------------------------------------------------------
 def load_record(patient_id: str) -> dict | None:
-    p = _record_path(patient_id)
-    if not p.exists():
-        return None
-    try:
-        return json.loads(p.read_text(encoding="utf-8"))
-    except Exception as e:  # noqa: BLE001
-        log.warning("failed to read EHR %s: %s", patient_id, e)
-        return None
+    return store.get_patient(patient_id, owner_user_id=_system_owner_user_id())
 
 
-def save_record(record: dict) -> Path:
+def save_record(record: dict) -> dict:
     pid = record["id"]
-    p = _record_path(pid)
-    record["updated_at"] = time.time()
-    p.write_text(json.dumps(record, ensure_ascii=False, indent=2), encoding="utf-8")
-    return p
+    language = record.get("language", "en")
+    data = {k: v for k, v in record.items() if k not in ("id", "language")}
+    return store.upsert_patient(
+        owner_user_id=_system_owner_user_id(),
+        data=data,
+        patient_id=pid,
+        language=language,
+    )
 
 
 def list_records() -> list[dict]:
-    out: list[dict] = []
-    for f in sorted(_store_dir().glob("*.json")):
-        try:
-            r = json.loads(f.read_text(encoding="utf-8"))
-            out.append({
-                "id": r.get("id"),
-                "name": r.get("patient", {}).get("name"),
-                "language": r.get("language"),
-                "medications": len(r.get("medications", [])),
-                "updated_at": r.get("updated_at"),
-            })
-        except Exception:  # noqa: BLE001
-            continue
-    return out
+    return store.list_patients(owner_user_id=_system_owner_user_id())
 
 
 # --------------------------------------------------------------------------
