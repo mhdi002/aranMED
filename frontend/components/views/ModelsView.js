@@ -41,11 +41,18 @@ export default function ModelsView({ kind = "asr" }) {
   const activeName = defaultName || health?.[meta.healthKey] || null;
   const active = activeName ? providers[activeName] : null;
   const online = active ? active?.health?.ok !== false : Boolean(health?.ok);
+  // `activeName` is the registry *slot key* (e.g. "ollama-core") -- a label,
+  // not necessarily the model it resolves to (config.model can be templated
+  // from an env var). Prefer what the provider actually reports/resolved to
+  // at runtime, so a stale or generic slot label can never misrepresent
+  // which model is really running. See docs/core/CONFIGURATION.md.
+  const resolvedModel =
+    active?.health?.model || active?.config?.model || activeName;
 
   return (
     <Card style={{ width: "100%" }}>
       <CardHead
-        title={activeName || "—"}
+        title={resolvedModel || "—"}
         hint={`${meta.role} role · model status`}
       />
 
@@ -54,7 +61,11 @@ export default function ModelsView({ kind = "asr" }) {
       <div className="kpis" style={{ gridTemplateColumns: "repeat(auto-fit,minmax(160px,1fr))" }}>
         <div className="kpi">
           <span>Model</span>
-          <b>{activeName || "not configured"}</b>
+          <b>{resolvedModel || "not configured"}</b>
+        </div>
+        <div className="kpi">
+          <span>Registry slot</span>
+          <b>{activeName || "—"}</b>
         </div>
         <div className="kpi">
           <span>Provider</span>
@@ -88,26 +99,29 @@ export default function ModelsView({ kind = "asr" }) {
         </EmptyState>
       ) : (
         <div className="list">
-          {entries.map(([name, p]) => (
-            <div key={name} className="list-item" style={{ cursor: "default" }}>
-              <div className="row" style={{ justifyContent: "space-between" }}>
-                <b>{name}</b>
-                <div className="row">
-                  {name === defaultName && <Badge tone="info">default</Badge>}
-                  {(p?.loaded || (registry?.warm || []).includes(name)) && (
-                    <Badge tone="ok">warm</Badge>
-                  )}
-                  <Badge tone={p?.health?.ok === false ? "due" : "ok"}>
-                    {p?.health?.ok === false ? "error" : "ready"}
-                  </Badge>
+          {entries.map(([name, p]) => {
+            const entryModel = p?.health?.model || p?.config?.model || name;
+            return (
+              <div key={name} className="list-item" style={{ cursor: "default" }}>
+                <div className="row" style={{ justifyContent: "space-between" }}>
+                  <b>{entryModel}</b>
+                  <div className="row">
+                    {name === defaultName && <Badge tone="info">default</Badge>}
+                    {(p?.loaded || (registry?.warm || []).includes(name)) && (
+                      <Badge tone="ok">warm</Badge>
+                    )}
+                    <Badge tone={p?.health?.ok === false ? "due" : "ok"}>
+                      {p?.health?.ok === false ? "error" : "ready"}
+                    </Badge>
+                  </div>
+                </div>
+                <div className="meta">
+                  slot {name} · provider {p?.kind || "—"}
+                  {p?.health?.detail ? ` · ${p.health.detail}` : ""}
                 </div>
               </div>
-              <div className="meta">
-                provider {p?.kind || "—"}
-                {p?.health?.detail ? ` · ${p.health.detail}` : ""}
-              </div>
-            </div>
-          ))}
+            );
+          })}
         </div>
       )}
 

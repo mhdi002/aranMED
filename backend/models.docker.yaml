@@ -7,12 +7,17 @@
 #
 # Both OLLAMA_HOST and OLLAMA_MODEL are set by docker-compose.yml.
 
-core: qwen2.5-7b [ollama]
+core: ollama-core [ollama]
 asr: whisper-large-v3 [hf_asr]
 
 models:
 - role: core
-  name: qwen2.5-7b
+  # This slot's actual model is entirely env-driven (config.model:
+  # ${OLLAMA_MODEL}) -- the label must not assert a specific model or it
+  # silently drifts from reality. Previously "qwen2.5-7b" while the
+  # resolved model was qwen3.5-9b:latest, which the UI displayed as fact.
+  # See docs/core/CONFIGURATION.md.
+  name: ollama-core
   provider: ollama
   enabled: true
   default: true
