@@ -3,6 +3,7 @@ import { fetchWithTimeout } from "../../lib/api";
 import { apiUrl } from "../../lib/config";
 import { Image, Send, Upload, Trash, XRay, Sparkle, Copy } from "../icons";
 import CriticalAlertsBanner from "../CriticalAlertsBanner";
+import { Button } from "../ui";
 
 const SUGGESTIONS = [
   "Briefly describe the findings on this chest X-ray.",
@@ -26,8 +27,18 @@ export default function RadiologyView() {
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState("");
   const [criticalAlerts, setCriticalAlerts] = useState([]);
+  const [health, setHealth] = useState(null);
   const fileRef = useRef(null);
   const endRef = useRef(null);
+
+  useEffect(() => {
+    let alive = true;
+    fetchWithTimeout(apiUrl("/api/health"), {}, 30000)
+      .then((r) => r.json())
+      .then((d) => alive && setHealth(d))
+      .catch(() => {});
+    return () => { alive = false; };
+  }, []);
 
   useEffect(() => {
     let id = localStorage.getItem("asr.radiology.sid");
@@ -167,13 +178,9 @@ export default function RadiologyView() {
                 session {sessionId.slice(0, 6) || "…"}
               </span>
             </div>
-            <button
-              className="btn ghost"
-              onClick={newChat}
-              title="Start a new session"
-            >
+            <Button variant="ghost" onClick={newChat} title="Start a new session">
               <Trash size={14} /> New chat
-            </button>
+            </Button>
           </div>
 
           <div className="chat-stream">
@@ -239,14 +246,14 @@ export default function RadiologyView() {
               }}
               disabled={busy}
             />
-            <button
-              className="btn"
+            <Button
               onClick={() => send()}
-              disabled={busy || (!input.trim() && pendingImages.length === 0)}
+              loading={busy}
+              disabled={!input.trim() && pendingImages.length === 0}
             >
-              {busy ? <span className="spinner" /> : <Send size={14} />}
+              {!busy && <Send size={14} />}
               Send
-            </button>
+            </Button>
           </div>
         </section>
 
@@ -287,14 +294,16 @@ export default function RadiologyView() {
             <span className="step">⚙</span>
             <h2>Model</h2>
           </div>
+          {/* Model identity comes from the live registry (GET /api/health) —
+              never hardcoded here. See docs/core/CONFIGURATION.md. */}
           <div className="kpis">
             <div className="kpi">
               <span>Vision</span>
-              <b>Radiology-Infer-Mini Q8</b>
+              <b>{health?.vision_model || "not configured"}</b>
             </div>
             <div className="kpi">
-              <span>Backend</span>
-              <b>llama-server :8088</b>
+              <span>Knowledge</span>
+              <b>{health?.medrag?.ok ? "MedicalRAG online" : "MedicalRAG offline"}</b>
             </div>
           </div>
         </aside>

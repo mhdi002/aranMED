@@ -132,7 +132,7 @@ export default function EducationView() {
   }
 
   return (
-    <div className="edu-bg">
+    <div>
       <div className="page-head">
         <h2 className="page-title">{t("edu.title")}</h2>
         <p className="page-sub">{t("edu.sub")}</p>

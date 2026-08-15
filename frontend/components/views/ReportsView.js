@@ -1,7 +1,10 @@
 import { useEffect, useState } from "react";
+import { ConfirmModal } from "../ui";
 
 export default function ReportsView() {
   const [items, setItems] = useState([]);
+  const [confirmClear, setConfirmClear] = useState(false);
+
   useEffect(() => {
     try {
       const raw = localStorage.getItem("asr.reports");
@@ -10,9 +13,9 @@ export default function ReportsView() {
   }, []);
 
   function clearAll() {
-    if (!confirm("Delete all saved reports?")) return;
     localStorage.removeItem("asr.reports");
     setItems([]);
+    setConfirmClear(false);
   }
 
   return (
@@ -38,9 +41,20 @@ export default function ReportsView() {
               </pre>
             </div>
           ))}
-          <button className="btn ghost" onClick={clearAll}>Clear all</button>
+          <button className="btn ghost" onClick={() => setConfirmClear(true)}>Clear all</button>
         </div>
       )}
+
+      <ConfirmModal
+        open={confirmClear}
+        title="Delete all saved reports?"
+        danger
+        confirmLabel="Delete all"
+        onCancel={() => setConfirmClear(false)}
+        onConfirm={clearAll}
+      >
+        This removes all {items.length} report(s) saved locally in this browser. This cannot be undone.
+      </ConfirmModal>
     </div>
   );
 }

@@ -1,7 +1,7 @@
+import "../styles/tokens.css";
 import "../styles/globals.css";
 import { useRouter } from "next/router";
 import { useEffect } from "react";
-import BackgroundFx from "../components/BackgroundFx";
 import { AuthProvider, useAuth } from "../lib/auth";
 import { LanguageProvider } from "../lib/i18n";
 
@@ -27,13 +27,9 @@ function Gate({ Component, pageProps }) {
 }
 
 export default function App({ Component, pageProps }) {
-  const router = useRouter();
-  const isLogin = router.pathname === "/login";
-
   return (
     <LanguageProvider>
       <AuthProvider>
-        {!isLogin && <BackgroundFx />}
         <Gate Component={Component} pageProps={pageProps} />
       </AuthProvider>
     </LanguageProvider>

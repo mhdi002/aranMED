@@ -3,6 +3,7 @@ import { useAuth } from "../../lib/auth";
 import { apiFetch } from "../../lib/api";
 import { useT } from "../../lib/i18n";
 import CriticalAlertsBanner from "../CriticalAlertsBanner";
+import { ConfirmModal } from "../ui";
 
 function fmtTs(t) {
   if (!t) return "—";
@@ -20,6 +21,7 @@ export default function EhrView() {
   const [askQ, setAskQ] = useState("");
   const [askAnswer, setAskAnswer] = useState("");
   const [criticalAlerts, setCriticalAlerts] = useState([]);
+  const [pendingDelete, setPendingDelete] = useState(null);
 
   const load = useCallback(async () => {
     if (!token) return;
@@ -58,12 +60,11 @@ export default function EhrView() {
   }
 
   async function remove(id) {
-    if (!confirm(`Delete ${id}?`)) return;
     try {
       await apiFetch(`/api/ehr/${id}`, { method: "DELETE" }, token);
       if (active?.id === id) setActive(null);
       load();
-    } catch (e) { setErr(e.message); }
+    } catch (e) { setErr(e.message); } finally { setPendingDelete(null); }
   }
 
   async function recordDose(medName) {
@@ -91,7 +92,7 @@ export default function EhrView() {
   }
 
   return (
-    <div className="ehr-bg">
+    <div>
       <div className="page-head">
         <h2 className="page-title">{t("ehr.title")}</h2>
         <p className="page-sub">{t("ehr.sub")}</p>
@@ -139,7 +140,7 @@ export default function EhrView() {
                   <button className="btn ghost" onClick={() => open(r.id)}>
                     {t("ehr.open")}
                   </button>
-                  <button className="btn ghost danger" onClick={() => remove(r.id)}>
+                  <button className="btn ghost danger" onClick={() => setPendingDelete(r.id)}>
                     {t("ehr.delete")}
                   </button>
                 </div>
@@ -221,6 +222,17 @@ export default function EhrView() {
           </div>
         </section>
       )}
+
+      <ConfirmModal
+        open={pendingDelete != null}
+        title="Delete record?"
+        danger
+        confirmLabel={t("ehr.delete")}
+        onCancel={() => setPendingDelete(null)}
+        onConfirm={() => remove(pendingDelete)}
+      >
+        This permanently deletes the EHR record for <strong>{pendingDelete}</strong>.
+      </ConfirmModal>
     </div>
   );
 }

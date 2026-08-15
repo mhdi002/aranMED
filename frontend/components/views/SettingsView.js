@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { ConfirmModal } from "../ui";
 
 export default function SettingsView() {
   const [theme, setTheme] = useState("light");
@@ -6,6 +7,7 @@ export default function SettingsView() {
   const [savedAt, setSavedAt] = useState(0);
   const [apiBase, setApiBase] = useState("/api (same origin)");
   const [frontBase, setFrontBase] = useState("");
+  const [confirmReset, setConfirmReset] = useState(false);
 
   useEffect(() => {
     setTheme(localStorage.getItem("theme") || "light");
@@ -26,12 +28,12 @@ export default function SettingsView() {
     setSavedAt(Date.now());
   }
   function reset() {
-    if (!confirm("Clear all local app data (saved reports, theme, preferences)?")) return;
     localStorage.removeItem("asr.reports");
     localStorage.removeItem("asr.language");
     localStorage.removeItem("theme");
     applyTheme("light");
     setLang("");
+    setConfirmReset(false);
   }
 
   return (
@@ -57,7 +59,7 @@ export default function SettingsView() {
 
       <div className="toolbar">
         <button className="btn" onClick={save}>Save</button>
-        <button className="btn ghost" onClick={reset}>Reset workspace</button>
+        <button className="btn ghost" onClick={() => setConfirmReset(true)}>Reset workspace</button>
       </div>
       {savedAt > 0 && (
         <p className="muted" style={{ marginTop: 10 }}>Saved.</p>
@@ -74,6 +76,17 @@ export default function SettingsView() {
         Endpoints and model tags are configured via environment variables — see{" "}
         <code>.env.example</code> in the project root. Restart the backend after editing.
       </p>
+
+      <ConfirmModal
+        open={confirmReset}
+        title="Reset workspace?"
+        danger
+        confirmLabel="Reset"
+        onCancel={() => setConfirmReset(false)}
+        onConfirm={reset}
+      >
+        This clears saved reports, theme, and language preferences stored locally in this browser.
+      </ConfirmModal>
     </div>
   );
 }

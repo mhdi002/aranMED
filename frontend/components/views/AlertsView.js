@@ -69,7 +69,7 @@ export default function AlertsView() {
   }
 
   return (
-    <div className="alerts-bg">
+    <div>
       <div className="page-head">
         <h2 className="page-title">{t("alerts.title")}</h2>
         <p className="page-sub">{t("alerts.sub")}</p>

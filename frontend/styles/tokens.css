@@ -1,0 +1,102 @@
+/* ─────────────────────────────────────────────────────────────────────────
+   AranMed design tokens — spatial / minimalist system.
+   docs/core/ (see ROADMAP.md) — single source of truth for color, type,
+   spacing, radius and elevation. No component or view file should define
+   a raw color/px value that belongs here; everything reads these
+   custom properties so the whole app can be retuned from one file.
+   ───────────────────────────────────────────────────────────────────────── */
+:root {
+  /* ---- color: surfaces (flat, opaque — no glass/blur by design) ---- */
+  --bg: #f6f7f9;
+  --surface: #ffffff;
+  --surface-2: #f1f3f6;
+  --surface-raised: #ffffff;
+  --border: #e2e5ea;
+  --border-strong: #cbd0d9;
+
+  /* ---- color: text ---- */
+  --text: #14181f;
+  --text-soft: #4b5563;
+  --muted: #8890a0;
+  --on-accent: #ffffff;
+
+  /* ---- color: brand + status ---- */
+  --accent: #0f9d94;          /* medical teal */
+  --accent-2: #2f6fed;        /* clinical blue */
+  --accent-soft: #e5f5f3;
+  --accent-strong: #0b7b74;
+
+  --ok: #1a9e6f;
+  --ok-soft: #e4f6ee;
+  --warn: #b76e00;
+  --warn-soft: #fdf1de;
+  --danger: #d1373f;
+  --danger-soft: #fbe9ea;
+
+  /* ---- elevation: one soft shadow scale, used sparingly ---- */
+  --shadow-1: 0 1px 2px rgba(20, 24, 31, 0.06);
+  --shadow-2: 0 2px 8px rgba(20, 24, 31, 0.08);
+  --shadow-3: 0 8px 24px rgba(20, 24, 31, 0.10);
+
+  /* ---- radius ---- */
+  --radius-sm: 6px;
+  --radius: 10px;
+  --radius-lg: 14px;
+
+  /* ---- spacing scale — 4px base ---- */
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-5: 20px;
+  --space-6: 24px;
+  --space-7: 32px;
+  --space-8: 40px;
+
+  /* ---- type scale ---- */
+  --text-xs: 11.5px;
+  --text-sm: 13px;
+  --text-base: 14px;
+  --text-md: 15px;
+  --text-lg: 18px;
+  --text-xl: 22px;
+  --leading-tight: 1.3;
+  --leading-normal: 1.55;
+
+  --font: "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", sans-serif;
+  --font-mono: "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
+
+  /* ---- motion ---- */
+  --ease: cubic-bezier(0.2, 0.6, 0.2, 1);
+  --dur-fast: 120ms;
+  --dur: 180ms;
+}
+
+html[data-theme="dark"] {
+  --bg: #0c0f14;
+  --surface: #14181f;
+  --surface-2: #1b202a;
+  --surface-raised: #1b202a;
+  --border: #262c37;
+  --border-strong: #38404f;
+
+  --text: #eef1f6;
+  --text-soft: #b7c0cf;
+  --muted: #737f92;
+
+  --accent: #2dd4c6;
+  --accent-2: #6693ff;
+  --accent-soft: rgba(45, 212, 198, 0.14);
+  --accent-strong: #7ce9dd;
+
+  --ok: #33c98c;
+  --ok-soft: rgba(51, 201, 140, 0.14);
+  --warn: #e0a542;
+  --warn-soft: rgba(224, 165, 66, 0.14);
+  --danger: #f0616a;
+  --danger-soft: rgba(240, 97, 106, 0.14);
+
+  --shadow-1: 0 1px 2px rgba(0, 0, 0, 0.3);
+  --shadow-2: 0 2px 10px rgba(0, 0, 0, 0.35);
+  --shadow-3: 0 10px 28px rgba(0, 0, 0, 0.4);
+}
