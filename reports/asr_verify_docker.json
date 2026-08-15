@@ -1,0 +1,56 @@
+{
+  "base": "http://127.0.0.1:8090",
+  "checks": [
+    {
+      "name": "backend reachable",
+      "ok": true,
+      "detail": "HTTP 200"
+    },
+    {
+      "name": "ASR model configured",
+      "ok": true,
+      "detail": "whisper-large-v3"
+    },
+    {
+      "name": "audio file found",
+      "ok": true,
+      "detail": "Feb 3, 5.12 PM​.m4a (708.8 KB)"
+    },
+    {
+      "name": "transcription request",
+      "ok": true,
+      "detail": "HTTP 200 in 66.0s"
+    },
+    {
+      "name": "transcript non-empty",
+      "ok": true,
+      "detail": "241 chars (min 20)"
+    },
+    {
+      "name": "transcript has real words",
+      "ok": true,
+      "detail": "34 word-like tokens"
+    },
+    {
+      "name": "within time budget",
+      "ok": true,
+      "detail": "66.0s <= 300.0s"
+    },
+    {
+      "name": "English-normalised transcript",
+      "ok": true,
+      "detail": "no Persian script present"
+    }
+  ],
+  "ok": true,
+  "asr_model": "whisper-large-v3",
+  "audio": {
+    "name": "Feb 3, 5.12 PM​.m4a",
+    "size_kb": 708.8
+  },
+  "elapsed_sec": 66.0,
+  "transcript_chars": 241,
+  "transcript": "For the patient, we will perform a hepato biliary sonography. Liver normal size, normal parasympathetic echo, gallus mediscentum normal, proximal part CBD normal, medial distal part gas shadow, visual part pancreas normal, and spleen normal.",
+  "asr_model_used": "whisper-large-v3",
+  "word_count": 34
+}

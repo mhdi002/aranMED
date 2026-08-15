@@ -1,0 +1,31 @@
+{
+  "base": "http://127.0.0.1:8090",
+  "checks": [
+    {
+      "name": "backend reachable",
+      "ok": true,
+      "detail": "HTTP 200"
+    },
+    {
+      "name": "ASR model configured",
+      "ok": true,
+      "detail": "whisper-large-v3"
+    },
+    {
+      "name": "audio file found",
+      "ok": true,
+      "detail": "Feb 3, 5.12 PM​.m4a (708.8 KB)"
+    },
+    {
+      "name": "transcription request",
+      "ok": false,
+      "detail": "ReadTimeout: timed out"
+    }
+  ],
+  "ok": false,
+  "asr_model": "whisper-large-v3",
+  "audio": {
+    "name": "Feb 3, 5.12 PM​.m4a",
+    "size_kb": 708.8
+  }
+}

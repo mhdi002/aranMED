@@ -1,0 +1,83 @@
+{
+  "target": "http://127.0.0.1:8010",
+  "users": 1000,
+  "duration_s": 32.4,
+  "include_ai": false,
+  "total_requests": 12007,
+  "throughput_rps": 370.4,
+  "error_rate": 0.0006,
+  "p50_ms": 1100.2,
+  "p95_ms": 6373.6,
+  "p99_ms": 14785.8,
+  "by_scenario": {
+    "live": {
+      "requests": 3049,
+      "ok": 3048,
+      "error_rate": 0.0003,
+      "rps": 94.1,
+      "p50_ms": 995.7,
+      "p90_ms": 2005.1,
+      "p95_ms": 6011.9,
+      "p99_ms": 13752.5,
+      "max_ms": 25579.9,
+      "mean_ms": 1546.7,
+      "statuses": {
+        "200": 3048
+      },
+      "transport_errors": {
+        "ReadError": 1
+      },
+      "expect": [
+        200
+      ]
+    },
+    "health": {
+      "requests": 4500,
+      "ok": 4498,
+      "error_rate": 0.0004,
+      "rps": 138.8,
+      "p50_ms": 1355.3,
+      "p90_ms": 4788.9,
+      "p95_ms": 7677.7,
+      "p99_ms": 16350.1,
+      "max_ms": 27114.3,
+      "mean_ms": 2376.8,
+      "statuses": {
+        "200": 4498
+      },
+      "transport_errors": {
+        "ReadError": 2
+      },
+      "expect": [
+        200
+      ]
+    },
+    "templates": {
+      "requests": 4458,
+      "ok": 4454,
+      "error_rate": 0.0009,
+      "rps": 137.5,
+      "p50_ms": 998.1,
+      "p90_ms": 1943.1,
+      "p95_ms": 5699.2,
+      "p99_ms": 14007.8,
+      "max_ms": 25407.1,
+      "mean_ms": 1519.7,
+      "statuses": {
+        "200": 4454
+      },
+      "transport_errors": {
+        "ReadError": 2,
+        "RemoteProtocolError": 2
+      },
+      "expect": [
+        200
+      ]
+    }
+  },
+  "thresholds": {
+    "max_error_rate": 0.01,
+    "max_p95_ms": 2000.0
+  },
+  "passed": false
+}

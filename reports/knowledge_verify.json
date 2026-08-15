@@ -1,0 +1,97 @@
+{
+  "qdrant": "http://127.0.0.1:6333",
+  "medrag": "http://127.0.0.1:8080",
+  "checks": [
+    {
+      "name": "qdrant reachable",
+      "ok": true,
+      "detail": "4 collections"
+    },
+    {
+      "name": "collection medical_library_main",
+      "ok": true,
+      "detail": "0 points, dim=1024, Cosine"
+    },
+    {
+      "name": "collection medical_library_standards",
+      "ok": true,
+      "detail": "5 points, dim=1024, Cosine"
+    },
+    {
+      "name": "collection medical_library_expand",
+      "ok": true,
+      "detail": "438,371 points, dim=1024, Cosine"
+    },
+    {
+      "name": "corpus has points",
+      "ok": true,
+      "detail": "438,376 points across 2 populated store(s)"
+    },
+    {
+      "name": "vector search",
+      "ok": true,
+      "detail": "3 hits from medical_library_expand"
+    },
+    {
+      "name": "results carry real content + provenance",
+      "ok": true,
+      "detail": "3/3 hits have both title and text"
+    },
+    {
+      "name": "cosine scores behave sanely",
+      "ok": true,
+      "detail": "top score 0.0877 from a random probe"
+    }
+  ],
+  "collections": {
+    "medical_library_main": {
+      "points": 0,
+      "dim": 1024,
+      "distance": "Cosine"
+    },
+    "medical_library_standards": {
+      "points": 5,
+      "dim": 1024,
+      "distance": "Cosine"
+    },
+    "medical_library_expand": {
+      "points": 438371,
+      "dim": 1024,
+      "distance": "Cosine"
+    }
+  },
+  "configured_stores": [
+    "main",
+    "standards",
+    "expand"
+  ],
+  "total_points": 438376,
+  "samples": [
+    {
+      "score": 0.0877,
+      "title": "Clinical_Neuroanatomy_Snell",
+      "page": 219,
+      "source_corpus": "library",
+      "specialty": "neurology",
+      "text": "216\nCHAPTER 18\nThe Lowest Four Cranial Nerves\nThe nerve runs upwards in the subarachnoid space, posterior\nto the denticulate ligaments. It enters the cranial ca"
+    },
+    {
+      "score": 0.0828,
+      "title": "New Oxford Textbook of Psychiatry (2nd Edition)",
+      "page": 62,
+      "source_corpus": "mehrsys",
+      "specialty": "psychiatry",
+      "text": "r memory deficits. (e) Electronic memory aids These aids offer the major advantage of having the facility to prompt an action using alarms and so are particular"
+    },
+    {
+      "score": 0.0813,
+      "title": "Clinical_Neurological_Examination_Fuller",
+      "page": 216,
+      "source_corpus": "library",
+      "specialty": "neurology",
+      "text": "Chapter 21\nSpinal Accessory Nerve: Eleventh Cranial \nNerve\n21.1  \u0007Neuroanatomy\nThe accessory nerve, also known as the 11 cranial nerve, cranial nerve XI, is a c"
+    }
+  ],
+  "medrag_health": null,
+  "ok": true
+}

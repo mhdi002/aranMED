@@ -1,0 +1,117 @@
+{
+  "target": "http://127.0.0.1:8090",
+  "users": 1000,
+  "processes": 6,
+  "duration_s": 39.5,
+  "include_ai": false,
+  "total_requests": 28835,
+  "throughput_rps": 730.0,
+  "error_rate": 0.4026,
+  "p50_ms": 341.0,
+  "p95_ms": 3141.8,
+  "p99_ms": 5147.5,
+  "by_scenario": {
+    "live": {
+      "requests": 5254,
+      "ok": 2174,
+      "statuses": {
+        "200": 2174,
+        "502": 2449,
+        "503": 631
+      },
+      "transport_errors": {},
+      "expect": [
+        200
+      ],
+      "rps": 133.0,
+      "error_rate": 0.5862,
+      "p50_ms": 328.3,
+      "p90_ms": 1587.6,
+      "p95_ms": 2406.5,
+      "p99_ms": 4288.3,
+      "max_ms": 7201.3
+    },
+    "health": {
+      "requests": 7758,
+      "ok": 3900,
+      "statuses": {
+        "200": 3900,
+        "502": 3858
+      },
+      "transport_errors": {},
+      "expect": [
+        200
+      ],
+      "rps": 196.4,
+      "error_rate": 0.4973,
+      "p50_ms": 433.2,
+      "p90_ms": 3515.1,
+      "p95_ms": 4480.2,
+      "p99_ms": 5909.0,
+      "max_ms": 10693.5
+    },
+    "templates": {
+      "requests": 7965,
+      "ok": 3294,
+      "statuses": {
+        "200": 3294,
+        "502": 3653,
+        "503": 1018
+      },
+      "transport_errors": {},
+      "expect": [
+        200
+      ],
+      "rps": 201.6,
+      "error_rate": 0.5864,
+      "p50_ms": 333.0,
+      "p90_ms": 1585.6,
+      "p95_ms": 2272.7,
+      "p99_ms": 4259.4,
+      "max_ms": 11073.8
+    },
+    "ui_login": {
+      "requests": 5237,
+      "ok": 5237,
+      "statuses": {
+        "200": 5237
+      },
+      "transport_errors": {},
+      "expect": [
+        200
+      ],
+      "rps": 132.6,
+      "error_rate": 0.0,
+      "p50_ms": 275.3,
+      "p90_ms": 1441.9,
+      "p95_ms": 2121.8,
+      "p99_ms": 3885.8,
+      "max_ms": 5876.7
+    },
+    "ui_root": {
+      "requests": 2621,
+      "ok": 2621,
+      "statuses": {
+        "200": 2621
+      },
+      "transport_errors": {},
+      "expect": [
+        200,
+        302,
+        307
+      ],
+      "rps": 66.4,
+      "error_rate": 0.0,
+      "p50_ms": 284.2,
+      "p90_ms": 1521.9,
+      "p95_ms": 2256.5,
+      "p99_ms": 4286.6,
+      "max_ms": 5852.4
+    }
+  },
+  "thresholds": {
+    "max_error_rate": 0.01,
+    "max_p95_ms": 2000.0
+  },
+  "passed": false
+}
