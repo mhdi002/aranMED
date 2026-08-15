@@ -95,6 +95,12 @@ services:
       # Service discovery inside the compose network.
       OLLAMA_HOST: "${DOCKER_OLLAMA_HOST:-http://host.docker.internal:11434}"
       MEDRAG_API_URL: "${DOCKER_MEDRAG_API_URL:-http://medrag:8080}"
+      # whisper-triton is additive (disabled by default in models.docker.yaml
+      # unless TRITON_ENABLED_DEFAULT=true) -- but its URL must resolve inside
+      # the container regardless, since a bare 127.0.0.1 there means "this
+      # container", not any Triton server. Points at the compose `triton`
+      # service by default; override if you run a native/external one.
+      TRITON_URL: "${DOCKER_TRITON_URL:-http://triton:8002}"
       ASR_AGENT_REGISTRY_YAML: "${DOCKER_REGISTRY_YAML:-/app/backend/models.yaml}"
     volumes:
       - hf-cache:${DOCKER_HF_HOME:-/models}
@@ -120,6 +126,59 @@ services:
     deploy:
       <<: *gpu-reservation
       replicas: ${BACKEND_REPLICAS:-1}
+    restart: unless-stopped
+    logging: *default-logging
+
+  # ── Triton-compatible ASR service (the whisper-triton provider) ───────────
+  # Additive: hf_asr in the backend container stays the default ASR path.
+  # This gives the "asr" role a second, independent worker pool (selectable
+  # via model=whisper-triton) for capacity beyond a single hf_asr instance --
+  # e.g. run it on CPU while GPU hf_asr handles the primary load, or scale
+  # both independently under concurrent transcription requests.
+  #
+  # Reuses the `backend` image/build (already has torch/transformers/CUDA)
+  # with a different entrypoint instead of a third multi-GB image: the real
+  # nvcr.io/nvidia/tritonserver image requires an NGC login this environment
+  # doesn't have, so this runs deploy/triton/compat_http_server.py, which
+  # speaks the same HTTP v2 subset backend/providers/triton_asr.py expects.
+  triton:
+    build:
+      context: .
+      target: backend
+      args:
+        TORCH_INDEX: ${TORCH_INDEX:-https://download.pytorch.org/whl/cu128}
+    volumes:
+      - ./deploy:/app/deploy:ro
+      - hf-cache:${DOCKER_HF_HOME:-/models}
+      - ${LOCAL_MODELS_DIR:-./models}:/app/models:ro
+    working_dir: /app
+    environment:
+      PYTHONPATH: "/app/backend"
+      HF_HOME: "${DOCKER_HF_HOME:-/models}"
+      TRITON_COMPAT_HOST: "0.0.0.0"
+      TRITON_COMPAT_PORT: "${TRITON_COMPAT_PORT:-8002}"
+      # Local snapshot mounted above (see backend's LOCAL_MODELS_DIR comment);
+      # falls back to the HF hub id if not present.
+      WHISPER_MODEL_DIR: "${DOCKER_WHISPER_MODEL_DIR:-/app/models/whisper-large-v3}"
+      # CPU by default: the GPU is already shared by backend's hf_asr and
+      # medrag's local embeddings on an 8GB card. Set cuda if you have VRAM
+      # to spare and want this replica to genuinely add throughput, not just
+      # redundancy.
+      WHISPER_DEVICE: "${TRITON_WHISPER_DEVICE:-cpu}"
+      WHISPER_WARMUP: "${TRITON_WHISPER_WARMUP:-0}"
+      WHISPER_TARGET_SR: "16000"
+      WHISPER_OUTPUT_ENGLISH: "${WHISPER_OUTPUT_ENGLISH:-1}"
+      WHISPER_MAX_SHORTFORM_S: "${WHISPER_MAX_SHORTFORM_S:-30}"
+      WHISPER_CHUNK_LENGTH_S: "${WHISPER_CHUNK_LENGTH_S:-30}"
+    command: ["python", "/app/deploy/triton/compat_http_server.py"]
+    expose:
+      - "${TRITON_COMPAT_PORT:-8002}"
+    healthcheck:
+      test: ["CMD", "curl", "-sf", "http://127.0.0.1:${TRITON_COMPAT_PORT:-8002}/v2/health/ready"]
+      interval: "${HEALTHCHECK_INTERVAL:-30s}"
+      timeout: 10s
+      retries: 5
+      start_period: "${TRITON_START_PERIOD:-180s}"
     restart: unless-stopped
     logging: *default-logging
 
