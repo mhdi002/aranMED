@@ -1,0 +1,10 @@
+{
+  "positives": [
+    "CT demonstrates aortic dissection extending into the arch, type A dissection.",
+    "Findings consistent with ruptured aorta at the isthmus."
+  ],
+  "negatives": [
+    "Aorta is normal in caliber. No aortic dissection is identified.",
+    "There is no ruptured aorta on this study."
+  ]
+}

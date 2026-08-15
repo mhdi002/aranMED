@@ -1,0 +1,10 @@
+{
+  "positives": [
+    "Findings demonstrate complete airway obstruction at the level of the glottis.",
+    "Imminent airway loss due to expanding neck hematoma."
+  ],
+  "negatives": [
+    "Airway is patent without stenosis or obstruction.",
+    "No airway compromise identified."
+  ]
+}

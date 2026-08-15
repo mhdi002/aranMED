@@ -1,0 +1,10 @@
+{
+  "positives": [
+    "Findings consistent with a ruptured ectopic pregnancy with free fluid.",
+    "Ectopic pregnancy with rupture identified in the right adnexa."
+  ],
+  "negatives": [
+    "Intrauterine pregnancy identified. No adnexal mass.",
+    "No evidence of ectopic pregnancy."
+  ]
+}

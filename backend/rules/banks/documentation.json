@@ -1,0 +1,25 @@
+{
+  "bank": "documentation",
+  "rules": [
+    {
+      "rule_id": "DOC-NAMING-FORBIDDEN-TITLE-001",
+      "bank": "documentation",
+      "name": "Forbidden informal exam title spoken",
+      "condition": {
+        "type": "naming",
+        "check": "forbidden_title"
+      },
+      "action": {
+        "severity": "moderate",
+        "code": "forbidden_title",
+        "message_en": "Spoken exam title is not an approved insurance exam name; use the exact official title."
+      },
+      "source": "backend/data/REPORT_RULES.json (forbidden_titles), delegated via backend/report_rules.py::is_forbidden_title — see docs/core/RULE_MODEL_SCHEMA_v1.md §4",
+      "version": "1.0",
+      "effective_from": "2026-08-14",
+      "status": "production",
+      "validated_by": "migrated-from-existing-production-code",
+      "tags": ["naming", "insurance", "introspection-only"]
+    }
+  ]
+}

@@ -1,0 +1,10 @@
+{
+  "positives": [
+    "Impression: life-threatening finding, notify clinician immediately.",
+    "Critical finding — stat call clinician."
+  ],
+  "negatives": [
+    "Impression: no acute cardiopulmonary process.",
+    "No critical finding identified."
+  ]
+}

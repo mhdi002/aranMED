@@ -1,0 +1,215 @@
+{
+  "bank": "safety",
+  "rules": [
+    {
+      "rule_id": "SAFETY-TENSION-PTX-001",
+      "bank": "safety",
+      "name": "Tension pneumothorax mention",
+      "condition": {
+        "type": "regex",
+        "pattern": "\\b(tension\\s+pneumothorax|pneumothorax\\s+under\\s+tension)\\b|پنوموتوراکس\\s*تحت\\s*فشار",
+        "negation_window": 40
+      },
+      "action": {
+        "severity": "critical",
+        "code": "tension_pneumothorax",
+        "message_en": "Critical / potentially life-threatening finding detected ({label}): «{excerpt}»"
+      },
+      "source": "backend/clinical_safety.py::_CRITICAL_PATTERNS (pre-refactor)",
+      "version": "1.0",
+      "effective_from": "2026-08-14",
+      "status": "production",
+      "validated_by": "migrated-from-existing-production-code",
+      "tags": ["radiology", "critical-finding"]
+    },
+    {
+      "rule_id": "SAFETY-AORTIC-RUPTURE-001",
+      "bank": "safety",
+      "name": "Aortic rupture or dissection mention",
+      "condition": {
+        "type": "regex",
+        "pattern": "\\b(aortic\\s+(rupture|transection|dissection)|ruptured\\s+aorta|type\\s*[ab]\\s+dissection)\\b|پارگی\\s*آئورت|دیسکشن\\s*آئورت",
+        "negation_window": 40
+      },
+      "action": {
+        "severity": "critical",
+        "code": "aortic_rupture_or_dissection",
+        "message_en": "Critical / potentially life-threatening finding detected ({label}): «{excerpt}»"
+      },
+      "source": "backend/clinical_safety.py::_CRITICAL_PATTERNS (pre-refactor)",
+      "version": "1.0",
+      "effective_from": "2026-08-14",
+      "status": "production",
+      "validated_by": "migrated-from-existing-production-code",
+      "tags": ["radiology", "critical-finding"]
+    },
+    {
+      "rule_id": "SAFETY-ACTIVE-HEMORRHAGE-001",
+      "bank": "safety",
+      "name": "Active extravasation / life-threatening hemorrhage mention",
+      "condition": {
+        "type": "regex",
+        "pattern": "\\b(active\\s+(extravasation|bleeding)|life[- ]?threatening\\s+hemorrhage|massive\\s+hemorrhage)\\b|خونریزی\\s*فعال|خونریزی\\s*شدید",
+        "negation_window": 40
+      },
+      "action": {
+        "severity": "critical",
+        "code": "active_extravasation_hemorrhage",
+        "message_en": "Critical / potentially life-threatening finding detected ({label}): «{excerpt}»"
+      },
+      "source": "backend/clinical_safety.py::_CRITICAL_PATTERNS (pre-refactor)",
+      "version": "1.0",
+      "effective_from": "2026-08-14",
+      "status": "production",
+      "validated_by": "migrated-from-existing-production-code",
+      "tags": ["radiology", "critical-finding"]
+    },
+    {
+      "rule_id": "SAFETY-CEREBRAL-HERNIATION-001",
+      "bank": "safety",
+      "name": "Cerebral herniation mention",
+      "condition": {
+        "type": "regex",
+        "pattern": "\\b(uncal|tonsillar|transtentorial)\\s+herniation\\b|\\bcerebral\\s+herniation\\b|هرنیاسیون",
+        "negation_window": 40
+      },
+      "action": {
+        "severity": "critical",
+        "code": "cerebral_herniation",
+        "message_en": "Critical / potentially life-threatening finding detected ({label}): «{excerpt}»"
+      },
+      "source": "backend/clinical_safety.py::_CRITICAL_PATTERNS (pre-refactor)",
+      "version": "1.0",
+      "effective_from": "2026-08-14",
+      "status": "production",
+      "validated_by": "migrated-from-existing-production-code",
+      "tags": ["radiology", "critical-finding"]
+    },
+    {
+      "rule_id": "SAFETY-LARGE-ICH-SAH-001",
+      "bank": "safety",
+      "name": "Large ICH or SAH with hydrocephalus/herniation mention",
+      "condition": {
+        "type": "regex",
+        "pattern": "\\b(large\\s+(ich|intracerebral\\s+hemorrhage)|subarachnoid\\s+hemorrhage\\s+with\\s+(hydrocephalus|herniation)|massive\\s+(ich|intracranial\\s+hemorrhage))\\b|خونریزی\\s*مغزی\\s*وسیع",
+        "negation_window": 40
+      },
+      "action": {
+        "severity": "critical",
+        "code": "large_ich_or_sah",
+        "message_en": "Critical / potentially life-threatening finding detected ({label}): «{excerpt}»"
+      },
+      "source": "backend/clinical_safety.py::_CRITICAL_PATTERNS (pre-refactor)",
+      "version": "1.0",
+      "effective_from": "2026-08-14",
+      "status": "production",
+      "validated_by": "migrated-from-existing-production-code",
+      "tags": ["radiology", "critical-finding"]
+    },
+    {
+      "rule_id": "SAFETY-AIRWAY-COMPROMISE-001",
+      "bank": "safety",
+      "name": "Critical airway compromise mention",
+      "condition": {
+        "type": "regex",
+        "pattern": "\\b(complete\\s+airway\\s+obstruction|imminent\\s+airway\\s+loss|critical\\s+airway\\s+stenosis)\\b|انسداد\\s*راه\\s*هوایی",
+        "negation_window": 40
+      },
+      "action": {
+        "severity": "critical",
+        "code": "airway_compromise",
+        "message_en": "Critical / potentially life-threatening finding detected ({label}): «{excerpt}»"
+      },
+      "source": "backend/clinical_safety.py::_CRITICAL_PATTERNS (pre-refactor)",
+      "version": "1.0",
+      "effective_from": "2026-08-14",
+      "status": "production",
+      "validated_by": "migrated-from-existing-production-code",
+      "tags": ["radiology", "critical-finding"]
+    },
+    {
+      "rule_id": "SAFETY-BOWEL-ISCHEMIA-PERF-001",
+      "bank": "safety",
+      "name": "Bowel ischemia, perforation, or pneumoperitoneum mention",
+      "condition": {
+        "type": "regex",
+        "pattern": "\\b(free\\s+intraperitoneal\\s+air|pneumoperitoneum|bowel\\s+(ischemia|infarction|perforation)|mesenteric\\s+ischemia)\\b|پرفوراسیون\\s*روده|ایسکمی\\s*روده‌?ای",
+        "negation_window": 40
+      },
+      "action": {
+        "severity": "critical",
+        "code": "bowel_ischemia_or_perforation",
+        "message_en": "Critical / potentially life-threatening finding detected ({label}): «{excerpt}»"
+      },
+      "source": "backend/clinical_safety.py::_CRITICAL_PATTERNS (pre-refactor)",
+      "version": "1.0",
+      "effective_from": "2026-08-14",
+      "status": "production",
+      "validated_by": "migrated-from-existing-production-code",
+      "tags": ["radiology", "critical-finding"]
+    },
+    {
+      "rule_id": "SAFETY-MASSIVE-PE-001",
+      "bank": "safety",
+      "name": "Massive / saddle / high-risk pulmonary embolism mention",
+      "condition": {
+        "type": "regex",
+        "pattern": "\\b(massive\\s+(pe|pulmonary\\s+embolism)|saddle\\s+(pe|embolus)|high[- ]risk\\s+pulmonary\\s+embolism)\\b|آمبولی\\s*ریوی\\s*(وسیع|ماسیو|زین\\s*اسبی)",
+        "negation_window": 40
+      },
+      "action": {
+        "severity": "critical",
+        "code": "pulmonary_embolism_massive",
+        "message_en": "Critical / potentially life-threatening finding detected ({label}): «{excerpt}»"
+      },
+      "source": "backend/clinical_safety.py::_CRITICAL_PATTERNS (pre-refactor)",
+      "version": "1.0",
+      "effective_from": "2026-08-14",
+      "status": "production",
+      "validated_by": "migrated-from-existing-production-code",
+      "tags": ["radiology", "critical-finding"]
+    },
+    {
+      "rule_id": "SAFETY-ECTOPIC-RUPTURE-001",
+      "bank": "safety",
+      "name": "Ruptured ectopic pregnancy mention",
+      "condition": {
+        "type": "regex",
+        "pattern": "\\b(ruptured\\s+ectopic|ectopic\\s+pregnancy\\s+with\\s+rupture)\\b|بارداری\\s*خارج\\s*رحمی\\s*پاره",
+        "negation_window": 40
+      },
+      "action": {
+        "severity": "critical",
+        "code": "ectopic_rupture",
+        "message_en": "Critical / potentially life-threatening finding detected ({label}): «{excerpt}»"
+      },
+      "source": "backend/clinical_safety.py::_CRITICAL_PATTERNS (pre-refactor)",
+      "version": "1.0",
+      "effective_from": "2026-08-14",
+      "status": "production",
+      "validated_by": "migrated-from-existing-production-code",
+      "tags": ["radiology", "critical-finding"]
+    },
+    {
+      "rule_id": "SAFETY-LETHAL-FLAG-001",
+      "bank": "safety",
+      "name": "Generic life-threatening / critical finding flag",
+      "condition": {
+        "type": "regex",
+        "pattern": "\\b(life[- ]?threatening|lethal\\s+finding|critical\\s+finding|code\\s+blue|stat\\s+call\\s+clinician|immediately\\s+life[- ]?threatening)\\b|یافته\\s*بحرانی|تهدید\\s*کننده\\s*حیات",
+        "negation_window": 40
+      },
+      "action": {
+        "severity": "critical",
+        "code": "lethal_or_critical_flag",
+        "message_en": "Critical / potentially life-threatening finding detected ({label}): «{excerpt}»"
+      },
+      "source": "backend/clinical_safety.py::_CRITICAL_PATTERNS (pre-refactor)",
+      "version": "1.0",
+      "effective_from": "2026-08-14",
+      "status": "production",
+      "validated_by": "migrated-from-existing-production-code",
+      "tags": ["radiology", "critical-finding"]
+    }
+  ]
+}

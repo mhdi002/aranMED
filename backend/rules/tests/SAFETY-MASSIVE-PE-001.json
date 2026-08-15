@@ -1,0 +1,10 @@
+{
+  "positives": [
+    "CT pulmonary angiogram demonstrates a saddle embolus astride the main pulmonary artery.",
+    "Findings consistent with massive pulmonary embolism with right heart strain."
+  ],
+  "negatives": [
+    "There is no massive pulmonary embolism identified.",
+    "No saddle embolus is seen. Pulmonary arteries are patent."
+  ]
+}

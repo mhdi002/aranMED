@@ -1,0 +1,50 @@
+{
+  "bank": "clinical",
+  "rules": [
+    {
+      "rule_id": "allergy_beta_lactam",
+      "bank": "clinical",
+      "name": "Beta-lactam allergy conflict",
+      "condition": {
+        "type": "conjunction",
+        "all": [
+          { "type": "regex", "pattern": "allerg(?:y|ic).*penicillin|حساسیت.*پنی‌?سیلین" },
+          { "type": "regex", "pattern": "amoxicillin|ampicillin|آموکسی" }
+        ]
+      },
+      "action": {
+        "severity": "critical",
+        "code": "allergy_beta_lactam",
+        "message_en": "Possible beta-lactam allergy conflict with prescribed penicillin-class drug.",
+        "message_fa": "احتمال تداخل آلرژی بتا-لاکتام با داروی پنی‌سیلینی."
+      },
+      "source": "src/medrag/rules/engine.py::check_allergy (pre-refactor)",
+      "version": "1.0",
+      "effective_from": "2026-08-14",
+      "status": "production",
+      "validated_by": "migrated-from-existing-production-code",
+      "tags": ["clinical", "allergy"]
+    },
+    {
+      "rule_id": "sepsis_screen",
+      "bank": "clinical",
+      "name": "Sepsis screening reminder",
+      "condition": {
+        "type": "regex",
+        "pattern": "\\bsepsis\\b|سپسیس|NEWS2|qSOFA"
+      },
+      "action": {
+        "severity": "info",
+        "code": "sepsis_screen",
+        "message_en": "Consider formal sepsis screening (qSOFA/NEWS2) and local protocol.",
+        "message_fa": "غربالگری رسمی سپسیس (qSOFA/NEWS2) و پروتکل محلی را در نظر بگیرید."
+      },
+      "source": "src/medrag/rules/engine.py::sepsis_news2_hint (pre-refactor)",
+      "version": "1.0",
+      "effective_from": "2026-08-14",
+      "status": "production",
+      "validated_by": "migrated-from-existing-production-code",
+      "tags": ["clinical", "infectious-disease"]
+    }
+  ]
+}

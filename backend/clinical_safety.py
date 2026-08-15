@@ -6,6 +6,7 @@ run so offline / test environments still get deterministic flags.
 """
 from __future__ import annotations
 
+import asyncio
 import json
 import logging
 import os
@@ -14,6 +15,7 @@ from typing import Any, Optional
 
 import report_rules
 import templates as templates_mod
+from rules.engine import evaluate as evaluate_rules
 
 log = logging.getLogger("clinical_safety")
 
@@ -24,102 +26,11 @@ SEVERITY_MODERATE = "moderate"
 SEVERITY_LOW = "low"
 SEVERITY_NONE = "none"
 
-_CRITICAL_PATTERNS: list[tuple[str, re.Pattern[str]]] = [
-    (
-        "tension_pneumothorax",
-        re.compile(
-            r"\b(tension\s+pneumothorax|pneumothorax\s+under\s+tension)\b"
-            r"|پنوموتوراکس\s*تحت\s*فشار",
-            re.I,
-        ),
-    ),
-    (
-        "aortic_rupture_or_dissection",
-        re.compile(
-            r"\b(aortic\s+(rupture|transection|dissection)|ruptured\s+aorta|"
-            r"type\s*[ab]\s+dissection)\b|پارگی\s*آئورت|دیسکشن\s*آئورت",
-            re.I,
-        ),
-    ),
-    (
-        "active_extravasation_hemorrhage",
-        re.compile(
-            r"\b(active\s+(extravasation|bleeding)|life[- ]?threatening\s+"
-            r"hemorrhage|massive\s+hemorrhage)\b|خونریزی\s*فعال|خونریزی\s*شدید",
-            re.I,
-        ),
-    ),
-    (
-        "cerebral_herniation",
-        re.compile(
-            r"\b(uncal|tonsillar|transtentorial)\s+herniation\b|"
-            r"\bcerebral\s+herniation\b|هرنیاسیون",
-            re.I,
-        ),
-    ),
-    (
-        "large_ich_or_sah",
-        re.compile(
-            r"\b(large\s+(ich|intracerebral\s+hemorrhage)|"
-            r"subarachnoid\s+hemorrhage\s+with\s+(hydrocephalus|herniation)|"
-            r"massive\s+(ich|intracranial\s+hemorrhage))\b|"
-            r"خونریزی\s*مغزی\s*وسیع",
-            re.I,
-        ),
-    ),
-    (
-        "airway_compromise",
-        re.compile(
-            r"\b(complete\s+airway\s+obstruction|imminent\s+airway\s+loss|"
-            r"critical\s+airway\s+stenosis)\b|انسداد\s*راه\s*هوایی",
-            re.I,
-        ),
-    ),
-    (
-        "bowel_ischemia_or_perforation",
-        re.compile(
-            r"\b(free\s+intraperitoneal\s+air|pneumoperitoneum|"
-            r"bowel\s+(ischemia|infarction|perforation)|"
-            r"mesenteric\s+ischemia)\b|پرفوراسیون\s*روده|ایسکمی\s*روده‌?ای",
-            re.I,
-        ),
-    ),
-    (
-        "pulmonary_embolism_massive",
-        re.compile(
-            r"\b(massive\s+(pe|pulmonary\s+embolism)|"
-            r"saddle\s+(pe|embolus)|"
-            r"high[- ]risk\s+pulmonary\s+embolism)\b|"
-            r"آمبولی\s*ریوی\s*(وسیع|ماسیو|زین\s*اسبی)",
-            re.I,
-        ),
-    ),
-    (
-        "ectopic_rupture",
-        re.compile(
-            r"\b(ruptured\s+ectopic|ectopic\s+pregnancy\s+with\s+rupture)\b|"
-            r"بارداری\s*خارج\s*رحمی\s*پاره",
-            re.I,
-        ),
-    ),
-    (
-        "lethal_or_critical_flag",
-        re.compile(
-            r"\b(life[- ]?threatening|lethal\s+finding|critical\s+finding|"
-            r"code\s+blue|stat\s+call\s+clinician|"
-            r"immediately\s+life[- ]?threatening)\b|"
-            r"یافته\s*بحرانی|تهدید\s*کننده\s*حیات",
-            re.I,
-        ),
-    ),
-]
-
-# Benign / routine phrases that should not alone trigger critical
-_NEGATION_NEAR = re.compile(
-    r"\b(no|without|denies|negative\s+for|ruled\s+out|absence\s+of|"
-    r"not\s+(seen|identified|present))\b|بدون|ندارد|منفی",
-    re.I,
-)
+# The 10 critical-finding patterns formerly hardcoded here now live as data
+# in backend/rules/banks/safety.json, evaluated by the generic backend Rule
+# Engine (backend/rules/). See docs/core/RULE_MODEL_SCHEMA_v1.md. This
+# module keeps the exact same triage_local() signature/output shape so
+# every existing caller (backend/app.py::report(), tests) is unaffected.
 
 _SPOKEN_TEMPLATE_PATTERNS: list[re.Pattern[str]] = [
     re.compile(
@@ -146,44 +57,27 @@ def _use_medrag() -> bool:
     return raw not in ("0", "false", "no", "off")
 
 
-def _window_negated(text: str, start: int, end: int, radius: int = 40) -> bool:
-    left = max(0, start - radius)
-    snippet = text[left:end]
-    return bool(_NEGATION_NEAR.search(snippet))
-
-
 def triage_local(text: str) -> list[dict[str, Any]]:
-    """Fast deterministic scan for critical / lethal findings."""
+    """Fast deterministic scan for critical / lethal findings.
+
+    Evaluates the "safety" bank of the Rule Engine (backend/rules/) — see
+    docs/core/RULE_MODEL_SCHEMA_v1.md. Same dedup-by-code, same output
+    shape as before the Rule Engine consolidation.
+    """
     if not (text or "").strip():
         return []
-    alerts: list[dict[str, Any]] = []
-    for code, pat in _CRITICAL_PATTERNS:
-        for m in pat.finditer(text):
-            if _window_negated(text, m.start(), m.end()):
-                continue
-            span = m.group(0).strip()
-            alerts.append(
-                {
-                    "code": code,
-                    "severity": SEVERITY_CRITICAL,
-                    "label": code.replace("_", " ").title(),
-                    "excerpt": span[:160],
-                    "source": "local_triage",
-                    "message": (
-                        f"Critical / potentially life-threatening finding "
-                        f"detected ({code.replace('_', ' ')}): «{span[:80]}»"
-                    ),
-                }
-            )
-    # Deduplicate by code
-    seen: set[str] = set()
-    out: list[dict[str, Any]] = []
-    for a in alerts:
-        if a["code"] in seen:
-            continue
-        seen.add(a["code"])
-        out.append(a)
-    return out
+    hits = evaluate_rules(text, banks=["safety"])
+    return [
+        {
+            "code": h.code,
+            "severity": h.severity,
+            "label": h.label,
+            "excerpt": h.excerpt,
+            "source": "local_triage",
+            "message": h.message,
+        }
+        for h in hits
+    ]
 
 
 _MEDRAG_TRIAGE_PROMPT = """You are a clinical safety triage assistant for radiology.
@@ -209,11 +103,26 @@ async def triage_with_medrag(text: str) -> list[dict[str, Any]]:
     except Exception:  # noqa: BLE001
         return []
     try:
+        # Bounded: local regex triage has already run, so a slow MedicalRAG
+        # must not hold up the response. Same reasoning as
+        # report_rules.consult_medrag_naming_rules — the shared client's
+        # MEDRAG_TIMEOUT_SEC is sized for full RAG inference, not for an
+        # optional confirmation pass.
+        budget = float(os.getenv("CLINICAL_SAFETY_MEDRAG_TIMEOUT_SEC", "30"))
         client = get_medrag_client()
-        payload = await client.ask(
-            _MEDRAG_TRIAGE_PROMPT.format(text=text[:6000]),
-            specialty="radiology",
+        payload = await asyncio.wait_for(
+            client.ask(
+                _MEDRAG_TRIAGE_PROMPT.format(text=text[:6000]),
+                specialty="radiology",
+            ),
+            timeout=budget,
         )
+    except asyncio.TimeoutError:
+        log.warning(
+            "MedRAG clinical triage skipped: exceeded budget "
+            "(local triage results still apply)"
+        )
+        return []
     except Exception as e:  # noqa: BLE001
         log.warning("MedRAG clinical triage unavailable: %s", e)
         return []

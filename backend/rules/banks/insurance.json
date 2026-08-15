@@ -1,0 +1,25 @@
+{
+  "bank": "insurance",
+  "rules": [
+    {
+      "rule_id": "INS-NAMING-OFFICIAL-TITLE-001",
+      "bank": "insurance",
+      "name": "Spoken exam title cannot be resolved to an official insurance title",
+      "condition": {
+        "type": "naming",
+        "check": "official_title_required"
+      },
+      "action": {
+        "severity": "low",
+        "code": "official_title_unresolved",
+        "message_en": "Spoken exam title could not be resolved to a known official/alias insurance title."
+      },
+      "source": "backend/data/REPORT_RULES.json (official_titles/aliases), delegated via backend/report_rules.py::resolve_alias — see docs/core/RULE_MODEL_SCHEMA_v1.md §4",
+      "version": "1.0",
+      "effective_from": "2026-08-14",
+      "status": "production",
+      "validated_by": "migrated-from-existing-production-code",
+      "tags": ["naming", "insurance", "introspection-only"]
+    }
+  ]
+}

@@ -1,0 +1,105 @@
+{
+  "bank": "drug",
+  "rules": [
+    {
+      "rule_id": "metformin_egfr_lt30",
+      "bank": "drug",
+      "name": "Metformin contraindicated at eGFR < 30",
+      "condition": {
+        "type": "conjunction",
+        "all": [
+          { "type": "regex", "pattern": "metformin|متفورمین" },
+          {
+            "type": "numeric",
+            "extract": [
+              "egfr\\s*[:=]?\\s*(\\d+(?:\\.\\d+)?)",
+              "eGFR\\s*[:=]?\\s*(\\d+(?:\\.\\d+)?)",
+              "میزان\\s*تصفیه[^\\d]*(\\d+(?:\\.\\d+)?)"
+            ],
+            "op": "lt",
+            "value": 30
+          }
+        ]
+      },
+      "action": {
+        "severity": "critical",
+        "code": "metformin_egfr_lt30",
+        "message_en": "Metformin is contraindicated when eGFR < 30 (observed {excerpt}).",
+        "message_fa": "متفورمین در eGFR کمتر از ۳۰ ممنوع است (مشاهده‌شده: {excerpt})."
+      },
+      "source": "src/medrag/rules/engine.py::egfr_metformin_warning (pre-refactor)",
+      "version": "1.0",
+      "effective_from": "2026-08-14",
+      "status": "production",
+      "validated_by": "migrated-from-existing-production-code",
+      "tags": ["drug", "nephrology"]
+    },
+    {
+      "rule_id": "metformin_egfr_lt45",
+      "bank": "drug",
+      "name": "Metformin dose/continuation review at eGFR < 45",
+      "condition": {
+        "type": "conjunction",
+        "all": [
+          { "type": "regex", "pattern": "metformin|متفورمین" },
+          {
+            "type": "numeric",
+            "extract": [
+              "egfr\\s*[:=]?\\s*(\\d+(?:\\.\\d+)?)",
+              "eGFR\\s*[:=]?\\s*(\\d+(?:\\.\\d+)?)",
+              "میزان\\s*تصفیه[^\\d]*(\\d+(?:\\.\\d+)?)"
+            ],
+            "op": "ge",
+            "value": 30
+          },
+          {
+            "type": "numeric",
+            "extract": [
+              "egfr\\s*[:=]?\\s*(\\d+(?:\\.\\d+)?)",
+              "eGFR\\s*[:=]?\\s*(\\d+(?:\\.\\d+)?)",
+              "میزان\\s*تصفیه[^\\d]*(\\d+(?:\\.\\d+)?)"
+            ],
+            "op": "lt",
+            "value": 45
+          }
+        ]
+      },
+      "action": {
+        "severity": "warning",
+        "code": "metformin_egfr_lt45",
+        "message_en": "Review metformin dose/continuation when eGFR < 45 (observed {excerpt}).",
+        "message_fa": "در eGFR کمتر از ۴۵ دوز/ادامه متفورمین را بازبینی کنید (مشاهده‌شده: {excerpt})."
+      },
+      "source": "src/medrag/rules/engine.py::egfr_metformin_warning (pre-refactor)",
+      "version": "1.0",
+      "effective_from": "2026-08-14",
+      "status": "production",
+      "validated_by": "migrated-from-existing-production-code",
+      "tags": ["drug", "nephrology"]
+    },
+    {
+      "rule_id": "warfarin_amiodarone",
+      "bank": "drug",
+      "name": "Warfarin-amiodarone interaction",
+      "condition": {
+        "type": "conjunction",
+        "all": [
+          { "type": "regex", "pattern": "warfarin|وارفارین" },
+          { "type": "regex", "pattern": "amiodarone|آمیودارون" }
+        ]
+      },
+      "action": {
+        "severity": "warning",
+        "code": "warfarin_amiodarone",
+        "message_en": "Warfarin–Amiodarone interaction: expect increased INR; monitor closely.",
+        "message_fa": "تداخل وارفارین–آمیودارون: احتمال افزایش INR؛ پایش دقیق لازم است."
+      },
+      "source": "src/medrag/rules/engine.py::warfarin_amiodarone (pre-refactor)",
+      "version": "1.0",
+      "effective_from": "2026-08-14",
+      "status": "production",
+      "validated_by": "migrated-from-existing-production-code",
+      "tags": ["drug", "cardiology"]
+    }
+  ]
+}

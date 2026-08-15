@@ -1,8 +1,28 @@
-"""Deterministic clinical rule engine (LLM explains; rules decide)."""
+"""Deterministic clinical rule engine (LLM explains; rules decide).
+
+Rule content used to be hardcoded as Python functions in this module. It
+now lives as data in ``src/medrag/rules/banks/{drug,clinical}.json``,
+evaluated by the generic, rule-agnostic matcher in
+:mod:`medrag.rules.matcher`. See docs/core/RULE_MODEL_SCHEMA_v1.md.
+
+Every symbol this module exposed before the migration (`RuleAlert`,
+`evaluate`, `egfr_metformin_warning`, `check_allergy`, `warfarin_amiodarone`,
+`sepsis_news2_hint`, `RULES`) is preserved with the same signature/return
+shape, since :mod:`medrag.rag.engine` and existing tests import them
+directly.
+"""
 from __future__ import annotations
 
-import re
-from dataclasses import dataclass, asdict
+import json
+from dataclasses import asdict, dataclass
+from functools import lru_cache
+from pathlib import Path
+from typing import Any
+
+from .matcher import match_condition
+
+_BANKS_DIR = Path(__file__).resolve().parent / "banks"
+_ACTIVE_STATUSES = ("approved", "production")
 
 
 @dataclass
@@ -14,71 +34,71 @@ class RuleAlert:
     data: dict | None = None
 
 
-def _num(text: str, patterns: list[str]) -> float | None:
-    for pat in patterns:
-        m = re.search(pat, text, re.I)
-        if m:
-            try:
-                return float(m.group(1))
-            except ValueError:
-                continue
-    return None
+@lru_cache(maxsize=None)
+def _load_bank(bank: str) -> tuple[dict, ...]:
+    path = _BANKS_DIR / f"{bank}.json"
+    if not path.is_file():
+        return ()
+    raw = json.loads(path.read_text(encoding="utf-8"))
+    return tuple(
+        r for r in raw.get("rules", []) if r.get("status", "production") in _ACTIVE_STATUSES
+    )
+
+
+def _fire(bank: str, query: str) -> list[RuleAlert]:
+    out: list[RuleAlert] = []
+    for rule in _load_bank(bank):
+        try:
+            ok, excerpt = match_condition(rule["condition"], query)
+        except Exception:  # noqa: BLE001
+            continue
+        if not ok:
+            continue
+        action = rule.get("action", {})
+        fmt = {"excerpt": excerpt[:160]}
+        msg_en = action.get("message_en", "")
+        msg_fa = action.get("message_fa")
+        try:
+            message = msg_en.format(**fmt) if msg_en else ""
+        except (KeyError, IndexError):
+            message = msg_en
+        try:
+            message_fa = msg_fa.format(**fmt) if msg_fa else None
+        except (KeyError, IndexError):
+            message_fa = msg_fa
+        out.append(
+            RuleAlert(
+                rule_id=action.get("code") or rule["rule_id"],
+                severity=action.get("severity", "info"),
+                message=message,
+                message_fa=message_fa,
+                data=action.get("data"),
+            )
+        )
+    return out
 
 
 def check_allergy(query: str) -> list[RuleAlert]:
-    alerts = []
-    if re.search(r"allerg(?:y|ic).*penicillin|حساسیت.*پنی‌?سیلین", query, re.I):
-        if re.search(r"amoxicillin|ampicillin|آموکسی", query, re.I):
-            alerts.append(RuleAlert(
-                "allergy_beta_lactam", "critical",
-                "Possible beta-lactam allergy conflict with prescribed penicillin-class drug.",
-                "احتمال تداخل آلرژی بتا-لاکتام با داروی پنی‌سیلینی.",
-            ))
-    return alerts
+    return [a for a in _fire("clinical", query) if a.rule_id == "allergy_beta_lactam"]
 
 
 def egfr_metformin_warning(query: str) -> list[RuleAlert]:
-    egfr = _num(query, [
-        r"egfr\s*[:=]?\s*(\d+(?:\.\d+)?)",
-        r"eGFR\s*[:=]?\s*(\d+(?:\.\d+)?)",
-        r"میزان\s*تصفیه[^\d]*(\d+(?:\.\d+)?)",
-    ])
-    has_met = bool(re.search(r"metformin|متفورمین", query, re.I))
-    if has_met and egfr is not None and egfr < 30:
-        return [RuleAlert(
-            "metformin_egfr_lt30", "critical",
-            f"Metformin is contraindicated when eGFR < 30 (observed eGFR={egfr}).",
-            f"متفورمین در eGFR کمتر از ۳۰ ممنوع است (eGFR مشاهده‌شده={egfr}).",
-            {"egfr": egfr},
-        )]
-    if has_met and egfr is not None and egfr < 45:
-        return [RuleAlert(
-            "metformin_egfr_lt45", "warning",
-            f"Review metformin dose/continuation when eGFR < 45 (observed eGFR={egfr}).",
-            f"در eGFR کمتر از ۴۵ دوز/ادامه متفورمین را بازبینی کنید (eGFR={egfr}).",
-            {"egfr": egfr},
-        )]
-    return []
+    hits = [
+        a
+        for a in _fire("drug", query)
+        if a.rule_id in ("metformin_egfr_lt30", "metformin_egfr_lt45")
+    ]
+    # Original behavior: lt30 and lt45 are mutually exclusive by construction
+    # (banks/drug.json encodes lt45 as 30<=eGFR<45), so at most one fires.
+    return hits
 
 
 def warfarin_amiodarone(query: str) -> list[RuleAlert]:
-    if re.search(r"warfarin|وارفارین", query, re.I) and re.search(r"amiodarone|آمیودارون", query, re.I):
-        return [RuleAlert(
-            "warfarin_amiodarone", "warning",
-            "Warfarin–Amiodarone interaction: expect increased INR; monitor closely.",
-            "تداخل وارفارین–آمیودارون: احتمال افزایش INR؛ پایش دقیق لازم است.",
-        )]
-    return []
+    return [a for a in _fire("drug", query) if a.rule_id == "warfarin_amiodarone"]
 
 
 def sepsis_news2_hint(query: str) -> list[RuleAlert]:
-    if re.search(r"\bsepsis\b|سپسیس|NEWS2|qSOFA", query, re.I):
-        return [RuleAlert(
-            "sepsis_screen", "info",
-            "Consider formal sepsis screening (qSOFA/NEWS2) and local protocol.",
-            "غربالگری رسمی سپسیس (qSOFA/NEWS2) و پروتکل محلی را در نظر بگیرید.",
-        )]
-    return []
+    return [a for a in _fire("clinical", query) if a.rule_id == "sepsis_screen"]
 
 
 RULES = [
@@ -94,6 +114,6 @@ def evaluate(query: str) -> list[dict]:
     for fn in RULES:
         try:
             out.extend(fn(query))
-        except Exception:
+        except Exception:  # noqa: BLE001
             continue
     return [asdict(a) for a in out]

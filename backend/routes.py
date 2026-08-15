@@ -456,6 +456,28 @@ async def ehr_ask(patient_id: str, body: EhrAskIn,
     }
 
 
+@router.get("/rules")
+async def rules_list(user: dict = Depends(auth.current_user)) -> dict:
+    """Read-only Rule Engine introspection — docs/core/RULE_MODEL_SCHEMA_v1.md.
+
+    Lists every rule known to the backend's Rule Engine (safety bank plus
+    the documentation/insurance naming meta-rules); the drug/clinical banks
+    are evaluated inside the separate MedicalRAG service and are not
+    included here.
+    """
+    from rules import repository
+
+    rules = repository.all_rules()
+    by_bank: dict[str, int] = {}
+    for r in rules:
+        by_bank[r.bank] = by_bank.get(r.bank, 0) + 1
+    return {
+        "count": len(rules),
+        "by_bank": by_bank,
+        "rules": [r.to_dict() for r in rules],
+    }
+
+
 @router.get("/medrag/health")
 async def medrag_health(user: dict = Depends(auth.current_user)) -> dict:
     from integrations.medrag_client import MedragError, get_medrag_client
