@@ -226,6 +226,19 @@ QDRANT_MODE = (_env("MEDRAG_QDRANT_MODE") or _vd.get("mode") or "server").lower(
 COLLECTION = _vd.get("collection") or "medical_library"
 DENSE_DIM = int(_vd.get("dense_dim") or 1024)
 
+# Which logical stores this deployment actually has. A corpus that only
+# populated main/standards/expand must not be forced to probe collections that
+# were never created. Env (comma-separated) > config.yaml > built-in default.
+_stores_raw = _env("MEDRAG_QDRANT_STORES") or _vd.get("stores") or ""
+if isinstance(_stores_raw, (list, tuple)):
+    QDRANT_STORE_NAMES = tuple(str(s).strip() for s in _stores_raw if str(s).strip())
+elif str(_stores_raw).strip():
+    QDRANT_STORE_NAMES = tuple(
+        s.strip() for s in str(_stores_raw).split(",") if s.strip()
+    )
+else:
+    QDRANT_STORE_NAMES = ("main", "standards", "expand", "expand2", "expand3")
+
 # Logical write store → server collection medical_library_{store} (prefer "expand")
 _raw_write = PATHS.get("embed_write_store", "expand")
 EMBED_WRITE_STORE = _raw_write if _raw_write in ("expand", "expand2", "expand3") else "expand"

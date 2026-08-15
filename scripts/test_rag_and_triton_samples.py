@@ -3,6 +3,10 @@
 Does not modify MedicalRAG or hf_asr. Uses HTTP only.
 """
 from __future__ import annotations
+import sys
+from pathlib import Path
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+
 
 import json
 import sys
@@ -12,9 +16,9 @@ from pathlib import Path
 import httpx
 
 DESKTOP = Path.home() / "Desktop"
-BACKEND = "http://127.0.0.1:8010"
-MEDRAG = "http://127.0.0.1:8080"
-TRITON = "http://127.0.0.1:8002"
+from _endpoints import BACKEND_URL as BACKEND
+from _endpoints import MEDRAG_URL as MEDRAG
+from _endpoints import TRITON_URL as TRITON
 OUT = Path(__file__).resolve().parents[1] / "reports" / "rag_triton_sample_test.json"
 
 # Filenames may contain narrow no-break spaces from iOS Voice Memos.

@@ -1,3 +1,6 @@
+import sys
+from pathlib import Path
+sys.path.insert(0, str(Path(__file__).resolve().parent))
 #!/usr/bin/env python3
 """Finalize clinical_safety_e2e_audio.md from saved real ASR + live /api/report calls."""
 from __future__ import annotations
@@ -13,7 +16,7 @@ import httpx
 ROOT = Path(__file__).resolve().parents[1]
 RAW = ROOT / "reports" / "clinical_safety_e2e_audio_raw.json"
 OUT_MD = ROOT / "reports" / "clinical_safety_e2e_audio.md"
-BASE = "http://127.0.0.1:8010"
+from _endpoints import BACKEND_URL as BASE
 
 sys.path.insert(0, str(ROOT / "backend"))
 from clinical_safety import assess_template_mismatch, triage_local  # noqa: E402

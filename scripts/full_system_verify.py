@@ -16,7 +16,11 @@ import urllib.request
 ROOT = Path(__file__).resolve().parents[1]
 REPORTS = ROOT / "reports"
 DESKTOP = Path.home() / "Desktop"
-BASE = os.environ.get("ASR_API_BASE", "http://127.0.0.1:8010")
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+from _endpoints import (  # noqa: E402
+    BACKEND_URL as BASE, EMBED_BASE_URL, FRONTEND_URL, LLM_BASE_URL,
+    MEDRAG_URL, OLLAMA_URL, QDRANT_URL, TRITON_URL,
+)
 PERSIAN_RE = re.compile(r"[\u0600-\u06FF]")
 
 
@@ -338,7 +342,7 @@ def main() -> int:
     medrag_up = False
     medrag_health = None
     try:
-        c2, h2 = http_json("GET", "http://127.0.0.1:8080/health", timeout=5)
+        c2, h2 = http_json("GET", f"{MEDRAG_URL}/health", timeout=5)
         medrag_up = c2 == 200
         medrag_health = h2
     except Exception:
@@ -355,7 +359,7 @@ def main() -> int:
             # accept any non-error payload with model/provider present
             embed_ok = "error" not in emb and bool(emb.get("model") or emb.get("provider"))
     # Direct embed server probe
-    c_e, emb_models = http_json("GET", "http://127.0.0.1:8001/v1/models", timeout=5)
+    c_e, emb_models = http_json("GET", f"{EMBED_BASE_URL}/models", timeout=5)
     embed_detail["embed_8001"] = {"http": c_e, "body": emb_models if c_e == 200 else emb_models}
     if c_e == 200:
         embed_ok = True
@@ -385,7 +389,7 @@ def main() -> int:
                 payload["specialty"] = spec
             # Match separated-deploy behavior: long RAG+LLM asks; override via MEDRAG_TIMEOUT_SEC.
             _ask_to = float(os.environ.get("MEDRAG_TIMEOUT_SEC", "900"))
-            c_a, ans = http_json("POST", "http://127.0.0.1:8080/ask", data=payload, timeout=_ask_to)
+            c_a, ans = http_json("POST", f"{MEDRAG_URL}/ask", data=payload, timeout=_ask_to)
             text = ""
             if isinstance(ans, dict):
                 text = ans.get("answer") or ans.get("text") or ans.get("response") or ""
@@ -537,32 +541,32 @@ def main() -> int:
         "ollama_11434": False,
     }
     try:
-        c, _ = http_json("GET", "http://127.0.0.1:3000", timeout=5)
+        c, _ = http_json("GET", FRONTEND_URL, timeout=5)
         services["frontend_3000"] = c == 200
     except Exception:
         pass
     try:
-        c, _ = http_json("GET", "http://127.0.0.1:8002/v2/health/ready", timeout=5)
+        c, _ = http_json("GET", f"{TRITON_URL}/v2/health/ready", timeout=5)
         services["triton_8002"] = c == 200
     except Exception:
         pass
     try:
-        c, _ = http_json("GET", "http://127.0.0.1:8001/v1/models", timeout=5)
+        c, _ = http_json("GET", f"{EMBED_BASE_URL}/models", timeout=5)
         services["embed_8001"] = c == 200
     except Exception:
         pass
     try:
-        c, _ = http_json("GET", "http://127.0.0.1:6333/readyz", timeout=5)
+        c, _ = http_json("GET", f"{QDRANT_URL}/readyz", timeout=5)
         services["qdrant_6333"] = c == 200
     except Exception:
         pass
     try:
-        c, _ = http_json("GET", "http://127.0.0.1:8000/v1/models", timeout=5)
+        c, _ = http_json("GET", f"{LLM_BASE_URL}/models", timeout=5)
         services["vllm_8000"] = c == 200
     except Exception:
         pass
     try:
-        c, _ = http_json("GET", "http://127.0.0.1:11434/api/tags", timeout=5)
+        c, _ = http_json("GET", f"{OLLAMA_URL}/api/tags", timeout=5)
         services["ollama_11434"] = c == 200
     except Exception:
         pass

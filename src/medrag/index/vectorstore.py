@@ -14,10 +14,15 @@ from qdrant_client import QdrantClient, models
 from medrag.config import (
     COLLECTION, DENSE_DIM, EMBED_WRITE_STORE, QDRANT_EXPAND2_STORAGE,
     QDRANT_EXPAND3_STORAGE, QDRANT_EXPAND_STORAGE, QDRANT_MODE,
-    QDRANT_STANDARDS_STORAGE, QDRANT_STORAGE, QDRANT_URL, RRF_K,
+    QDRANT_STORE_NAMES, QDRANT_STANDARDS_STORAGE, QDRANT_STORAGE, QDRANT_URL,
+    RRF_K,
 )
 
-STORE_NAMES = ("main", "standards", "expand", "expand2", "expand3")
+# Logical stores are configuration, not a literal: a deployment whose corpus
+# only populated main/standards/expand must not be forced to probe collections
+# that were never created. Override with MEDRAG_QDRANT_STORES (see
+# docs/core/CONFIGURATION.md); config.py holds the default.
+STORE_NAMES = QDRANT_STORE_NAMES
 
 _clients: dict[str, QdrantClient | None] = {s: None for s in STORE_NAMES}
 _server_client: QdrantClient | None = None
@@ -75,19 +80,19 @@ def require_server(timeout: float = 3.0) -> None:
     import urllib.error
     import urllib.request
 
-    url = (QDRANT_URL or "http://localhost:6333").rstrip("/") + "/collections"
+    # QDRANT_URL is required at import time (config.py raises if unset), so
+    # there is no literal fallback host here by design.
+    url = QDRANT_URL.rstrip("/") + "/collections"
     try:
         with urllib.request.urlopen(url, timeout=timeout) as resp:
             if resp.status >= 400:
                 raise RuntimeError(f"Qdrant HTTP {resp.status} at {url}")
     except Exception as e:
         raise RuntimeError(
-            "Qdrant server is not reachable at "
-            f"{QDRANT_URL or 'http://localhost:6333'}.\n"
+            f"Qdrant server is not reachable at {QDRANT_URL} "
+            "(set QDRANT_URL / vector_db.url).\n"
             "Start it, then re-run embed:\n"
-            "  docker compose up -d\n"
-            "  # or (Windows, no Docker):\n"
-            "  powershell -File scripts/start_qdrant.ps1\n"
+            "  docker compose up -d qdrant\n"
             f"Underlying error: {type(e).__name__}: {e}"
         ) from e
 
