@@ -2,6 +2,8 @@
 
 Services talk only via env-configured URLs. Do not bake hosts into application code.
 
+See also: [`core/CORE_ARCHITECTURE_v1.md`](core/CORE_ARCHITECTURE_v1.md) for how this topology maps onto the platform-level AranMed Core (Rule Engine, Knowledge Engine, Clinical Data Fabric) — the Core is in-process on each existing service, not a new one.
+
 ```
 ┌─────────────┐   relative /api    ┌──────────────────┐
 │  frontend   │ ─────────────────▶ │ aranmed-backend  │

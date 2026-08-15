@@ -5,6 +5,7 @@ End-to-end reference for engineers and operators. Companion docs:
 - Microservice topology & env keys: [`MICROSERVICES.md`](MICROSERVICES.md)
 - Project setup / API / troubleshooting: [`../README.md`](../README.md)
 - Latest verification matrix: [`../reports/full_system_verify.md`](../reports/full_system_verify.md)
+- **AranMed Core architecture** (how this radiology stack fits into the platform-level Core — Rule Engine, Knowledge Artifacts, Clinical Data Fabric): [`core/CORE_ARCHITECTURE_v1.md`](core/CORE_ARCHITECTURE_v1.md)
 
 MedicalRAG lives in this monorepo as `src/medrag` but runs as a **separate HTTP microservice**. The ASR backend talks to it only over HTTP (`MEDRAG_API_URL`) — no in-process imports of `medrag` from `backend/`.
 
