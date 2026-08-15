@@ -24,7 +24,10 @@ export default function DictateView({ initialTemplates, initialHealth, userRole 
   const { t } = useT();
   const [templates, setTemplates] = useState(initialTemplates || []);
   const [health, setHealth] = useState(initialHealth);
-  const [templateId, setTemplateId] = useState(initialTemplates?.[0]?.id || "");
+  const [templateId, setTemplateId] = useState("");
+  const [autoSelected, setAutoSelected] = useState(false);
+  const [selectionConfidence, setSelectionConfidence] = useState(null);
+  const [selectionReason, setSelectionReason] = useState("");
   const [transcript, setTranscript] = useState("");
   const [report, setReport] = useState("");
   const [criticalAlerts, setCriticalAlerts] = useState([]);
@@ -45,11 +48,7 @@ export default function DictateView({ initialTemplates, initialHealth, userRole 
   useEffect(() => {
     fetchWithTimeout(apiUrl("/api/templates"), {}, 30000)
       .then((r) => r.json())
-      .then((d) => {
-        const list = d.templates || [];
-        setTemplates(list);
-        if (!templateId && list[0]) setTemplateId(list[0].id);
-      })
+      .then((d) => setTemplates(d.templates || []))
       .catch(() => {});
     fetchWithTimeout(apiUrl("/api/health"), {}, 30000)
       .then((r) => r.json())
@@ -97,6 +96,26 @@ export default function DictateView({ initialTemplates, initialHealth, userRole 
   }
   function stopRec() { mediaRef.current?.stop(); setRecording(false); }
 
+  async function suggestTemplate(text) {
+    if (!text.trim()) return;
+    try {
+      const r = await fetchWithTimeout(apiUrl("/api/templates/suggest"), {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ transcript: text, top_k: 1 }),
+      }, 30000);
+      if (!r.ok) return;
+      const d = await r.json();
+      const top = (d.suggestions || [])[0];
+      if (top) {
+        setTemplateId(top.template_id);
+        setAutoSelected(true);
+        setSelectionConfidence(top.confidence);
+        setSelectionReason(top.detail || top.matched_on || "");
+      }
+    } catch (_) {}
+  }
+
   async function doTranscribe() {
     if (!audioBlob) { setErr("Record or upload audio first."); return; }
     setErr(""); setBusy("Transcribing…");
@@ -108,19 +127,19 @@ export default function DictateView({ initialTemplates, initialHealth, userRole 
       if (!r.ok) throw new Error(await r.text());
       const d = await r.json();
       setTranscript(d.text);
+      await suggestTemplate(d.text);
     } catch (e) { setErr(e.message); } finally { setBusy(""); }
   }
 
   async function doReport() {
     if (!transcript.trim()) { setErr("No transcript yet."); return; }
-    if (!templateId)        { setErr("Pick a template.");   return; }
     setErr(""); setBusy("Generating report…");
     try {
       const r = await fetchWithTimeout(apiUrl("/api/report"), {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          transcript, template_id: templateId,
+          transcript, template_id: templateId || null,
           extra_context: extraContext || null,
         }),
       }, 120000);
@@ -129,17 +148,20 @@ export default function DictateView({ initialTemplates, initialHealth, userRole 
       setReport(d.report);
       setCriticalAlerts(d.critical_alerts || []);
       setTemplateMismatch(d.template_mismatch || null);
+      setTemplateId(d.template_id);
+      setAutoSelected(!!d.auto_selected_template);
+      setSelectionConfidence(d.template_selection_confidence ?? null);
+      setSelectionReason(d.template_selection_reason || "");
     } catch (e) { setErr(e.message); } finally { setBusy(""); }
   }
 
   async function doDictate() {
     if (!audioBlob) { setErr("Record or upload audio first."); return; }
-    if (!templateId){ setErr("Pick a template.");             return; }
     setErr(""); setBusy("ASR + LLM pipeline…");
     try {
       const fd = new FormData();
       fd.append("file", audioBlob, "dictation.webm");
-      fd.append("template_id", templateId);
+      if (templateId)   fd.append("template_id", templateId);
       if (language)     fd.append("language", language);
       if (extraContext) fd.append("extra_context", extraContext);
       const r = await fetchWithTimeout(apiUrl("/api/dictate"), { method: "POST", body: fd }, 300000);
@@ -148,6 +170,10 @@ export default function DictateView({ initialTemplates, initialHealth, userRole 
       setReport(d.report);
       setCriticalAlerts(d.critical_alerts || []);
       setTemplateMismatch(d.template_mismatch || null);
+      setTemplateId(d.template_id);
+      setAutoSelected(!!d.auto_selected_template);
+      setSelectionConfidence(d.template_selection_confidence ?? null);
+      setSelectionReason(d.template_selection_reason || "");
       try {
         const fd2 = new FormData();
         fd2.append("file", audioBlob, "dictation.webm");
@@ -200,8 +226,22 @@ export default function DictateView({ initialTemplates, initialHealth, userRole 
                    placeholder="e.g. fa, en — leave blank to auto-detect" />
           </Field>
 
-          <Field label="Report template">
-            <select className="select" value={templateId} onChange={(e) => setTemplateId(e.target.value)}>
+          <Field
+            label="Report template"
+            hint={
+              templateId
+                ? autoSelected
+                  ? `auto-selected${selectionConfidence != null ? ` · ${Math.round(selectionConfidence * 100)}% confidence` : ""}`
+                  : "manually selected"
+                : "auto-selected from dictation if left blank"
+            }
+          >
+            <select
+              className="select"
+              value={templateId}
+              onChange={(e) => { setTemplateId(e.target.value); setAutoSelected(false); }}
+            >
+              <option value="">— auto-select from dictation —</option>
               {templates.map((tpl) => (
                 <option key={tpl.id} value={tpl.id}>{tpl.name}</option>
               ))}

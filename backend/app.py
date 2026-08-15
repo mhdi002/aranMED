@@ -96,7 +96,7 @@ class TranscribeOut(BaseModel):
 
 class ReportIn(BaseModel):
     transcript: str
-    template_id: str
+    template_id: Optional[str] = None  # omit to auto-select from the dictation
     extra_context: Optional[str] = None
     model: Optional[str] = None  # provider name override
     patient_id: Optional[str] = None  # optional: attach critical alerts to EHR
@@ -108,6 +108,18 @@ class ReportOut(BaseModel):
     model: str
     critical_alerts: list[dict] = []
     template_mismatch: Optional[dict] = None
+    auto_selected_template: bool = False
+    template_selection_confidence: Optional[float] = None
+    template_selection_reason: Optional[str] = None
+
+
+class TemplateSuggestIn(BaseModel):
+    transcript: str
+    top_k: int = 3
+
+
+class TemplateSuggestOut(BaseModel):
+    suggestions: list[dict]
 
 
 class ChatOut(BaseModel):
@@ -319,18 +331,45 @@ async def transcribe(
     )
 
 
+@app.post("/api/templates/suggest", response_model=TemplateSuggestOut)
+async def suggest_template(req: TemplateSuggestIn) -> TemplateSuggestOut:
+    import template_selection
+
+    suggestions = template_selection.suggest_templates(req.transcript, top_k=req.top_k)
+    return TemplateSuggestOut(suggestions=[s.to_dict() for s in suggestions])
+
+
 @app.post("/api/report", response_model=ReportOut)
 async def report(req: ReportIn) -> ReportOut:
+    template_id = req.template_id
+    auto_selected = False
+    selection_confidence: Optional[float] = None
+    selection_reason: Optional[str] = None
+    if not (template_id or "").strip():
+        import template_selection
+
+        pick = template_selection.auto_select_template(req.transcript)
+        if pick is None:
+            raise HTTPException(
+                422,
+                "no template_id was provided and automatic selection was not "
+                "confident enough — please select a template",
+            )
+        template_id = pick.template_id
+        auto_selected = True
+        selection_confidence = pick.confidence
+        selection_reason = pick.detail or pick.matched_on
+
     try:
-        tpl = templates_mod.get_template(req.template_id)
-        meta = templates_mod.get_template_meta(req.template_id)
+        tpl = templates_mod.get_template(template_id)
+        meta = templates_mod.get_template_meta(template_id)
     except FileNotFoundError:
         raise HTTPException(404, "template not found")
     from tools.builtin import _STRUCTURE_SYS  # type: ignore[attr-defined]
     from clinical_safety import enrich_report_payload
     import report_rules as rules_mod
 
-    template_title = meta.get("title") or rules_mod.official_title_for(req.template_id)
+    template_title = meta.get("title") or rules_mod.official_title_for(template_id)
     medrag_ans = await rules_mod.consult_medrag_naming_rules(
         template_title=template_title, transcript=req.transcript,
     )
@@ -343,7 +382,7 @@ async def report(req: ReportIn) -> ReportOut:
 
     core = await registry.get_text("core", name=req.model)
     prompt = (
-        f"=== TEMPLATE (id={req.template_id}; title={template_title or 'unknown'}) ===\n"
+        f"=== TEMPLATE (id={template_id}; title={template_title or 'unknown'}) ===\n"
         f"{tpl}\n\n"
         f"=== DICTATION ===\n{req.transcript}\n\n"
         "NOTE: Fill the TEMPLATE above exactly. The UI-selected template wins "
@@ -363,22 +402,25 @@ async def report(req: ReportIn) -> ReportOut:
     safety = await enrich_report_payload(
         transcript=req.transcript,
         report_text=out.content,
-        template_id=req.template_id,
+        template_id=template_id,
         patient_id=req.patient_id,
     )
     return ReportOut(
         report=out.content,
-        template_id=req.template_id,
+        template_id=template_id,
         model=core.name,
         critical_alerts=safety.get("critical_alerts") or [],
         template_mismatch=safety.get("template_mismatch"),
+        auto_selected_template=auto_selected,
+        template_selection_confidence=selection_confidence,
+        template_selection_reason=selection_reason,
     )
 
 
 @app.post("/api/dictate", response_model=ReportOut)
 async def dictate(
     file: UploadFile = File(...),
-    template_id: str = Form(...),
+    template_id: Optional[str] = Form(None),
     language: Optional[str] = Form(None),
     extra_context: Optional[str] = Form(None),
     model: Optional[str] = Form(None),

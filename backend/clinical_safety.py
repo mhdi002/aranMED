@@ -334,6 +334,17 @@ def _titles_match(a: str, b: str) -> bool:
     return False
 
 
+def template_catalog() -> list[dict[str, str]]:
+    """Public accessor for the id/name/official_title catalog — reused by
+    template_selection.py so it never re-derives this from templates.py."""
+    return _template_catalog()
+
+
+def titles_match(a: str, b: str) -> bool:
+    """Public accessor for the normalized title-equivalence check."""
+    return _titles_match(a, b)
+
+
 def assess_template_mismatch(
     transcript: str,
     selected_template_id: str,
