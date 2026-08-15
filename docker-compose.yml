@@ -1,83 +1,317 @@
-# GPU server stack: Ollama (LLM) + aranmed backend (Whisper) + Next.js frontend
+# =============================================================================
+# AranMed — full stack, single command.
 #
-# Prerequisites:
-#   - NVIDIA driver + nvidia-container-toolkit
-#   - docker compose v2
-# MedicalRAG (src/medrag) and Triton are separate processes —
-#     set MEDRAG_API_URL / TRITON_URL in .env (see docs/MICROSERVICES.md)
+#   cp .env.example .env      # then set MEDRAG_QDRANT_STORAGE to your corpus
+#   docker compose up -d --build
 #
-# Quick start:
-#   cp .env.example .env
-#   make docker-install    # pulls stock LLM qwen2.5:7b by default
-#   make docker-run
+# Brings up: gateway (load balancer) → frontend + backend → medrag → qdrant.
+# Every image installs its own dependencies at build time; no manual pip/npm.
+#
+# Profiles (opt-in extras, none required for the core stack):
+#   --profile ollama      run Ollama in-compose instead of pointing at a host
+#   --profile vllm        GPU generation server (OpenAI-compatible)
+#   --profile vllm-embed  GPU embedding server
+#
+# Scale horizontally (the gateway discovers replicas via Docker DNS):
+#   docker compose up -d --scale backend=4 --scale medrag=3 --scale frontend=2
+#
+# Nothing below hardcodes a host, port, path, or model — every value is an
+# environment variable with a documented default. See docs/core/CONFIGURATION.md
+# =============================================================================
+
+x-logging: &default-logging
+  driver: "json-file"
+  options:
+    max-size: "${LOG_MAX_SIZE:-10m}"
+    max-file: "${LOG_MAX_FILE:-3}"
+
+x-gpu: &gpu-reservation
+  resources:
+    reservations:
+      devices:
+        - driver: nvidia
+          count: ${GPU_COUNT:-all}
+          capabilities: [gpu]
 
 services:
-  ollama:
-    image: ollama/ollama:latest
-    container_name: aranmed-ollama
-    ports: ["11434:11434"]
-    volumes: ["ollama:/root/.ollama"]
-    deploy:
-      resources:
-        reservations:
-          devices:
-            - driver: nvidia
-              count: all
-              capabilities: [gpu]
+  # ── Public entrypoint / load balancer ──────────────────────────────────────
+  gateway:
+    image: nginx:${NGINX_VERSION:-1.27-alpine}
+    depends_on:
+      - backend
+      - frontend
+    environment:
+      # Rendered into the config by nginx's envsubst entrypoint.
+      GATEWAY_PORT: "${GATEWAY_PORT:-8080}"
+      BACKEND_HOST: "${BACKEND_SERVICE:-backend}"
+      BACKEND_PORT: "${BACKEND_PORT:-8010}"
+      FRONTEND_HOST: "${FRONTEND_SERVICE:-frontend}"
+      FRONTEND_PORT: "${FRONTEND_PORT:-3000}"
+      LB_KEEPALIVE: "${LB_KEEPALIVE:-64}"
+      LB_MAX_FAILS: "${LB_MAX_FAILS:-3}"
+      LB_FAIL_TIMEOUT: "${LB_FAIL_TIMEOUT:-15s}"
+      LB_CONNECT_TIMEOUT: "${LB_CONNECT_TIMEOUT:-10s}"
+      LB_SEND_TIMEOUT: "${LB_SEND_TIMEOUT:-600s}"
+      LB_READ_TIMEOUT: "${LB_READ_TIMEOUT:-600s}"
+      LB_HEALTH_TIMEOUT: "${LB_HEALTH_TIMEOUT:-10s}"
+      LB_MAX_BODY_SIZE: "${LB_MAX_BODY_SIZE:-256m}"
+      LB_NEXT_UPSTREAM_TRIES: "${LB_NEXT_UPSTREAM_TRIES:-3}"
+      LB_AI_RATE: "${LB_AI_RATE:-30r/s}"
+      LB_AI_BURST: "${LB_AI_BURST:-200}"
+      LB_MAX_CONN_PER_IP: "${LB_MAX_CONN_PER_IP:-100}"
+      LB_RATE_ZONE_SIZE: "${LB_RATE_ZONE_SIZE:-16m}"
+      # Only substitute our own knobs; leave nginx's own $variables intact.
+      NGINX_ENVSUBST_FILTER: "^(GATEWAY_|BACKEND_|FRONTEND_|LB_)"
+    volumes:
+      - ./deploy/nginx/nginx.conf.template:/etc/nginx/templates/default.conf.template:ro
+    # Lets BACKEND_SERVICE/FRONTEND_SERVICE point at host.docker.internal when
+    # an upstream runs outside the compose network (e.g. a natively installed
+    # backend during a partial rollout). See docs/core/DEPLOYMENT.md.
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    ports:
+      - "${GATEWAY_PUBLISH_PORT:-8080}:${GATEWAY_PORT:-8080}"
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://127.0.0.1:${GATEWAY_PORT:-8080}/healthz"]
+      interval: "${HEALTHCHECK_INTERVAL:-15s}"
+      timeout: 5s
+      retries: 5
+      start_period: 10s
     restart: unless-stopped
+    logging: *default-logging
 
+  # ── aranmed backend (ASR + reporting + rules + EHR) ───────────────────────
   backend:
     build:
       context: .
       target: backend
       args:
         TORCH_INDEX: ${TORCH_INDEX:-https://download.pytorch.org/whl/cu128}
-    container_name: aranmed-backend
-    depends_on:
-      ollama:
-        condition: service_started
-    env_file:
-      - .env
+    env_file: [.env]
     environment:
-      OLLAMA_HOST: http://ollama:11434
-      OLLAMA_MODEL: ${OLLAMA_MODEL:-qwen2.5:7b}
-      MEDRAG_API_URL: ${MEDRAG_API_URL:-}
-      MEDRAG_TIMEOUT_SEC: ${MEDRAG_TIMEOUT_SEC:-120}
-      TRITON_URL: ${TRITON_URL:-}
-      TRITON_MODEL: ${TRITON_MODEL:-whisper}
-      HF_HOME: /models
-      PORT: "8010"
-      HOST: 0.0.0.0
+      HOST: "0.0.0.0"
+      PORT: "${BACKEND_PORT:-8010}"
+      HF_HOME: "${DOCKER_HF_HOME:-/models}"
+      # Service discovery inside the compose network.
+      OLLAMA_HOST: "${DOCKER_OLLAMA_HOST:-http://host.docker.internal:11434}"
+      MEDRAG_API_URL: "${DOCKER_MEDRAG_API_URL:-http://medrag:8080}"
+      ASR_AGENT_REGISTRY_YAML: "${DOCKER_REGISTRY_YAML:-/app/backend/models.yaml}"
     volumes:
-      - hf-cache:/models
+      - hf-cache:${DOCKER_HF_HOME:-/models}
       - ./backend/models.docker.yaml:/app/backend/models.yaml:ro
       - ./backend/data:/app/backend/data
-    ports: ["8010:8010"]
+      # Pre-downloaded weights snapshot (e.g. models/whisper-large-v3/...).
+      # backend/providers/hf_asr.py::_resolve_model_source already checks
+      # <project_root>/models/<repo-name> before hitting the network — this
+      # just makes that directory visible inside the container. Point
+      # LOCAL_MODELS_DIR elsewhere if your snapshots live outside the repo;
+      # defaults to the host ./models used by the native (non-Docker) run.
+      - ${LOCAL_MODELS_DIR:-./models}:/app/models:ro
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    expose:
+      - "${BACKEND_PORT:-8010}"
+    healthcheck:
+      test: ["CMD", "curl", "-sf", "http://127.0.0.1:${BACKEND_PORT:-8010}/api/health"]
+      interval: "${HEALTHCHECK_INTERVAL:-30s}"
+      timeout: 10s
+      retries: 5
+      start_period: "${BACKEND_START_PERIOD:-180s}"
     deploy:
-      resources:
-        reservations:
-          devices:
-            - driver: nvidia
-              count: all
-              capabilities: [gpu]
+      <<: *gpu-reservation
+      replicas: ${BACKEND_REPLICAS:-1}
     restart: unless-stopped
+    logging: *default-logging
 
+  # ── MedicalRAG knowledge engine ───────────────────────────────────────────
+  medrag:
+    build:
+      context: .
+      target: medrag
+      args:
+        MEDRAG_TORCH_INDEX: ${MEDRAG_TORCH_INDEX:-https://download.pytorch.org/whl/cpu}
+    env_file: [.env]
+    environment:
+      MEDRAG_HOST: "0.0.0.0"
+      MEDRAG_PORT: "${MEDRAG_PORT:-8080}"
+      MEDRAG_ROOT: "/app"
+      HF_HOME: "${DOCKER_HF_HOME:-/models}"
+      QDRANT_URL: "${DOCKER_QDRANT_URL:-http://qdrant:6333}"
+      MEDRAG_QDRANT_MODE: "server"
+      # Only the stores this corpus actually contains (see CONFIGURATION.md).
+      MEDRAG_QDRANT_STORES: "${MEDRAG_QDRANT_STORES:-main,standards,expand}"
+      MEDRAG_CATALOG_DB: "${DOCKER_MEDRAG_CATALOG_DB:-/app/corpus/catalog.db}"
+      MEDRAG_DATA_DIR: "${DOCKER_MEDRAG_DATA_DIR:-/app/corpus/data}"
+      OLLAMA_HOST: "${DOCKER_OLLAMA_HOST:-http://host.docker.internal:11434}"
+      # This image ships CPU torch, so embeddings/reranking run in-process on
+      # CPU by default. Point these at a GPU vLLM server (profile: vllm-embed)
+      # for production throughput — see docs/core/DEPLOYMENT.md.
+      MEDRAG_EMBED_PROVIDER: "${DOCKER_MEDRAG_EMBED_PROVIDER:-local}"
+      MEDRAG_EMBED_DEVICE: "${DOCKER_MEDRAG_EMBED_DEVICE:-cpu}"
+      MEDRAG_RERANK_DEVICE: "${DOCKER_MEDRAG_RERANK_DEVICE:-cpu}"
+      # Provider and model must agree: MEDRAG_LLM_MODEL in .env names a
+      # vLLM/HuggingFace id (e.g. "Qwen/Qwen3.5-4B"), which Ollama answers
+      # with 404. When this container defaults the provider to ollama it must
+      # also supply an Ollama *tag*. Defaults to the configured Ollama
+      # fallback model. See docs/core/CONFIGURATION.md.
+      MEDRAG_LLM_PROVIDER: "${DOCKER_MEDRAG_LLM_PROVIDER:-ollama}"
+      MEDRAG_LLM_MODEL: "${DOCKER_MEDRAG_LLM_MODEL:-${MEDRAG_LLM_FALLBACK_MODEL:-}}"
+    volumes:
+      - hf-cache:${DOCKER_HF_HOME:-/models}
+      # The knowledge corpus root: holds catalog.db plus data/ (chunks, OCR
+      # text, manifests). Point MEDRAG_CORPUS_DIR at your MedicalRAG install.
+      - ${MEDRAG_CORPUS_DIR:-.}:/app/corpus
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    depends_on:
+      qdrant:
+        condition: service_started
+    expose:
+      - "${MEDRAG_PORT:-8080}"
+    # Not published by default (the gateway is the entrypoint). Set
+    # MEDRAG_PUBLISH_PORT to reach it from the host — useful for debugging or
+    # when the backend runs outside the compose network. Incompatible with
+    # MEDRAG_REPLICAS>1 (a fixed host port cannot fan out).
+    ports:
+      - "${MEDRAG_PUBLISH_PORT:-8081}:${MEDRAG_PORT:-8080}"
+    healthcheck:
+      # /live is dependency-free, so a replica reports healthy as soon as the
+      # process is serving; /health (models + Qdrant) is the deeper probe.
+      test: ["CMD", "curl", "-sf", "http://127.0.0.1:${MEDRAG_PORT:-8080}/live"]
+      interval: "${HEALTHCHECK_INTERVAL:-30s}"
+      timeout: 10s
+      retries: 5
+      start_period: "${MEDRAG_START_PERIOD:-120s}"
+    # Local-CPU embeddings + reranking load two ~2.2 GB models and rerank up
+    # to `retrieval.top_k_search` passages. Unbounded, that starves the rest of
+    # the stack and the kernel OOM-killer picks an arbitrary victim (observed:
+    # the medrag worker was "Killed" mid-request, surfacing to the client as a
+    # dropped connection rather than an error). An explicit limit makes the
+    # constraint attributable. Raise it, or move embed/rerank onto the GPU via
+    # the vllm-embed profile. See docs/core/DEPLOYMENT.md.
+    mem_limit: ${MEDRAG_MEM_LIMIT:-6g}
+    deploy:
+      replicas: ${MEDRAG_REPLICAS:-1}
+    restart: unless-stopped
+    logging: *default-logging
+
+  # ── Vector database (the real knowledge corpus lives here) ────────────────
+  qdrant:
+    image: qdrant/qdrant:${QDRANT_VERSION:-latest}
+    environment:
+      QDRANT__SERVICE__HTTP_PORT: "${QDRANT_HTTP_PORT:-6333}"
+      QDRANT__SERVICE__GRPC_PORT: "${QDRANT_GRPC_PORT:-6334}"
+      QDRANT__STORAGE__PERFORMANCE__MAX_SEARCH_THREADS: "${QDRANT_SEARCH_THREADS:-0}"
+    volumes:
+      # Point MEDRAG_QDRANT_STORAGE at your existing corpus to use it as-is.
+      - ${MEDRAG_QDRANT_STORAGE:-./qdrant_storage}:/qdrant/storage
+    ports:
+      - "${QDRANT_PUBLISH_PORT:-6333}:${QDRANT_HTTP_PORT:-6333}"
+    healthcheck:
+      # The qdrant image ships bash but no curl/wget, so probe the port directly.
+      # Qdrant does not bind HTTP until every collection is recovered, so a
+      # large corpus (tens of GB) legitimately needs a long start_period —
+      # otherwise the container is marked unhealthy while it is simply loading.
+      test: ["CMD-SHELL", "bash -c ':> /dev/tcp/127.0.0.1/${QDRANT_HTTP_PORT:-6333}'"]
+      interval: "${HEALTHCHECK_INTERVAL:-15s}"
+      timeout: 5s
+      retries: "${QDRANT_HEALTH_RETRIES:-30}"
+      start_period: "${QDRANT_START_PERIOD:-900s}"
+    restart: unless-stopped
+    logging: *default-logging
+
+  # ── Next.js UI ────────────────────────────────────────────────────────────
   frontend:
     build:
       context: .
       target: frontend
-    container_name: aranmed-frontend
+    environment:
+      HOST: "0.0.0.0"
+      PORT: "${FRONTEND_PORT:-3000}"
+      NODE_ENV: production
+      BACKEND_URL: "${DOCKER_BACKEND_URL:-http://backend:8010}"
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     depends_on:
       backend:
         condition: service_healthy
-    environment:
-      BACKEND_URL: http://backend:8010
-      HOST: 0.0.0.0
-      PORT: "3000"
-      NODE_ENV: production
-    ports: ["3000:3000"]
+    expose:
+      - "${FRONTEND_PORT:-3000}"
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://127.0.0.1:${FRONTEND_PORT:-3000}/login"]
+      interval: "${HEALTHCHECK_INTERVAL:-30s}"
+      timeout: 10s
+      retries: 5
+      start_period: 30s
+    deploy:
+      replicas: ${FRONTEND_REPLICAS:-1}
     restart: unless-stopped
+    logging: *default-logging
+
+  # ── Optional: Ollama in-compose (else point DOCKER_OLLAMA_HOST at a host) ──
+  ollama:
+    profiles: ["ollama"]
+    image: ollama/ollama:${OLLAMA_VERSION:-latest}
+    volumes:
+      - ollama:/root/.ollama
+    ports:
+      - "${OLLAMA_PUBLISH_PORT:-11434}:11434"
+    deploy: *gpu-reservation
+    restart: unless-stopped
+    logging: *default-logging
+
+  # ── Optional: GPU generation server (OpenAI-compatible) ───────────────────
+  vllm:
+    profiles: ["vllm"]
+    image: vllm/vllm-openai:${VLLM_VERSION:-latest}
+    environment:
+      HUGGING_FACE_HUB_TOKEN: "${HF_TOKEN:-}"
+    volumes:
+      - hf-cache:/root/.cache/huggingface
+    command:
+      - "--model"
+      - "${VLLM_MODEL}"
+      - "--host"
+      - "0.0.0.0"
+      - "--port"
+      - "${VLLM_CONTAINER_PORT:-8000}"
+      - "--max-model-len"
+      - "${VLLM_MAX_MODEL_LEN:-2048}"
+      - "--gpu-memory-utilization"
+      - "${VLLM_GPU_MEM_UTIL:-0.55}"
+    ports:
+      - "${VLLM_PORT:-8000}:${VLLM_CONTAINER_PORT:-8000}"
+    deploy: *gpu-reservation
+    restart: unless-stopped
+    logging: *default-logging
+
+  # ── Optional: GPU embedding server ────────────────────────────────────────
+  vllm-embed:
+    profiles: ["vllm-embed"]
+    image: vllm/vllm-openai:${VLLM_VERSION:-latest}
+    environment:
+      HUGGING_FACE_HUB_TOKEN: "${HF_TOKEN:-}"
+    volumes:
+      - hf-cache:/root/.cache/huggingface
+    command:
+      - "--model"
+      - "${VLLM_EMBED_MODEL}"
+      - "--task"
+      - "${VLLM_EMBED_TASK:-embed}"
+      - "--host"
+      - "0.0.0.0"
+      - "--port"
+      - "${VLLM_EMBED_CONTAINER_PORT:-8001}"
+      - "--max-model-len"
+      - "${VLLM_EMBED_MAX_MODEL_LEN:-512}"
+      - "--gpu-memory-utilization"
+      - "${VLLM_EMBED_GPU_MEM_UTIL:-0.25}"
+    ports:
+      - "${VLLM_EMBED_PORT:-8001}:${VLLM_EMBED_CONTAINER_PORT:-8001}"
+    deploy: *gpu-reservation
+    restart: unless-stopped
+    logging: *default-logging
 
 volumes:
-  ollama:
   hf-cache:
+  ollama:

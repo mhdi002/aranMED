@@ -18,12 +18,25 @@ ENV DEBIAN_FRONTEND=noninteractive \
     PORT=8010 \
     PYTHONPATH=/app/backend
 
-RUN apt-get update && apt-get install -y --no-install-recommends \
-        python3.11 python3.11-venv python3-pip \
-        ffmpeg libsndfile1 curl ca-certificates \
+# Debian/Ubuntu mirrors intermittently return 502/EOF on constrained links,
+# which fails the whole build after the multi-GB CUDA layers already pulled.
+# Retry acquisition and the apt invocation itself so a transient mirror error
+# does not discard that work.
+RUN printf 'Acquire::Retries "10";\nAcquire::http::Timeout "60";\nAcquire::https::Timeout "60";\n' \
+        > /etc/apt/apt.conf.d/99retries \
+    && for i in 1 2 3 4 5; do \
+         apt-get update && break || { echo "apt-get update retry $i"; sleep 15; }; \
+       done \
+    && for i in 1 2 3 4 5; do \
+         apt-get install -y --no-install-recommends \
+             python3.11 python3.11-venv python3-pip \
+             ffmpeg libsndfile1 curl ca-certificates \
+         && break || { echo "apt-get install retry $i"; sleep 15; }; \
+       done \
     && rm -rf /var/lib/apt/lists/* \
     && ln -sf /usr/bin/python3.11 /usr/local/bin/python \
-    && ln -sf /usr/bin/python3.11 /usr/local/bin/python3
+    && ln -sf /usr/bin/python3.11 /usr/local/bin/python3 \
+    && python --version
 
 WORKDIR /app
 
@@ -44,7 +57,73 @@ EXPOSE 8010
 HEALTHCHECK --interval=30s --timeout=10s --start-period=120s --retries=3 \
     CMD curl -sf http://127.0.0.1:8010/api/health || exit 1
 
-CMD ["python", "-m", "uvicorn", "app:app", "--host", "0.0.0.0", "--port", "8010"]
+# Bind host/port/workers from env so the same image serves any topology.
+#
+# Workers default to 1: each worker process loads its *own* copy of the ASR /
+# vision models, so N workers multiply VRAM (whisper-large-v3 alone is ~5.8 GB
+# of an 8 GB card). Scale out with container replicas behind the gateway
+# instead — see docs/core/DEPLOYMENT.md — or raise BACKEND_WORKERS on a host
+# with VRAM to spare.
+CMD ["sh", "-c", "python -m uvicorn app:app --host ${HOST:-0.0.0.0} --port ${PORT:-8010} --workers ${BACKEND_WORKERS:-1} --backlog ${BACKEND_BACKLOG:-2048}"]
+
+
+# ── MedicalRAG (Knowledge Engine microservice) ───────────────────────────────
+# Installs every Python dependency automatically (medrag package + extras).
+# CPU wheels by default so the image builds anywhere; switch to CUDA for GPU
+# embeddings at build time:
+#   docker compose build --build-arg MEDRAG_TORCH_INDEX=https://download.pytorch.org/whl/cu128 medrag
+FROM python:3.11-slim AS medrag
+
+ENV DEBIAN_FRONTEND=noninteractive \
+    PYTHONUNBUFFERED=1 \
+    PIP_NO_CACHE_DIR=1 \
+    PYTHONPATH=/app/src \
+    HF_HOME=/models \
+    MEDRAG_ROOT=/app \
+    MEDRAG_PORT=8080
+
+# Only runtime libs: curl for the healthcheck, libgomp1 for torch/sklearn
+# OpenMP. No toolchain — every dependency ships prebuilt wheels, and pulling
+# build-essential would add ~400 MB for nothing.
+RUN printf 'Acquire::Retries "10";\nAcquire::http::Timeout "60";\nAcquire::https::Timeout "60";\n' \
+        > /etc/apt/apt.conf.d/99retries \
+    && for i in 1 2 3 4 5; do \
+         apt-get update && break || { echo "apt-get update retry $i"; sleep 15; }; \
+       done \
+    && for i in 1 2 3 4 5; do \
+         apt-get install -y --no-install-recommends curl ca-certificates libgomp1 \
+         && break || { echo "apt-get install retry $i"; sleep 15; }; \
+       done \
+    && rm -rf /var/lib/apt/lists/*
+
+WORKDIR /app
+
+ARG MEDRAG_TORCH_INDEX=https://download.pytorch.org/whl/cpu
+
+# Dependency layer first so source edits don't re-trigger the long install.
+COPY requirements-medrag.txt /app/requirements-medrag.txt
+RUN python -m pip install --upgrade pip wheel \
+    && pip install torch --index-url "$MEDRAG_TORCH_INDEX" \
+    && pip install -r /app/requirements-medrag.txt
+
+COPY pyproject.toml /app/
+COPY src /app/src
+COPY config.yaml /app/config.yaml
+# Ops tooling (model warmup, endpoint resolver) so a running container can
+# pre-cache weights: docker compose exec medrag python /app/scripts/warmup_models.py
+COPY scripts /app/scripts
+# pyproject declares `readme`, but *.md is excluded from the build context
+# (.dockerignore) to keep it small — provide a stub so the metadata resolves.
+RUN printf 'MedicalRAG service image.\n' > /app/README.md \
+    && pip install --no-deps -e . \
+    && python -c "import medrag, fastapi, qdrant_client; print('medrag deps OK')"
+
+EXPOSE 8080
+
+HEALTHCHECK --interval=30s --timeout=10s --start-period=180s --retries=5 \
+    CMD curl -sf "http://127.0.0.1:${MEDRAG_PORT:-8080}/health" || exit 1
+
+CMD ["sh", "-c", "python -m uvicorn medrag.interfaces.api:app --host ${MEDRAG_HOST:-0.0.0.0} --port ${MEDRAG_PORT:-8080}"]
 
 
 # ── Frontend (Next.js production) ────────────────────────────────────────────

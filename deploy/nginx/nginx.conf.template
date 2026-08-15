@@ -1,0 +1,102 @@
+# =============================================================================
+# AranMed gateway / load balancer
+#
+# Rendered by nginx's envsubst entrypoint at container start, so every tunable
+# below comes from the environment — nothing is baked into the image.
+# See docs/core/CONFIGURATION.md and docs/core/DEPLOYMENT.md.
+#
+# Docker's embedded DNS resolves the compose service names to *all* replica
+# IPs, so `server backend:8010 resolve` load-balances across every replica
+# started with `docker compose up --scale backend=N`.
+# =============================================================================
+
+# WebSocket/upgrade passthrough for Next.js dev HMR and any future streaming.
+map $http_upgrade $connection_upgrade {
+    default upgrade;
+    ''      close;
+}
+
+upstream aranmed_backend {
+    # least_conn suits long, uneven requests (ASR/LLM) far better than round
+    # robin: a replica already busy transcribing won't be handed more work.
+    least_conn;
+    server ${BACKEND_HOST}:${BACKEND_PORT} max_fails=${LB_MAX_FAILS} fail_timeout=${LB_FAIL_TIMEOUT};
+    keepalive ${LB_KEEPALIVE};
+}
+
+upstream aranmed_frontend {
+    least_conn;
+    server ${FRONTEND_HOST}:${FRONTEND_PORT} max_fails=${LB_MAX_FAILS} fail_timeout=${LB_FAIL_TIMEOUT};
+    keepalive ${LB_KEEPALIVE};
+}
+
+# Protect the heavy AI endpoints from a thundering herd while leaving cheap
+# reads (health, templates, static) unthrottled.
+limit_req_zone $binary_remote_addr zone=aranmed_ai:${LB_RATE_ZONE_SIZE} rate=${LB_AI_RATE};
+limit_conn_zone $binary_remote_addr zone=aranmed_conn:${LB_RATE_ZONE_SIZE};
+
+server {
+    listen ${GATEWAY_PORT};
+    server_name _;
+
+    # Dictation uploads are multi-MB audio blobs.
+    client_max_body_size ${LB_MAX_BODY_SIZE};
+    client_body_timeout ${LB_SEND_TIMEOUT};
+
+    proxy_http_version 1.1;
+    proxy_set_header Host              $host;
+    proxy_set_header X-Real-IP         $remote_addr;
+    proxy_set_header X-Forwarded-For   $proxy_add_x_forwarded_for;
+    proxy_set_header X-Forwarded-Proto $scheme;
+    proxy_set_header Connection        "";
+
+    # ASR + LLM calls legitimately run for minutes; do not cut them off.
+    proxy_connect_timeout ${LB_CONNECT_TIMEOUT};
+    proxy_send_timeout    ${LB_SEND_TIMEOUT};
+    proxy_read_timeout    ${LB_READ_TIMEOUT};
+
+    # Retry the next replica when one is down or errors before responding.
+    proxy_next_upstream error timeout http_502 http_503 http_504;
+    proxy_next_upstream_tries ${LB_NEXT_UPSTREAM_TRIES};
+
+    gzip on;
+    gzip_proxied any;
+    gzip_types text/plain text/css application/json application/javascript
+               application/xml text/xml image/svg+xml;
+    gzip_min_length 1024;
+
+    # Gateway's own liveness — answered locally, never proxied, so probes stay
+    # green even while upstreams are still warming their models.
+    location = /healthz {
+        access_log off;
+        add_header Content-Type application/json always;
+        return 200 '{"ok":true,"service":"aranmed-gateway"}';
+    }
+
+    # Cheap backend reads: no rate limit, short timeouts.
+    location = /api/health {
+        proxy_pass http://aranmed_backend;
+        proxy_read_timeout ${LB_HEALTH_TIMEOUT};
+        access_log off;
+    }
+
+    # Heavy AI surface: rate + concurrency limited per client.
+    location ~ ^/api/(transcribe|dictate|report|chat|vision) {
+        limit_req  zone=aranmed_ai burst=${LB_AI_BURST} nodelay;
+        limit_conn aranmed_conn ${LB_MAX_CONN_PER_IP};
+        proxy_pass http://aranmed_backend;
+        proxy_request_buffering off;   # stream uploads straight through
+    }
+
+    location /api/ {
+        limit_conn aranmed_conn ${LB_MAX_CONN_PER_IP};
+        proxy_pass http://aranmed_backend;
+    }
+
+    # Everything else is the Next.js UI (incl. /_next static assets + HMR).
+    location / {
+        proxy_pass http://aranmed_frontend;
+        proxy_set_header Upgrade    $http_upgrade;
+        proxy_set_header Connection $connection_upgrade;
+    }
+}
