@@ -98,7 +98,16 @@ class TritonASRProvider(ASRProvider):
             import httpx
 
             base = self.url if self.url.startswith("http") else f"http://{self.url}"
-            async with httpx.AsyncClient(timeout=min(self.timeout, 10.0)) as c:
+            # Short connect/read so /api/models stays snappy when Triton is
+            # absent. self.timeout is the *inference* budget (often 120s);
+            # reusing it here made an unreachable optional provider cost ~2.5s
+            # on every registry health call. Mirrors the Ollama provider.
+            probe_timeout = httpx.Timeout(
+                connect=float(os.getenv("TRITON_HEALTH_CONNECT_TIMEOUT_SEC", "0.5")),
+                read=float(os.getenv("TRITON_HEALTH_READ_TIMEOUT_SEC", "2")),
+                write=2.0, pool=1.0,
+            )
+            async with httpx.AsyncClient(timeout=probe_timeout) as c:
                 r = await c.get(f"{base}/v2/health/ready")
                 ok = r.status_code == 200
             return {

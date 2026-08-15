@@ -221,12 +221,32 @@ class Registry:
 
     # --- health --------------------------------------------------------
     async def health(self) -> dict:
-        out: dict[str, dict] = {}
-        for name, inst in self._providers.items():
+        """Probe every provider concurrently with a per-provider timeout.
+
+        Probing serially made this endpoint as slow as the sum of all
+        providers' timeouts: a single unreachable optional provider (e.g. a
+        Triton server that isn't running) added ~3 s to every call. Providers
+        are independent, so fan out and bound each one. Override the budget
+        with PROVIDER_HEALTH_TIMEOUT_SEC.
+        """
+        timeout = float(os.getenv("PROVIDER_HEALTH_TIMEOUT_SEC", "2"))
+
+        async def probe(name: str, inst) -> tuple[str, dict]:
             try:
-                out[name] = {**inst.info(), "health": await inst.health()}
+                h = await asyncio.wait_for(inst.health(), timeout=timeout)
+                return name, {**inst.info(), "health": h}
+            except asyncio.TimeoutError:
+                return name, {
+                    **inst.info(),
+                    "health": {"ok": False, "detail": f"health probe timed out after {timeout}s"},
+                }
             except Exception as e:  # noqa: BLE001
-                out[name] = {**inst.info(), "health": {"ok": False, "detail": str(e)}}
+                return name, {**inst.info(), "health": {"ok": False, "detail": str(e)}}
+
+        results = await asyncio.gather(
+            *(probe(n, i) for n, i in self._providers.items())
+        )
+        out: dict[str, dict] = dict(results)
         return {
             "vram_used_gb": round(_vram_used_gb(), 2),
             "warm": [n for n in self._lru if self._providers[n]._loaded],  # noqa: SLF001

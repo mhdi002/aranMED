@@ -133,6 +133,7 @@ class HFASRProvider(ASRProvider):
         self._lock = threading.Lock()
 
     async def _load(self) -> None:
+        import anyio
         import torch
         from transformers import AutoModelForSpeechSeq2Seq, AutoProcessor
 
@@ -141,19 +142,29 @@ class HFASRProvider(ASRProvider):
         model_source, local_only = _resolve_model_source(self.model_id)
         log.info("Loading Whisper %s on %s (%s)", model_source, dev, dt)
 
-        model = AutoModelForSpeechSeq2Seq.from_pretrained(
-            model_source,
-            torch_dtype=dt,
-            low_cpu_mem_usage=True,
-            use_safetensors=True,
-            local_files_only=local_only,
-        )
-        processor = AutoProcessor.from_pretrained(
-            model_source,
-            local_files_only=local_only,
-        )
+        # Reading multi-GB weights and moving them to the device is long,
+        # blocking, synchronous work. Running it directly in this coroutine
+        # freezes the whole event loop for the duration — with a single
+        # uvicorn worker even /api/health then times out, so the container is
+        # reported unhealthy while it is merely warming. `transcribe()`
+        # already offloads via anyio; the loader must do the same.
+        def _blocking_load():
+            model = AutoModelForSpeechSeq2Seq.from_pretrained(
+                model_source,
+                torch_dtype=dt,
+                low_cpu_mem_usage=True,
+                use_safetensors=True,
+                local_files_only=local_only,
+            )
+            processor = AutoProcessor.from_pretrained(
+                model_source,
+                local_files_only=local_only,
+            )
+            return model.to(dev), processor
 
-        self._model = model.to(dev)
+        model, processor = await anyio.to_thread.run_sync(_blocking_load)
+
+        self._model = model
         self._processor = processor
         self._dtype = dt
         self._device = dev

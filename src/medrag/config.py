@@ -323,6 +323,26 @@ LLM_FALLBACK_ENDPOINT = (
     or _llm.get("fallback_endpoint")
     or OLLAMA_URL
 )
+# Provider/model consistency guard.
+#
+# Ollama addresses models by tag ("qwen3.5-9b:latest"); vLLM/OpenAI address
+# them by HuggingFace id ("Qwen/Qwen3.5-4B"). Pointing the ollama provider at
+# an HF id yields a bare `404 Not Found` from /api/chat, which reads like an
+# unreachable server rather than a misconfiguration — and only surfaces after
+# retrieval has already done all its work. Warn at import so the mismatch is
+# visible in startup logs instead of in a failed answer.
+if LLM_PROVIDER == "ollama" and "/" in (LLM_MODEL or ""):
+    import warnings as _warnings
+
+    _warnings.warn(
+        f"MEDRAG_LLM_PROVIDER=ollama but MEDRAG_LLM_MODEL={LLM_MODEL!r} looks "
+        f"like a HuggingFace id. Ollama expects a tag (e.g. "
+        f"{LLM_FALLBACK_MODEL or 'model:tag'!r}). Generation will fail with "
+        f"HTTP 404 from /api/chat.",
+        RuntimeWarning,
+        stacklevel=2,
+    )
+
 LLM_TIMEOUT = float(_env("MEDRAG_LLM_TIMEOUT") or _llm.get("timeout") or 300)
 LLM_MAX_RETRIES = int(_env("MEDRAG_LLM_MAX_RETRIES") or _llm.get("max_retries") or 1)
 LLM_TEMPERATURE = float(_env("MEDRAG_LLM_TEMPERATURE") or _llm.get("temperature") or 0.1)
@@ -431,6 +451,14 @@ if _env("MEDRAG_GROUNDING_MIN") is not None:
     RETRIEVAL["grounding_min_score"] = float(_env("MEDRAG_GROUNDING_MIN"))
 if _env("MEDRAG_SELF_RAG_THRESHOLD") is not None:
     RETRIEVAL["self_rag_grounding_threshold"] = float(_env("MEDRAG_SELF_RAG_THRESHOLD"))
+# Retrieval breadth is the dominant memory/latency lever on constrained hosts:
+# every candidate from top_k_search is cross-encoder reranked, so halving it
+# roughly halves reranker peak memory. It belongs with the other deploy knobs
+# rather than being config.yaml-only.
+if _env("MEDRAG_TOP_K_SEARCH"):
+    RETRIEVAL["top_k_search"] = int(_env("MEDRAG_TOP_K_SEARCH"))
+if _env("MEDRAG_TOP_K_FINAL"):
+    RETRIEVAL["top_k_final"] = int(_env("MEDRAG_TOP_K_FINAL"))
 
 MAX_CHUNKS_PER_BOOK = RETRIEVAL.get("max_chunks_per_book", 2)
 RRF_K = RETRIEVAL.get("rrf_k", 60)

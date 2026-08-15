@@ -20,9 +20,12 @@ The HTTP surface has two layers:
 
 from __future__ import annotations
 
+import asyncio
 import logging
+import os
+import time
 import uuid
-from typing import Optional
+from typing import Any, Optional
 
 from fastapi import FastAPI, File, Form, HTTPException, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
@@ -142,38 +145,83 @@ async def _startup() -> None:
 # ---------------------------------------------------------------------------
 # Health / introspection
 # ---------------------------------------------------------------------------
-@app.get("/api/health")
-async def health() -> dict:
-    """Lightweight health probe for the front-end pills."""
+@app.get("/api/live")
+async def live() -> dict:
+    """Liveness only — touches no dependency, so it stays fast and truthful
+    under load. Load balancers and container healthchecks should probe this;
+    ``/api/health`` is the deeper readiness view. See docs/core/DEPLOYMENT.md.
+    """
+    return {"ok": True, "service": "aranmed"}
+
+
+# `/api/health` fans out to Ollama and MedicalRAG. Doing that per request melts
+# down under concurrency (measured: p50 17s at 50 users, with timeouts), so the
+# dependency probe is cached for a short TTL and de-duplicated: N concurrent
+# callers trigger at most one upstream probe. Tune with HEALTH_CACHE_TTL_SEC.
+_HEALTH_TTL = float(os.getenv("HEALTH_CACHE_TTL_SEC", "5"))
+_health_cache: dict[str, Any] = {"at": 0.0, "value": None}
+_health_lock = asyncio.Lock()
+
+
+async def _probe_dependencies() -> dict:
+    """Actually contact Ollama + MedicalRAG. Callers must go through
+    :func:`_dependency_health` so this runs at most once per TTL."""
     info = registry.list()
     core_default = info["defaults"].get("core")
-    asr_default = info["defaults"].get("asr")
-    vision_default = info["defaults"].get("vision")
     core_health: dict = {}
     if core_default:
         try:
             core_health = await registry._providers[core_default].health()  # noqa: SLF001
         except Exception as e:  # noqa: BLE001
             core_health = {"ok": False, "detail": str(e)}
+
     medrag_health: dict = {"ok": False, "detail": "not checked"}
     try:
         from integrations.medrag_client import MedragClient, MedragError
 
-        try:
-            # Lightweight probe only — do not use the full MEDRAG_TIMEOUT_SEC.
-            url = (
-                __import__("os").getenv("MEDRAG_API_URL")
-                or __import__("os").getenv("MEDICALRAG_URL")
-                or ""
-            ).strip().rstrip("/")
-            if not url:
-                medrag_health = {"ok": False, "detail": "MEDRAG_API_URL unset"}
-            else:
-                medrag_health = await MedragClient(base_url=url, timeout_sec=3.0).health()
-        except MedragError as e:
-            medrag_health = {"ok": False, "detail": str(e)}
+        url = (os.getenv("MEDRAG_API_URL") or os.getenv("MEDICALRAG_URL") or "").strip().rstrip("/")
+        if not url:
+            medrag_health = {"ok": False, "detail": "MEDRAG_API_URL unset"}
+        else:
+            try:
+                timeout = float(os.getenv("MEDRAG_HEALTH_TIMEOUT_SEC", "3"))
+                medrag_health = await MedragClient(base_url=url, timeout_sec=timeout).health()
+            except MedragError as e:
+                medrag_health = {"ok": False, "detail": str(e)}
     except Exception as e:  # noqa: BLE001
         medrag_health = {"ok": False, "detail": str(e)}
+
+    return {"core_health": core_health, "medrag": medrag_health}
+
+
+async def _dependency_health() -> dict:
+    now = time.monotonic()
+    cached = _health_cache["value"]
+    if cached is not None and (now - _health_cache["at"]) < _HEALTH_TTL:
+        return cached
+    async with _health_lock:
+        # Re-check inside the lock: whoever waited gets the fresh value for free.
+        now = time.monotonic()
+        cached = _health_cache["value"]
+        if cached is not None and (now - _health_cache["at"]) < _HEALTH_TTL:
+            return cached
+        value = await _probe_dependencies()
+        _health_cache["value"] = value
+        _health_cache["at"] = time.monotonic()
+        return value
+
+
+@app.get("/api/health")
+async def health() -> dict:
+    """Readiness probe for the front-end pills (dependency results cached)."""
+    info = registry.list()
+    core_default = info["defaults"].get("core")
+    asr_default = info["defaults"].get("asr")
+    vision_default = info["defaults"].get("vision")
+
+    deps = await _dependency_health()
+    core_health = deps["core_health"]
+    medrag_health = deps["medrag"]
 
     return {
         "ok": True,
@@ -189,9 +237,38 @@ async def health() -> dict:
     }
 
 
+# Registry introspection fans out to every provider's health endpoint, so it
+# carries the same cost profile as /api/health and gets the same treatment:
+# TTL cache + single-flight. Without it an admin page polling this endpoint
+# hammers Ollama/Triton once per request.
+#
+# Note the TTL is deliberately longer than the health TTL. Caches are
+# per-worker, so with N uvicorn workers a given worker only sees every Nth
+# request; a 5 s TTL expires before the round-robin comes back around and the
+# cache never hits. Registry composition only changes on model load/unload,
+# so a longer window is both safe and effective.
+_MODELS_TTL = float(os.getenv("MODELS_CACHE_TTL_SEC", "30"))
+_models_cache: dict[str, Any] = {"at": 0.0, "value": None}
+_models_lock = asyncio.Lock()
+
+
 @app.get("/api/models")
 async def models() -> dict:
-    return await registry.health()
+    now = time.monotonic()
+    cached = _models_cache["value"]
+    if cached is not None and (now - _models_cache["at"]) < _MODELS_TTL:
+        return cached
+    async with _models_lock:
+        now = time.monotonic()
+        cached = _models_cache["value"]
+        if cached is not None and (now - _models_cache["at"]) < _MODELS_TTL:
+            return cached
+        value = await registry.health()
+        _models_cache["value"] = value
+        _models_cache["at"] = time.monotonic()
+        return value
+
+
 
 
 # ---------------------------------------------------------------------------

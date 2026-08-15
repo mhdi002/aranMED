@@ -268,12 +268,29 @@ async def consult_medrag_naming_rules(
         f"Selected template title: {template_title or '(unknown)'}. "
         f"Dictation excerpt: {(transcript or '')[:400]}"
     )
+    # This consult is an *optional* enhancement: the local rules excerpt is
+    # already in the prompt, so a slow or cold MedicalRAG must never hold up
+    # report generation. Using the shared client's MEDRAG_TIMEOUT_SEC (often
+    # 1200s, sized for full RAG inference) meant a warming MedicalRAG could
+    # stall /api/report for twenty minutes. Bound it separately and give up
+    # quietly. See docs/core/CONFIGURATION.md.
+    budget = float(os.getenv("REPORT_RULES_MEDRAG_TIMEOUT_SEC", "20"))
     try:
+        import asyncio
+
         from integrations.medrag_client import MedragClient, get_medrag_client
 
         client = get_medrag_client()
-        payload = await client.ask(query, specialty="radiology")
+        payload = await asyncio.wait_for(
+            client.ask(query, specialty="radiology"), timeout=budget
+        )
         return MedragClient.format_answer(payload)
+    except asyncio.TimeoutError:
+        log.info(
+            "MedRAG naming-rules consult skipped: exceeded %.0fs budget "
+            "(report proceeds with local naming rules)", budget,
+        )
+        return ""
     except Exception as e:  # noqa: BLE001
         log.info("MedRAG naming-rules consult skipped: %s", e)
         return ""
