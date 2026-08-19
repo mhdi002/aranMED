@@ -10,11 +10,13 @@ Storage: the SQLite ``patients`` table (``backend/store.py`` /
 routes use. This used to be a separate one-file-per-patient JSON store at
 ``backend/data/ehr/<patient_id>.json`` with no owner concept; see
 docs/core/CLINICAL_DATA_FABRIC_v1.md for why/how it was folded in.
-``POST /api/chat`` (the only entry point that reaches these tools) carries
-no authenticated user, so records built here are attributed to a
+``POST /api/chat`` scopes these tools by the authenticated caller
+(``ToolContext.owner_user_id``, set from the bearer token) exactly like the
+``/api/ehr/*`` REST routes do, so one session can never read/list another
+user's patients. When the request carries no token (chat allows
+unauthenticated use for backward compatibility), records fall back to a
 configured system-owner account (``config.EHR_TOOL_SYSTEM_OWNER_USERNAME``)
-rather than a per-request user — the same effective namespace the old
-ownerless file store had.
+— the same effective namespace the old ownerless file store had.
 """
 from __future__ import annotations
 
@@ -66,24 +68,35 @@ def _system_owner_user_id() -> int:
 # --------------------------------------------------------------------------
 # Storage helpers — thin wrappers over backend/store.py (see module docstring)
 # --------------------------------------------------------------------------
-def load_record(patient_id: str) -> dict | None:
-    return store.get_patient(patient_id, owner_user_id=_system_owner_user_id())
+def _owner_id(ctx: ToolContext | None) -> int:
+    """The authenticated caller when available, else the shared system owner.
+
+    Never mix the two namespaces for the same call: an authenticated chat
+    session must only ever see its own patients.
+    """
+    if ctx is not None and ctx.owner_user_id is not None:
+        return ctx.owner_user_id
+    return _system_owner_user_id()
 
 
-def save_record(record: dict) -> dict:
+def load_record(patient_id: str, ctx: ToolContext | None = None) -> dict | None:
+    return store.get_patient(patient_id, owner_user_id=_owner_id(ctx))
+
+
+def save_record(record: dict, ctx: ToolContext | None = None) -> dict:
     pid = record["id"]
     language = record.get("language", "en")
     data = {k: v for k, v in record.items() if k not in ("id", "language")}
     return store.upsert_patient(
-        owner_user_id=_system_owner_user_id(),
+        owner_user_id=_owner_id(ctx),
         data=data,
         patient_id=pid,
         language=language,
     )
 
 
-def list_records() -> list[dict]:
-    return store.list_patients(owner_user_id=_system_owner_user_id())
+def list_records(ctx: ToolContext | None = None) -> list[dict]:
+    return store.list_patients(owner_user_id=_owner_id(ctx))
 
 
 # --------------------------------------------------------------------------
@@ -211,14 +224,14 @@ class BuildEHRTool(Tool):
                               data={"raw": out.content})
 
         name = (data.get("patient") or {}).get("name") or "patient"
-        pid = patient_id or load_existing_id(name) or _slugify(name)
+        pid = patient_id or load_existing_id(name, ctx) or _slugify(name)
         record = {
             "id": pid,
             "language": language,
-            "created_at": (load_record(pid) or {}).get("created_at", time.time()),
+            "created_at": (load_record(pid, ctx) or {}).get("created_at", time.time()),
             **data,
         }
-        save_record(record)
+        save_record(record, ctx)
         ctx.state["ehr_patient_id"] = pid
         ctx.state["ehr_record"] = record
 
@@ -243,7 +256,7 @@ class GetEHRTool(Tool):
     }
 
     async def run(self, ctx: ToolContext, patient_id: str) -> ToolResult:
-        rec = load_record(patient_id)
+        rec = load_record(patient_id, ctx)
         if rec is None:
             return ToolResult(content="", error=f"no EHR for id {patient_id}")
         ctx.state["ehr_patient_id"] = patient_id
@@ -261,17 +274,17 @@ class ListEHRTool(Tool):
     parameters = {"type": "object", "properties": {}, "required": []}
 
     async def run(self, ctx: ToolContext) -> ToolResult:
-        items = list_records()
+        items = list_records(ctx)
         return ToolResult(
             content=f"{len(items)} EHR record(s) stored.",
             data={"records": items},
         )
 
 
-def load_existing_id(name: str) -> str | None:
+def load_existing_id(name: str, ctx: ToolContext | None = None) -> str | None:
     """Return an existing record id whose patient name matches *name*."""
     target = _slugify(name)
-    for item in list_records():
+    for item in list_records(ctx):
         if item.get("id") == target:
             return target
     return None

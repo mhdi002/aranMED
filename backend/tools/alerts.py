@@ -194,7 +194,7 @@ class CheckMedicationsTool(Tool):
 
     async def run(self, ctx: ToolContext, patient_id: str,
                   language: str = "en") -> ToolResult:
-        record = load_record(patient_id)
+        record = load_record(patient_id, ctx)
         if record is None:
             return ToolResult(content="", error=f"no EHR for id {patient_id}")
         due = compute_due_medications(record)
@@ -229,7 +229,7 @@ class RecordDoseTool(Tool):
 
     async def run(self, ctx: ToolContext, patient_id: str, medication: str,
                   at: float | None = None) -> ToolResult:
-        record = load_record(patient_id)
+        record = load_record(patient_id, ctx)
         if record is None:
             return ToolResult(content="", error=f"no EHR for id {patient_id}")
         ts = at if at is not None else _now()
@@ -242,7 +242,7 @@ class RecordDoseTool(Tool):
         if hit is None:
             return ToolResult(content="",
                               error=f"medication '{medication}' not found in EHR")
-        save_record(record)
+        save_record(record, ctx)
         return ToolResult(
             content=f"Recorded dose of {medication} at {_fmt_ts(ts)}.",
             data={"patient_id": patient_id, "medication": medication,
@@ -276,7 +276,7 @@ class SendDoctorAlertTool(Tool):
     async def run(self, ctx: ToolContext, patient_id: str, channel: str,
                   to: str, language: str = "en",
                   only_if_due: bool = True) -> ToolResult:
-        record = load_record(patient_id)
+        record = load_record(patient_id, ctx)
         if record is None:
             return ToolResult(content="", error=f"no EHR for id {patient_id}")
         due = compute_due_medications(record)

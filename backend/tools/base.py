@@ -30,11 +30,16 @@ class ToolContext:
       :func:`structure_report` to pick up automatically).
     * ``attachments`` — bytes uploaded by the user with the current request,
       keyed by an opaque id (``audio:0``, ``image:0`` …).
+    * ``owner_user_id`` — the authenticated caller's ``users.id``, when the
+      request carried a valid bearer token. Tools that touch per-user data
+      (EHR records) must scope storage by this id, not a shared account,
+      so one session can never read/list another user's patients.
     """
     registry: Any
     state: dict = field(default_factory=dict)
     attachments: dict[str, bytes] = field(default_factory=dict)
     templates: Any = None  # templates module (lazy)
+    owner_user_id: int | None = None
 
 
 @dataclass

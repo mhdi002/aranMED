@@ -1,0 +1,13 @@
+{
+  "_comment": "Bootstrap-only seed used by report_rules.rebuild_rules_json_from_templates() when REPORT_RULES.json is missing or has no aliases/forbidden_titles yet. Edit this file (not Python source) to change the seeded naming rules -- REPORT_RULES.json itself always wins once it exists.",
+  "official_titles": {
+    "neck_soft_tissue_ct": "neck soft tissue ct"
+  },
+  "aliases": {
+    "neck ct": "neck soft tissue ct",
+    "ct neck": "neck soft tissue ct",
+    "soft tissue neck ct": "neck soft tissue ct"
+  },
+  "forbidden_titles": ["neck ct", "ct neck"],
+  "notes": "Insurance/hospital naming: use exact official titles. Selected UI template always wins for report structure."
+}

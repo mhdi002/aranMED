@@ -27,11 +27,12 @@ import time
 import uuid
 from typing import Any, Optional
 
-from fastapi import FastAPI, File, Form, HTTPException, UploadFile
+from fastapi import Depends, FastAPI, File, Form, HTTPException, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel
 
+import auth
 import templates as templates_mod
 from agent import Agent
 from config import HOST, PORT
@@ -80,7 +81,10 @@ app.include_router(extra_router)
 # Module-level singletons
 # ---------------------------------------------------------------------------
 registry = Registry.get()
-memory = MemoryStore()
+memory = MemoryStore(
+    max_sessions=int(registry.runtime.get("memory_max_sessions", 2000)),
+    idle_ttl_sec=float(registry.runtime.get("memory_idle_ttl_sec", 6 * 3600)),
+)
 agent = Agent(registry=registry, memory=memory)
 
 
@@ -235,12 +239,18 @@ async def health() -> dict:
     core_health = deps["core_health"]
     medrag_health = deps["medrag"]
 
+    # core_default is the registry *slot name* (e.g. "ollama-core"), not the
+    # actual model — resolve to what the provider's own health check reports
+    # is loaded, falling back to the slot name only if that's unavailable.
+    resolved_core_model = core_health.get("model") or core_default
+
     return {
         "ok": True,
         "service": "aranmed",
         "asr_model": asr_default,
-        "ollama_model": core_default,  # legacy field name
-        "core_model": core_default,
+        "ollama_model": resolved_core_model,  # legacy field name
+        "core_model": resolved_core_model,
+        "core_slot": core_default,
         "vision_model": vision_default,
         "ollama_available": bool(core_health.get("ok")),
         "ollama_models": core_health.get("available_models", []),
@@ -456,6 +466,7 @@ async def chat(
     core_model: Optional[str] = Form(None),
     audio: Optional[list[UploadFile]] = File(None),
     images: Optional[list[UploadFile]] = File(None),
+    user: Optional[dict] = Depends(auth.current_user_optional),
 ) -> ChatOut:
     sid = session_id or uuid.uuid4().hex
     attachments: dict[str, bytes] = {}
@@ -559,6 +570,7 @@ async def chat(
         user_text=text or "(no text)",
         attachments=attachments,
         core_name=core_model,
+        owner_user_id=(user or {}).get("id"),
     )
     from clinical_safety import enrich_text_payload
 

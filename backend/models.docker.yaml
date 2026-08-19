@@ -97,3 +97,14 @@ runtime:
   vram_budget_gb: 18
   history_keep_turns: 12
   history_summary_trigger: 24
+  # Agent tool-calling loop (backend/agent.py) — see docs/core/AGENT_ORCHESTRATION.md
+  agent_max_iters: 5
+  agent_max_tokens: 1400
+  agent_final_max_tokens: 900
+  agent_temperature: 0.2
+  # Conversation memory (backend/memory.py)
+  memory_summary_char_limit: 600
+  memory_summary_max_tokens: 400
+  memory_summary_word_limit: 250
+  memory_max_sessions: 2000
+  memory_idle_ttl_sec: 21600

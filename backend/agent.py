@@ -69,12 +69,20 @@ class Agent:
         session_id: str,
         user_text: str,
         attachments: Optional[dict[str, bytes]] = None,
-        max_iters: int = 5,
+        max_iters: Optional[int] = None,
         core_name: Optional[str] = None,
+        owner_user_id: Optional[int] = None,
     ) -> AgentResult:
         attachments = attachments or {}
+        # runtime.* comes from models.yaml — dynamically configurable per
+        # deployment, not a Python-level default (see docs/core/CONFIGURATION.md).
+        if max_iters is None:
+            max_iters = int(self.runtime.get("agent_max_iters", 5))
+        agent_max_tokens = int(self.runtime.get("agent_max_tokens", 1400))
+        agent_final_max_tokens = int(self.runtime.get("agent_final_max_tokens", 900))
+        agent_temperature = float(self.runtime.get("agent_temperature", 0.2))
         ctx = ToolContext(registry=self.registry, attachments=attachments,
-                          templates=templates_mod)
+                          templates=templates_mod, owner_user_id=owner_user_id)
 
         # 1) extend memory with the new user turn (annotated with what's attached).
         attach_note = ""
@@ -109,8 +117,8 @@ class Agent:
             out = await core.chat(
                 msgs,
                 tools=tool_schemas if core.supports_tools else None,
-                temperature=0.2,
-                max_tokens=1400,
+                temperature=agent_temperature,
+                max_tokens=agent_max_tokens,
             )
             msgs.append(out)
             conv.append(out)
@@ -133,7 +141,8 @@ class Agent:
                 conv.append(tool_msg)
 
         # Hit max iters without a final answer; ask one more time, no tools.
-        final = await core.chat(msgs, tools=None, temperature=0.2, max_tokens=900)
+        final = await core.chat(msgs, tools=None, temperature=agent_temperature,
+                                max_tokens=agent_final_max_tokens)
         conv.append(final)
         return AgentResult(answer=final.content, tool_calls=all_calls,
                            state=ctx.state, model=core.name)

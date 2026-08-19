@@ -317,32 +317,38 @@ def build_report_context(
     return "\n\n".join(parts)
 
 
+def _seed_defaults() -> dict[str, Any]:
+    """Bootstrap-only naming rules, read from a bundled JSON fixture (not
+    hardcoded in source) so a fresh REPORT_RULES.json isn't missing basic
+    aliases/forbidden titles. REPORT_RULES.json always wins once it exists.
+    See backend/data/report_rules/seed_defaults.json.
+    """
+    path = REPORT_RULES_DIR / "seed_defaults.json"
+    try:
+        with open(path, "r", encoding="utf-8") as f:
+            return json.load(f)
+    except (OSError, ValueError):
+        return {}
+
+
 def rebuild_rules_json_from_templates() -> dict[str, Any]:
     """Refresh official_titles from on-disk templates; keep aliases/forbidden."""
     import templates as templates_mod
 
     existing = load_report_rules()
+    seed = _seed_defaults()
     official: dict[str, str] = dict(existing.get("official_titles") or {})
     for t in templates_mod.list_templates():
         tid = t["id"]
         official[tid] = t.get("name") or tid.replace("_", " ")
-    # Preserve canonical insurance examples even if not on disk as .txt
-    official.setdefault("neck_soft_tissue_ct", "neck soft tissue ct")
+    # Preserve canonical examples even if not on disk as .txt (data-driven, see seed_defaults.json)
+    for tid, title in (seed.get("official_titles") or {}).items():
+        official.setdefault(tid, title)
     data = {
         "official_titles": official,
-        "aliases": existing.get("aliases")
-        or {
-            "neck ct": "neck soft tissue ct",
-            "ct neck": "neck soft tissue ct",
-            "soft tissue neck ct": "neck soft tissue ct",
-        },
-        "forbidden_titles": existing.get("forbidden_titles")
-        or ["neck ct", "ct neck"],
-        "notes": (
-            existing.get("notes")
-            or "Insurance/hospital naming: use exact official titles. "
-            "Selected UI template always wins for report structure."
-        ),
+        "aliases": existing.get("aliases") or seed.get("aliases") or {},
+        "forbidden_titles": existing.get("forbidden_titles") or seed.get("forbidden_titles") or [],
+        "notes": existing.get("notes") or seed.get("notes") or "",
         "rules_docx": str(REPORT_RULES_DOCX),
         "rules_dir": str(REPORT_RULES_DIR),
     }

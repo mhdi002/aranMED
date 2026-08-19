@@ -198,3 +198,18 @@ def current_user(token: Optional[str] = Depends(oauth2_scheme)) -> dict:
     if user is None:
         raise HTTPException(status.HTTP_401_UNAUTHORIZED, "user not found")
     return user
+
+
+def current_user_optional(token: Optional[str] = Depends(oauth2_scheme)) -> dict | None:
+    """Like :func:`current_user` but returns ``None`` instead of raising when
+    no token is present — for endpoints (e.g. ``/api/chat``) that must keep
+    working unauthenticated but should scope per-user data whenever a valid
+    token *is* supplied, rather than always falling back to a shared owner.
+    """
+    if not token:
+        return None
+    try:
+        payload = decode_token(token)
+    except ValueError:
+        return None
+    return get_user(int(payload["sub"]))
