@@ -1,11 +1,12 @@
 # ASR-Agent — server deployment
 # Usage:
-#   make install          # venv, deps, models, verify
-#   make run              # start backend + frontend
-#   make stop             # stop services
-#   make verify           # pre-flight checks
-#   make docker-install   # Docker build + model cache
-#   make docker-run       # docker compose up -d
+#   make deploy            # full automated deployment (see deploy.sh) — start here
+#   make install           # venv, deps, models, verify (bare-metal)
+#   make run               # start backend + frontend (bare-metal)
+#   make stop              # stop services (bare-metal)
+#   make verify            # pre-flight checks
+#   make docker-install    # Docker build + model cache
+#   make docker-run        # docker compose up -d
 
 SHELL := /bin/bash
 ROOT := $(CURDIR)
@@ -19,17 +20,25 @@ FRONTEND_PORT ?= 3000
 TORCH_INDEX ?= https://download.pytorch.org/whl/cu128
 OLLAMA_MODEL ?=
 
-.PHONY: install run stop verify clean docker-install docker-run docker-stop docker-logs help
+.PHONY: deploy install run stop verify clean docker-install docker-run docker-stop docker-logs help
 
 help:
 	@echo "Targets:"
-	@echo "  make install        Install Python/Node deps + download models + verify"
-	@echo "  make run            Start backend (:$(PORT)) and frontend (:$(FRONTEND_PORT))"
-	@echo "  make stop           Stop backend and frontend"
-	@echo "  make verify         Run deployment checks (add VERIFY_FULL=1 for GPU load test)"
-	@echo "  make docker-install Build images and cache Whisper in volume"
-	@echo "  make docker-run     Start stack with Docker Compose"
-	@echo "  make docker-stop    Stop Docker Compose stack"
+	@echo "  make deploy          Full automated deployment: docker, images, models, triton, vllm, up"
+	@echo "                       (pass flags via ARGS, e.g. make deploy ARGS=\"--with-ollama --with-vllm\")"
+	@echo "  make install         Install Python/Node deps + download models + verify (bare-metal)"
+	@echo "  make run             Start backend (:$(PORT)) and frontend (:$(FRONTEND_PORT)) (bare-metal)"
+	@echo "  make stop            Stop backend and frontend (bare-metal)"
+	@echo "  make verify          Run deployment checks (add VERIFY_FULL=1 for GPU load test)"
+	@echo "  make docker-install  Build images and cache Whisper in volume"
+	@echo "  make docker-run      Start stack with Docker Compose"
+	@echo "  make docker-stop     Stop Docker Compose stack"
+
+# ── Full automated deployment (Docker: backend, frontend, triton, medrag, ──
+# ── qdrant, gateway, + optional ollama/vllm/vllm-embed, + model downloads) ──
+deploy:
+	@chmod +x deploy.sh
+	./deploy.sh $(ARGS)
 
 # ── Bare-metal (upload files to GPU server, then install + run) ─────────────
 
