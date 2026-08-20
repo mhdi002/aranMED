@@ -1,4 +1,4 @@
-# Start Qdrant server on :6333 (Windows native binary — no Docker required).
+﻿# Start Qdrant server on :6333 (Windows native binary — no Docker required).
 # Prefer: docker compose up -d   when Docker Desktop is installed.
 #
 # Storage resolution (first match wins):

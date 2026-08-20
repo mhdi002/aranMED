@@ -108,6 +108,11 @@ class MemoryStore:
         """Flush one session's current state to SQLite. Call once per turn
         (after the agent loop finishes appending) — not on every append, to
         avoid a DB round-trip per message.
+
+        Synchronous: SQLite writes are fast and this keeps a simple call site
+        for non-async callers. From async code prefer :meth:`persist_async`,
+        which runs this off the event loop thread so one session's flush
+        can't stall other requests being served by the same worker.
         """
         if not self.persist_enabled or session_id not in self._sessions:
             return
@@ -127,6 +132,41 @@ class MemoryStore:
                 )
         except Exception as e:  # noqa: BLE001
             log.warning("memory: failed to persist session %s: %s", session_id, e)
+
+    async def persist_async(self, session_id: str) -> None:
+        """Async wrapper around :meth:`persist` — offloads the SQLite write to
+        a worker thread (``asyncio.to_thread``) so it doesn't block the event
+        loop. SQLite still serializes writers under the hood, so this doesn't
+        raise write throughput by itself, but it stops one session's flush
+        from adding event-loop latency to every other concurrent request on
+        the same worker — the cheap first step before reaching for a write
+        queue, which is only worth the complexity if load actually needs it.
+        """
+        await asyncio.to_thread(self.persist, session_id)
+
+    def purge_stale(self, idle_ttl_sec: float | None = None) -> int:
+        """Delete durable rows older than ``idle_ttl_sec`` (default: this
+        store's own idle_ttl_sec). Idle-TTL eviction in :meth:`_evict_if_needed`
+        only bounds the in-process cache -- the SQLite table accumulates
+        every session ever seen unless something purges it too. Returns the
+        number of rows deleted. Safe to call from any process; a scheduled
+        caller doesn't need to be the same worker that wrote the rows.
+        """
+        if not self.persist_enabled:
+            return 0
+        ttl = self.idle_ttl_sec if idle_ttl_sec is None else idle_ttl_sec
+        cutoff = time.time() - ttl
+        try:
+            import db
+            with db.connect() as c:
+                cur = c.execute("DELETE FROM agent_sessions WHERE last_used < ?", (cutoff,))
+                deleted = cur.rowcount
+            if deleted:
+                log.info("memory: purged %d stale session(s) older than %.0fs", deleted, ttl)
+            return deleted
+        except Exception as e:  # noqa: BLE001
+            log.warning("memory: purge_stale failed: %s", e)
+            return 0
 
     @staticmethod
     def _load_from_db(session_id: str) -> "Conversation | None":

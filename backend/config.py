@@ -38,6 +38,12 @@ TRITON_PROTOCOL = os.getenv("TRITON_PROTOCOL") or "http"
 
 TEMPLATES_DIR = (ROOT / os.getenv("TEMPLATES_DIR", "./data/templates")).resolve()
 TEMPLATES_DIR.mkdir(parents=True, exist_ok=True)
+
+# System prompts live as editable data files (same pattern as templates and
+# report rules) so prompt text can be reviewed/tuned per deployment without a
+# code change. See backend/data/prompts/README.md.
+PROMPTS_DIR = (ROOT / os.getenv("PROMPTS_DIR", "./data/prompts")).resolve()
+PROMPTS_DIR.mkdir(parents=True, exist_ok=True)
 RADREPORT_BASE = os.getenv("RADREPORT_BASE", "https://radreport.org")
 # Off by default — institutional templates must not be overwritten by radreport.org.
 TEMPLATES_FETCH_RADREPORT = os.getenv("TEMPLATES_FETCH_RADREPORT", "0").strip().lower() in (

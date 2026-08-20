@@ -1,4 +1,4 @@
-# Start Windows OpenAI-compat bge-m3 embed server on CUDA (port from .env).
+﻿# Start Windows OpenAI-compat bge-m3 embed server on CUDA (port from .env).
 # Usage (from aranmed root):  pwsh -File scripts/medrag/start_embed_windows.ps1
 # Requires free VRAM — keep VLLM_GPU_MEM_UTIL≈0.55 on RTX 3070 8GB.
 

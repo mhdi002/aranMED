@@ -1,4 +1,4 @@
-<#
+﻿<#
 .SYNOPSIS
   AranMed — one-command full-stack deployment (Windows / Docker Desktop).
 
@@ -103,12 +103,43 @@ if (-not (Test-Path $envPath)) {
 }
 
 $envVars = @{}
+$seenKeys = @{}
+$dupeKeys = New-Object System.Collections.Generic.List[string]
 if (Test-Path $envPath) {
+  $lineNo = 0
   Get-Content $envPath | ForEach-Object {
+    $lineNo++
     if ($_ -match '^\s*([A-Za-z_][A-Za-z0-9_]*)\s*=\s*(.*)\s*$') {
-      $envVars[$Matches[1]] = $Matches[2]
+      $k = $Matches[1]
+      if ($seenKeys.ContainsKey($k)) {
+        if (-not $dupeKeys.Contains($k)) { $dupeKeys.Add($k) }
+        $seenKeys[$k] += ",$lineNo"
+      } else {
+        $seenKeys[$k] = "$lineNo"
+      }
+      $envVars[$k] = $Matches[2]
     }
   }
+}
+
+# A key defined twice in .env silently resolves to one of the two values, and
+# the loser is usually the one the operator meant. This bites hardest on path
+# keys - a duplicate MEDRAG_QDRANT_STORAGE can mount an empty local directory
+# instead of the real knowledge corpus, and the stack comes up "healthy"
+# serving zero chunks. Warn loudly rather than guessing.
+if ($dupeKeys.Count -gt 0) {
+  Warn "Duplicate keys in .env - the later definition wins, which may not be what you intended:"
+  foreach ($k in $dupeKeys) { Write-Host "        $k  (lines $($seenKeys[$k]))" }
+  Warn "Comment out the stale definition(s) and re-run, or continue if this is intentional."
+}
+
+# Corpus sanity: a bind-mounted Qdrant path that doesn't exist (or is empty)
+# means the stack will start and report healthy while serving no knowledge.
+$qdrantPath = if ($envVars.ContainsKey("MEDRAG_QDRANT_STORAGE")) { $envVars["MEDRAG_QDRANT_STORAGE"] } else { "./qdrant_storage" }
+if (-not (Test-Path $qdrantPath)) {
+  Warn "MEDRAG_QDRANT_STORAGE points at '$qdrantPath', which does not exist - MedicalRAG will serve 0 chunks."
+} elseif (-not (Get-ChildItem (Join-Path $qdrantPath "collections") -ErrorAction SilentlyContinue)) {
+  Warn "MEDRAG_QDRANT_STORAGE ('$qdrantPath') has no collections - MedicalRAG will serve 0 chunks."
 }
 
 $profileArgs = @()

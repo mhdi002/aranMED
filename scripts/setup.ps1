@@ -1,4 +1,4 @@
-<#
+﻿<#
 .SYNOPSIS
     One-shot bootstrap for the ASR-Agent project.
 
@@ -154,7 +154,11 @@ if ($pythonExe) {
         if (Get-Command brew -ErrorAction SilentlyContinue) { brew install python@3.12 }
         $pythonExe = Find-Python
     } else {
-        sudo apt-get update -qq && sudo apt-get install -y python3.12 python3.12-venv
+        # NB: no `&&` here — it is a PowerShell 7+ operator and Windows
+        # PowerShell 5.1 fails to PARSE the whole file when it appears, even
+        # though this Linux-only branch never runs there.
+        sudo apt-get update -qq
+        if ($?) { sudo apt-get install -y python3.12 python3.12-venv }
         $pythonExe = Find-Python
     }
     if (-not $pythonExe) {

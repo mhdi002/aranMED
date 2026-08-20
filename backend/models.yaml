@@ -123,3 +123,6 @@ runtime:
   memory_summary_word_limit: 250
   memory_max_sessions: 2000
   memory_idle_ttl_sec: 21600
+  # Periodic purge of durable agent_sessions rows past idle TTL. 0 disables
+  # (e.g. when an external cron owns the purge instead).
+  memory_purge_interval_sec: 3600

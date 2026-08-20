@@ -15,6 +15,7 @@ import json
 import logging
 import os
 import secrets
+import threading
 import time
 from typing import Any, Optional
 
@@ -28,8 +29,70 @@ log = logging.getLogger("auth")
 # ---------------------------------------------------------------------------
 # Configuration
 # ---------------------------------------------------------------------------
-SECRET = os.environ.get("ASR_AGENT_SECRET") or secrets.token_urlsafe(48)
+SECRET = os.environ.get("ASR_AGENT_SECRET") or ""
+if not SECRET:
+    # Every worker generating its own random secret means a token minted by
+    # one replica is rejected by the next -- users get random 401s the moment
+    # you scale past one process, and every restart logs everyone out. Loud
+    # warning rather than a hard failure so single-process dev still works.
+    SECRET = secrets.token_urlsafe(48)
+    log.warning(
+        "ASR_AGENT_SECRET is not set — generated an ephemeral per-process secret. "
+        "Tokens will not validate across replicas or survive a restart. "
+        "Set ASR_AGENT_SECRET in .env before running more than one backend worker."
+    )
 TOKEN_TTL_SEC = int(os.environ.get("ASR_AGENT_TOKEN_TTL", str(60 * 60 * 12)))
+
+# Brute-force throttling for the login endpoint. Counters are per-process;
+# with N replicas the effective limit is N * LOGIN_MAX_ATTEMPTS, which still
+# bounds an attacker to a tiny fraction of an unthrottled guess rate. A
+# shared store (Redis) would tighten this if the deployment needs it.
+LOGIN_MAX_ATTEMPTS = int(os.environ.get("LOGIN_MAX_ATTEMPTS", "8"))
+LOGIN_WINDOW_SEC = float(os.environ.get("LOGIN_WINDOW_SEC", "300"))
+LOGIN_LOCKOUT_SEC = float(os.environ.get("LOGIN_LOCKOUT_SEC", "900"))
+_login_attempts: dict[str, list[float]] = {}
+_login_lockouts: dict[str, float] = {}
+_login_lock = threading.Lock()
+
+
+def _throttle_key(username: str, client_ip: str = "") -> str:
+    return f"{(username or '').strip().lower()}|{client_ip}"
+
+
+def login_is_locked(key: str) -> float:
+    """Seconds remaining on a lockout for *key*, or 0.0 if not locked."""
+    with _login_lock:
+        until = _login_lockouts.get(key, 0.0)
+    remaining = until - time.time()
+    return remaining if remaining > 0 else 0.0
+
+
+def record_login_failure(key: str) -> None:
+    """Count a failed attempt; lock the key out once it exceeds the window."""
+    now = time.time()
+    with _login_lock:
+        hits = [t for t in _login_attempts.get(key, []) if now - t < LOGIN_WINDOW_SEC]
+        hits.append(now)
+        _login_attempts[key] = hits
+        if len(hits) >= LOGIN_MAX_ATTEMPTS:
+            _login_lockouts[key] = now + LOGIN_LOCKOUT_SEC
+            _login_attempts[key] = []
+            log.warning("auth: login locked out for %ss (key=%s)", LOGIN_LOCKOUT_SEC, key)
+        # Opportunistic cleanup so these dicts can't grow without bound.
+        if len(_login_attempts) > 10000:
+            for k, v in list(_login_attempts.items()):
+                if not v or now - v[-1] > LOGIN_WINDOW_SEC:
+                    _login_attempts.pop(k, None)
+        if len(_login_lockouts) > 10000:
+            for k, until in list(_login_lockouts.items()):
+                if until < now:
+                    _login_lockouts.pop(k, None)
+
+
+def record_login_success(key: str) -> None:
+    with _login_lock:
+        _login_attempts.pop(key, None)
+        _login_lockouts.pop(key, None)
 # scrypt cost — n=2**14 ≈ 50 ms on a 2024 desktop, fine for an on-prem app.
 _SCRYPT_N = 2 ** 14
 _SCRYPT_R = 8
@@ -106,6 +169,11 @@ def decode_token(token: str) -> dict:
 # ---------------------------------------------------------------------------
 # User CRUD
 # ---------------------------------------------------------------------------
+# Fixed dummy hash of a random password, used to equalise the timing of a
+# "no such user" login against a real password check (see authenticate()).
+_DUMMY_HASH = hash_password(secrets.token_urlsafe(32))
+
+
 def create_user(*, username: str, password: str, email: str | None = None,
                 role: str = "doctor") -> dict:
     username = username.strip().lower()
@@ -133,7 +201,14 @@ def authenticate(*, username: str, password: str) -> dict | None:
     with db.connect() as c:
         row = c.execute("SELECT * FROM users WHERE username=?",
                         (username.strip().lower(),)).fetchone()
-    if row is None or not verify_password(password, row["password_hash"]):
+    if row is None:
+        # Burn an equivalent scrypt round against a dummy hash before failing.
+        # Returning early here is measurably faster than the password-check
+        # path, which leaks whether a username exists to anyone timing the
+        # endpoint.
+        verify_password(password, _DUMMY_HASH)
+        return None
+    if not verify_password(password, row["password_hash"]):
         return None
     return _user_to_dict(row)
 

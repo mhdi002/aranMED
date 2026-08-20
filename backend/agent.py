@@ -18,6 +18,7 @@ import logging
 from dataclasses import dataclass, field
 from typing import Any, Optional
 
+import prompts
 import templates as templates_mod
 from memory import MemoryStore
 from providers.base import ChatMessage, ToolCall
@@ -27,7 +28,7 @@ from tools import ToolContext, registry as tool_registry
 log = logging.getLogger("agent")
 
 
-SYSTEM_PROMPT = """You are aranmed, an orchestration assistant for a bilingual
+_SYSTEM_PROMPT_FALLBACK = """You are aranmed, an orchestration assistant for a bilingual
 (Persian + English) radiology workflow.
 
 Style:
@@ -48,6 +49,10 @@ Tools:
 When you finish, return the final answer in plain text. If a tool produced
 a structured report, include the report verbatim.
 """
+
+# Loaded from data/prompts/agent_system.txt (see backend/prompts.py); the
+# literal above is the fallback if that file is missing.
+SYSTEM_PROMPT = prompts.get("agent_system", _SYSTEM_PROMPT_FALLBACK)
 
 
 @dataclass
@@ -185,7 +190,7 @@ class Agent:
         finally:
             # Flush once per turn regardless of outcome (including timeouts),
             # so a slow/failed turn still durably keeps what it appended.
-            self.memory.persist(session_id)
+            await self.memory.persist_async(session_id)
 
     async def _invoke(self, tc: ToolCall, ctx: ToolContext, *, timeout: float = 60.0):
         """Returns (ToolResult, resolved_from) — resolved_from is the original

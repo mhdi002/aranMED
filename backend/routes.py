@@ -8,7 +8,7 @@ from __future__ import annotations
 import logging
 from typing import Any, Optional
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Request, status
 from fastapi.security import OAuth2PasswordRequestForm
 from pydantic import BaseModel, Field
 
@@ -52,11 +52,25 @@ async def register(body: RegisterIn) -> TokenOut:
 
 
 @router.post("/auth/login", response_model=TokenOut)
-async def login(form: OAuth2PasswordRequestForm = Depends()) -> TokenOut:
+async def login(request: Request,
+                form: OAuth2PasswordRequestForm = Depends()) -> TokenOut:
+    client_ip = request.client.host if request.client else ""
+    key = auth._throttle_key(form.username, client_ip)  # noqa: SLF001
+    locked_for = auth.login_is_locked(key)
+    if locked_for > 0:
+        raise HTTPException(
+            status.HTTP_429_TOO_MANY_REQUESTS,
+            f"too many failed login attempts — try again in {int(locked_for)}s",
+            headers={"Retry-After": str(int(locked_for))},
+        )
     user = auth.authenticate(username=form.username, password=form.password)
     if user is None:
+        auth.record_login_failure(key)
+        # Deliberately identical message for "no such user" and "wrong
+        # password" — anything more specific is a user-enumeration oracle.
         raise HTTPException(status.HTTP_401_UNAUTHORIZED,
                             "invalid username or password")
+    auth.record_login_success(key)
     token = auth.create_token({"sub": str(user["id"]),
                                "role": user["role"],
                                "username": user["username"]})

@@ -99,7 +99,32 @@ if [[ ! -f "$ROOT/.env" ]]; then
 else
   printf "${c_dim}    .env already present — leaving as-is.${c_off}\n"
 fi
+# A key defined twice in .env silently resolves to one of the two values,
+# and the loser is usually the one the operator meant. This bites hardest on
+# path keys -- a duplicate MEDRAG_QDRANT_STORAGE can mount an empty local
+# directory instead of the real knowledge corpus, and the stack comes up
+# "healthy" serving zero chunks. Warn loudly rather than guessing.
+_dupes="$(grep -oE '^[A-Za-z_][A-Za-z0-9_]*=' "$ROOT/.env" 2>/dev/null | sort | uniq -d | tr -d '=')"
+if [[ -n "$_dupes" ]]; then
+  warn "Duplicate keys in .env — the later definition wins, which may not be what you intended:"
+  while read -r k; do
+    [[ -z "$k" ]] && continue
+    printf "        %s\n" "$k"
+    grep -nE "^${k}=" "$ROOT/.env" | sed 's/^/          line /'
+  done <<< "$_dupes"
+  warn "Comment out the stale definition(s) and re-run, or continue if this is intentional."
+fi
+
 set -a; source "$ROOT/.env" 2>/dev/null || true; set +a
+
+# Corpus sanity: a bind-mounted Qdrant path that doesn't exist (or is empty)
+# means the stack will start and report healthy while serving no knowledge.
+_qdrant_path="${MEDRAG_QDRANT_STORAGE:-./qdrant_storage}"
+if [[ ! -d "$_qdrant_path" ]]; then
+  warn "MEDRAG_QDRANT_STORAGE points at '$_qdrant_path', which does not exist — MedicalRAG will serve 0 chunks."
+elif [[ -z "$(ls -A "$_qdrant_path/collections" 2>/dev/null)" ]]; then
+  warn "MEDRAG_QDRANT_STORAGE ('$_qdrant_path') has no collections — MedicalRAG will serve 0 chunks."
+fi
 
 PROFILE_ARGS=()
 [[ $WITH_OLLAMA -eq 1 ]]     && PROFILE_ARGS+=(--profile ollama)

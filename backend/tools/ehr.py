@@ -31,6 +31,7 @@ from pydantic import BaseModel, Field, ValidationError
 
 import config
 import db
+import prompts
 import store
 from auth import ensure_default_admin
 
@@ -199,7 +200,7 @@ def unique_new_id(name: str, ctx: ToolContext | None = None) -> str:
 # --------------------------------------------------------------------------
 # LLM prompt
 # --------------------------------------------------------------------------
-_EHR_SYS_EN = """You are a clinical informatics assistant that converts raw
+_EHR_SYS_EN_FALLBACK = """You are a clinical informatics assistant that converts raw
 patient information into a STRICT JSON Electronic Health Record.
 
 Rules:
@@ -227,7 +228,7 @@ Rules:
   keep medication brand names as written.
 """
 
-_EHR_SYS_FA = """You are a clinical informatics assistant. Convert raw patient
+_EHR_SYS_FA_FALLBACK = """You are a clinical informatics assistant. Convert raw patient
 information into a STRICT JSON Electronic Health Record whose field VALUES are
 written in Persian (فارسی), except medication brand names which stay as given.
 
@@ -252,6 +253,12 @@ Rules:
 }
 - "frequency_hours" عددی است: فاصله‌ی دوزها بر حسب ساعت (مثلاً «هر ۸ ساعت» → 8).
 """
+
+# Loaded from data/prompts/ehr_build_{en,fa}.txt (see backend/prompts.py);
+# the literals above are the fallbacks if those files are missing. The JSON
+# schema in both is mirrored by EHRRecordSchema above -- keep them in sync.
+_EHR_SYS_EN = prompts.get("ehr_build_en", _EHR_SYS_EN_FALLBACK)
+_EHR_SYS_FA = prompts.get("ehr_build_fa", _EHR_SYS_FA_FALLBACK)
 
 
 def _extract_json(text: str) -> dict:

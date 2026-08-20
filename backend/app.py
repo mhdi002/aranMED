@@ -53,22 +53,51 @@ log = logging.getLogger("api")
 
 app = FastAPI(title="aranmed — Bilingual Radiology Reporter", version="2.0.0")
 
+# Default stays "*" so an on-prem single-origin install works out of the box;
+# set CORS_ALLOW_ORIGINS to a comma-separated allowlist for any deployment
+# reachable from more than the operator's own browser.
+_cors_origins = [o.strip() for o in os.getenv("CORS_ALLOW_ORIGINS", "*").split(",") if o.strip()]
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=_cors_origins,
     allow_methods=["*"],
     allow_headers=["*"],
 )
 
+
+@app.middleware("http")
+async def _security_headers(request, call_next):
+    """Baseline hardening headers on every response.
+
+    The API serves JSON to a same-origin Next.js frontend, so a restrictive
+    default-src costs nothing here and blocks injected content from loading
+    anything if a response ever gets rendered directly.
+    """
+    response = await call_next(request)
+    response.headers.setdefault("X-Content-Type-Options", "nosniff")
+    response.headers.setdefault("X-Frame-Options", "DENY")
+    response.headers.setdefault("Referrer-Policy", "no-referrer")
+    response.headers.setdefault(
+        "Content-Security-Policy",
+        "default-src 'none'; frame-ancestors 'none'; base-uri 'none'",
+    )
+    return response
+
+
 # ---------------------------------------------------------------------------
-# Global exception handler – prints full traceback for 500 errors
+# Global exception handler – logs the full traceback, returns an opaque body
 # ---------------------------------------------------------------------------
 @app.exception_handler(Exception)
 async def global_exception_handler(request, exc):
-    log.exception("Unhandled exception in %s", request.url)
+    # Full detail goes to the server log; the client gets a correlation id and
+    # nothing else. Echoing str(exc)/type back leaked internals (file paths,
+    # driver errors, occasionally query fragments) to anyone who could trigger
+    # a 500.
+    error_id = uuid.uuid4().hex[:12]
+    log.exception("Unhandled exception [%s] in %s", error_id, request.url)
     return JSONResponse(
         status_code=500,
-        content={"detail": str(exc), "type": type(exc).__name__}
+        content={"detail": "internal server error", "error_id": error_id},
     )
 
 # Auth, EHR, alerts and education routes live in their own module.
@@ -144,6 +173,31 @@ class VisionOut(BaseModel):
 # ---------------------------------------------------------------------------
 # Lifecycle
 # ---------------------------------------------------------------------------
+_purge_task: Optional[asyncio.Task] = None
+
+
+async def _purge_stale_sessions_loop() -> None:
+    """Periodically drop agent_sessions rows past their idle TTL.
+
+    In-process eviction (MemoryStore._evict_if_needed) only bounds the cache;
+    without this the durable table grows for the lifetime of the deployment.
+    Interval is config-driven; set memory_purge_interval_sec to 0 to disable
+    (e.g. if an external cron owns the purge instead).
+    """
+    interval = float(registry.runtime.get("memory_purge_interval_sec", 3600))
+    if interval <= 0:
+        log.info("memory purge loop disabled (memory_purge_interval_sec=%s)", interval)
+        return
+    while True:
+        try:
+            await asyncio.sleep(interval)
+            await asyncio.to_thread(memory.purge_stale)
+        except asyncio.CancelledError:
+            raise
+        except Exception:  # noqa: BLE001
+            log.exception("memory purge loop iteration failed; continuing")
+
+
 @app.on_event("startup")
 async def _startup() -> None:
     templates_mod.initialise()
@@ -151,11 +205,19 @@ async def _startup() -> None:
     from auth import ensure_default_admin
 
     ensure_default_admin()
+    global _purge_task
+    _purge_task = asyncio.create_task(_purge_stale_sessions_loop())
     log.info(
         "registry roles=%s defaults=%s",
         list(registry._role_index.keys()),  # noqa: SLF001
         registry._defaults,  # noqa: SLF001
     )
+
+
+@app.on_event("shutdown")
+async def _shutdown() -> None:
+    if _purge_task is not None:
+        _purge_task.cancel()
 
 
 # ---------------------------------------------------------------------------
