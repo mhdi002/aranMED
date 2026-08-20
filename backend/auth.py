@@ -15,14 +15,15 @@ import json
 import logging
 import os
 import secrets
-import threading
 import time
+from pathlib import Path
 from typing import Any, Optional
 
 from fastapi import Depends, HTTPException, status
 from fastapi.security import OAuth2PasswordBearer
 
 import db
+import throttle
 
 log = logging.getLogger("auth")
 
@@ -43,56 +44,20 @@ if not SECRET:
     )
 TOKEN_TTL_SEC = int(os.environ.get("ASR_AGENT_TOKEN_TTL", str(60 * 60 * 12)))
 
-# Brute-force throttling for the login endpoint. Counters are per-process;
-# with N replicas the effective limit is N * LOGIN_MAX_ATTEMPTS, which still
-# bounds an attacker to a tiny fraction of an unthrottled guess rate. A
-# shared store (Redis) would tighten this if the deployment needs it.
-LOGIN_MAX_ATTEMPTS = int(os.environ.get("LOGIN_MAX_ATTEMPTS", "8"))
-LOGIN_WINDOW_SEC = float(os.environ.get("LOGIN_WINDOW_SEC", "300"))
-LOGIN_LOCKOUT_SEC = float(os.environ.get("LOGIN_LOCKOUT_SEC", "900"))
-_login_attempts: dict[str, list[float]] = {}
-_login_lockouts: dict[str, float] = {}
-_login_lock = threading.Lock()
+# Brute-force throttling for the login endpoint. The counting logic and its
+# storage live in backend/throttle.py, which defaults to a backend shared
+# across replicas (SQLite, or Redis when REDIS_URL is set) -- per-process
+# counters would hand an attacker N times the attempt budget on an N-replica
+# deployment, since the gateway spreads their guesses across all of them.
+# These thin aliases keep auth.* as the single import surface for callers.
+LOGIN_MAX_ATTEMPTS = throttle.MAX_ATTEMPTS
+LOGIN_WINDOW_SEC = throttle.WINDOW_SEC
+LOGIN_LOCKOUT_SEC = throttle.LOCKOUT_SEC
 
-
-def _throttle_key(username: str, client_ip: str = "") -> str:
-    return f"{(username or '').strip().lower()}|{client_ip}"
-
-
-def login_is_locked(key: str) -> float:
-    """Seconds remaining on a lockout for *key*, or 0.0 if not locked."""
-    with _login_lock:
-        until = _login_lockouts.get(key, 0.0)
-    remaining = until - time.time()
-    return remaining if remaining > 0 else 0.0
-
-
-def record_login_failure(key: str) -> None:
-    """Count a failed attempt; lock the key out once it exceeds the window."""
-    now = time.time()
-    with _login_lock:
-        hits = [t for t in _login_attempts.get(key, []) if now - t < LOGIN_WINDOW_SEC]
-        hits.append(now)
-        _login_attempts[key] = hits
-        if len(hits) >= LOGIN_MAX_ATTEMPTS:
-            _login_lockouts[key] = now + LOGIN_LOCKOUT_SEC
-            _login_attempts[key] = []
-            log.warning("auth: login locked out for %ss (key=%s)", LOGIN_LOCKOUT_SEC, key)
-        # Opportunistic cleanup so these dicts can't grow without bound.
-        if len(_login_attempts) > 10000:
-            for k, v in list(_login_attempts.items()):
-                if not v or now - v[-1] > LOGIN_WINDOW_SEC:
-                    _login_attempts.pop(k, None)
-        if len(_login_lockouts) > 10000:
-            for k, until in list(_login_lockouts.items()):
-                if until < now:
-                    _login_lockouts.pop(k, None)
-
-
-def record_login_success(key: str) -> None:
-    with _login_lock:
-        _login_attempts.pop(key, None)
-        _login_lockouts.pop(key, None)
+throttle_key = throttle.make_key
+login_is_locked = throttle.seconds_locked
+record_login_failure = throttle.record_failure
+record_login_success = throttle.record_success
 # scrypt cost — n=2**14 ≈ 50 ms on a 2024 desktop, fine for an on-prem app.
 _SCRYPT_N = 2 ** 14
 _SCRYPT_R = 8
@@ -219,31 +184,93 @@ def get_user(user_id: int) -> dict | None:
     return _user_to_dict(row) if row else None
 
 
-def ensure_default_admin(*, username: str = "admin",
-                        password: str = "admin") -> None:
-    """Create a default admin account on first start if no users exist.
+def _truthy(v: str) -> bool:
+    return v.strip().lower() in ("1", "true", "yes", "on")
 
-    Intended for local single-user installs. The credentials can be
-    overridden via ``ASR_AGENT_ADMIN_USER`` / ``ASR_AGENT_ADMIN_PASSWORD``.
-    Bypasses the public min-length checks so the convenience default
-    ``admin``/``admin`` works out of the box.
+
+def ensure_default_admin(*, username: str = "admin",
+                        password: str | None = None) -> None:
+    """Create the first admin account on first start if no users exist.
+
+    There is no well-known default password. Precedence:
+
+    1. ``ASR_AGENT_ADMIN_PASSWORD`` — what a real deployment should set.
+    2. ``ASR_AGENT_ALLOW_INSECURE_ADMIN=1`` — opt in to the old
+       ``admin``/``admin`` for throwaway local work. Must be explicit.
+    3. Otherwise a random password is generated and written to
+       ``ADMIN_CREDENTIALS_FILE`` (default ``<data>/initial-admin-password.txt``,
+       mode 0600) and logged once.
+
+    A seeded-but-unknown password is recoverable (delete the file's user row
+    or set the env var and re-seed); a seeded *guessable* password on an
+    internet-reachable deployment is not recoverable at all, which is why
+    the guessable one now has to be asked for by name.
     """
     username = os.environ.get("ASR_AGENT_ADMIN_USER", username).strip().lower()
-    password = os.environ.get("ASR_AGENT_ADMIN_PASSWORD", password)
+    env_password = os.environ.get("ASR_AGENT_ADMIN_PASSWORD") or password
+    allow_insecure = _truthy(os.environ.get("ASR_AGENT_ALLOW_INSECURE_ADMIN", ""))
+
     with db.connect() as c:
         n = c.execute("SELECT COUNT(*) AS n FROM users").fetchone()["n"]
         if n > 0:
             return
-        try:
+
+    generated = False
+    if env_password:
+        secret = env_password
+    elif allow_insecure:
+        secret = "admin"
+        log.warning(
+            "ASR_AGENT_ALLOW_INSECURE_ADMIN is set — seeding admin/admin. "
+            "Never use this on a network-reachable deployment."
+        )
+    else:
+        secret = secrets.token_urlsafe(18)
+        generated = True
+
+    try:
+        with db.connect() as c:
             c.execute(
                 "INSERT INTO users(username,email,password_hash,role,created_at) "
                 "VALUES (?,?,?,?,?)",
-                (username, None, hash_password(password), "admin", db.now()),
+                (username, None, hash_password(secret), "admin", db.now()),
             )
-            log.warning("seeded default admin user '%s' (change the password!)",
-                        username)
-        except Exception as e:  # noqa: BLE001
-            log.warning("could not seed admin user: %s", e)
+    except Exception as e:  # noqa: BLE001
+        log.warning("could not seed admin user: %s", e)
+        return
+
+    if not generated:
+        log.warning("seeded admin user %r from configured credentials", username)
+        return
+
+    path = _admin_credentials_path()
+    written = False
+    try:
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(
+            f"username: {username}\npassword: {secret}\n\n"
+            "Generated on first start because ASR_AGENT_ADMIN_PASSWORD was not set.\n"
+            "Sign in, change the password, then delete this file.\n",
+            encoding="utf-8",
+        )
+        os.chmod(path, 0o600)
+        written = True
+    except OSError as e:
+        log.warning("could not write admin credentials file %s: %s", path, e)
+
+    log.warning(
+        "No ASR_AGENT_ADMIN_PASSWORD set — generated a random password for %r. %s",
+        username,
+        f"Saved to {path} (delete it after first sign-in)." if written
+        else f"Password (store it now, it is not saved anywhere): {secret}",
+    )
+
+
+def _admin_credentials_path() -> Path:
+    override = os.environ.get("ADMIN_CREDENTIALS_FILE", "").strip()
+    if override:
+        return Path(override)
+    return db.get_db_path().parent / "initial-admin-password.txt"
 
 
 def _user_to_dict(row) -> dict:

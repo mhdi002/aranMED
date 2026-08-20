@@ -55,7 +55,7 @@ async def register(body: RegisterIn) -> TokenOut:
 async def login(request: Request,
                 form: OAuth2PasswordRequestForm = Depends()) -> TokenOut:
     client_ip = request.client.host if request.client else ""
-    key = auth._throttle_key(form.username, client_ip)  # noqa: SLF001
+    key = auth.throttle_key(form.username, client_ip)
     locked_for = auth.login_is_locked(key)
     if locked_for > 0:
         raise HTTPException(

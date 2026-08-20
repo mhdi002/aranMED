@@ -234,3 +234,53 @@ Troubleshooting:
 | backend healthy but `/api/health` shows `medrag.ok: false` | MedicalRAG not running or `MEDRAG_API_URL` wrong | `docker compose ps medrag`; check `DOCKER_MEDRAG_API_URL` |
 | 503 on `/api/chat` | Text-only chat requires MedicalRAG | Start medrag; unrelated to ASR/report paths |
 | GPU not used in container | Missing NVIDIA Container Toolkit | Install it; or set `GPU_COUNT` / drop the GPU reservation |
+
+---
+
+## TLS at the gateway
+
+Off by default (plain HTTP on `GATEWAY_PUBLISH_PORT`). Turn it on with:
+
+```bash
+./deploy.sh --tls
+# or, without the script:
+docker compose -f docker-compose.yml -f docker-compose.tls.yml up -d
+```
+
+Both forms apply `docker-compose.tls.yml`, which sets `GATEWAY_TLS_ENABLED=1`
+and publishes `GATEWAY_TLS_PUBLISH_PORT` (default 8443). It is an overlay
+rather than a flag in the base file so a plain-HTTP deployment never binds a
+host port nothing is listening on.
+
+**Bring your own certificate.** Put `tls.crt` and `tls.key` in
+`deploy/nginx/certs/` (gitignored), or point `GATEWAY_TLS_CERT_DIR` at wherever
+they already live. `deploy.sh --tls` refuses to start without them and prints
+the `openssl` command for a local test certificate.
+
+What changes when enabled — all from the *same* `nginx.conf.template`, rewritten
+at container start by `deploy/nginx/10-aranmed-tls.sh` (one source of truth, no
+second template to drift):
+
+- HTTPS listener on `GATEWAY_TLS_PORT` with HTTP/2, TLS 1.2/1.3, and HSTS
+- a small server block on `GATEWAY_PORT` that 301s everything to HTTPS
+- `/healthz` still answered over plain HTTP, so the container healthcheck
+  doesn't chase a redirect
+
+If TLS is enabled but the cert/key is missing or unreadable, the gateway
+**fails to start** instead of silently falling back to plaintext.
+
+TLS terminates at the gateway; gateway→backend stays plaintext on the internal
+compose network. See `docs/core/SECURITY.md` §4.
+
+## Scaling checklist
+
+Before `--scale backend=N`:
+
+1. **Set `ASR_AGENT_SECRET`** in `.env`. Without it each worker signs tokens
+   with its own random key and sessions break across replicas.
+2. **Leave `LOGIN_THROTTLE_BACKEND` at `auto`** (or set `redis`). The
+   `memory` backend gives an attacker N× the attempt budget at N replicas.
+3. **Keep `DB_JOURNAL_MODE=WAL`.** Replicas share `backend/data/app.db`; the
+   default rollback journal blocks readers for the whole of every write.
+4. Conversation memory is already durable in SQLite (`agent_sessions`), so a
+   request landing on a different replica rehydrates rather than starting over.

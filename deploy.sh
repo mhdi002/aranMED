@@ -13,6 +13,8 @@
 #   ./deploy.sh --with-vllm           # + GPU generation server (OpenAI-compatible)
 #   ./deploy.sh --with-vllm-embed     # + GPU embedding server
 #   ./deploy.sh --with-ollama --with-vllm --with-vllm-embed   # everything
+#   ./deploy.sh --tls                 # terminate HTTPS at the gateway
+#                                     #   (needs deploy/nginx/certs/tls.{crt,key})
 #   ./deploy.sh --skip-models         # skip the Whisper/Ollama prefetch step
 #   ./deploy.sh --no-up               # build + prefetch only, don't start containers
 #   ./deploy.sh --install-docker      # offer to install Docker if missing (asks first)
@@ -33,17 +35,19 @@ SKIP_MODELS=0
 NO_UP=0
 INSTALL_DOCKER=0
 ASSUME_YES=0
+WITH_TLS=0
 
 while [[ $# -gt 0 ]]; do
   case "$1" in
     --with-ollama)     WITH_OLLAMA=1 ;;
     --with-vllm)       WITH_VLLM=1 ;;
     --with-vllm-embed) WITH_VLLM_EMBED=1 ;;
+    --tls)             WITH_TLS=1 ;;
     --skip-models)     SKIP_MODELS=1 ;;
     --no-up)           NO_UP=1 ;;
     --install-docker)  INSTALL_DOCKER=1 ;;
     --yes|-y)          ASSUME_YES=1 ;;
-    -h|--help)         sed -n '2,22p' "$0"; exit 0 ;;
+    -h|--help)         sed -n '2,24p' "$0"; exit 0 ;;
     *) echo "unknown flag: $1" >&2; exit 2 ;;
   esac
   shift
@@ -131,9 +135,27 @@ PROFILE_ARGS=()
 [[ $WITH_VLLM -eq 1 ]]       && PROFILE_ARGS+=(--profile vllm)
 [[ $WITH_VLLM_EMBED -eq 1 ]] && PROFILE_ARGS+=(--profile vllm-embed)
 
+# TLS is an opt-in compose overlay (see docker-compose.tls.yml). Every compose
+# call goes through dc() so the overlay can't be applied to some commands and
+# silently missed by others.
+FILE_ARGS=()
+if [[ $WITH_TLS -eq 1 ]]; then
+  FILE_ARGS+=(-f docker-compose.yml -f docker-compose.tls.yml)
+  cert="${GATEWAY_TLS_CERT_DIR:-./deploy/nginx/certs}"
+  if [[ ! -r "$cert/tls.crt" || ! -r "$cert/tls.key" ]]; then
+    warn "--tls given but $cert/tls.{crt,key} not found."
+    echo "  Generate a local test certificate with:"
+    echo "    mkdir -p $cert && openssl req -x509 -newkey rsa:2048 -nodes \\"
+    echo "      -keyout $cert/tls.key -out $cert/tls.crt -days 365 -subj '/CN=localhost'"
+    die "no certificate to serve"
+  fi
+  ok "TLS enabled — HTTPS on ${GATEWAY_TLS_PUBLISH_PORT:-8443}"
+fi
+dc() { docker compose "${FILE_ARGS[@]}" "$@"; }
+
 # ── 3) Build images (backend, frontend, medrag, triton — deps installed in-image) ──
 step "3/6" "Building images (backend + frontend + medrag + triton; each installs its own deps)"
-docker compose "${PROFILE_ARGS[@]}" build
+dc "${PROFILE_ARGS[@]}" build
 ok "Images built"
 
 # ── 4) Model downloads ──────────────────────────────────────────────────────
@@ -143,7 +165,7 @@ if [[ $SKIP_MODELS -eq 0 ]]; then
   # MSYS_NO_PATHCONV: on git-bash/Windows, leading-slash args get silently
   # rewritten into host Windows paths before reaching docker (e.g.
   # /app/scripts/x.py -> C:/Program Files/Git/app/scripts/x.py). No-op elsewhere.
-  MSYS_NO_PATHCONV=1 docker compose run --rm backend python /app/scripts/install_models.py --skip-ollama \
+  MSYS_NO_PATHCONV=1 dc run --rm backend python /app/scripts/install_models.py --skip-ollama \
     || warn "Whisper prefetch failed — it will lazily download on first request instead."
 
   OLLAMA_MODEL_NAME="${OLLAMA_MODEL:-qwen3.5-9b:latest}"
@@ -157,13 +179,13 @@ if [[ $SKIP_MODELS -eq 0 ]]; then
   }
   if [[ $WITH_OLLAMA -eq 1 ]]; then
     echo "  Ollama model '$OLLAMA_MODEL_NAME' → in-compose ollama container"
-    docker compose --profile ollama up -d ollama
+    dc --profile ollama up -d ollama
     for i in $(seq 1 30); do
-      docker compose exec -T ollama ollama list >/dev/null 2>&1 && break
+      dc exec -T ollama ollama list >/dev/null 2>&1 && break
       sleep 2
     done
-    if ! pull_or_guide_ollama docker compose exec -T ollama ollama list; then
-      docker compose exec -T ollama ollama pull "$OLLAMA_MODEL_NAME" || {
+    if ! pull_or_guide_ollama dc exec -T ollama ollama list; then
+      dc exec -T ollama ollama pull "$OLLAMA_MODEL_NAME" || {
         warn "Ollama pull of '$OLLAMA_MODEL_NAME' failed — it isn't on the public registry."
         [[ -f "$ROOT/Modelfile_qwen" || -f "$ROOT/Modelfile" ]] && \
           warn "This repo ships a local Modelfile — build it instead, e.g.: docker compose exec ollama ollama create ${OLLAMA_MODEL_NAME%%:*} -f /Modelfile_qwen (mount the Modelfile + GGUF into the container first)."
@@ -199,33 +221,44 @@ if [[ $NO_UP -eq 1 ]]; then
 fi
 
 step "5/6" "Starting the stack"
-docker compose "${PROFILE_ARGS[@]}" up -d
+dc "${PROFILE_ARGS[@]}" up -d
 ok "Containers started"
 
 # nginx resolves upstream container IPs once at its own startup. If gateway
 # itself wasn't recreated but backend/medrag/etc. were (e.g. a re-run of this
 # script after a code change), it's left pointing at dead IPs -> 502s despite
 # every backend service reporting healthy. Force it to re-resolve.
-docker compose restart gateway >/dev/null 2>&1 || true
+dc restart gateway >/dev/null 2>&1 || true
 
 # ── 6) Wait for health ──────────────────────────────────────────────────────
 step "6/6" "Waiting for services to become healthy"
 GATEWAY_PORT="${GATEWAY_PUBLISH_PORT:-8090}"
+if [[ $WITH_TLS -eq 1 ]]; then
+  # Plain HTTP now 301s to HTTPS, so probe the TLS listener directly.
+  # -k because a local/self-signed cert is the normal case for a first run.
+  HEALTH_URL="https://localhost:${GATEWAY_TLS_PUBLISH_PORT:-8443}/api/health"
+  CURL_OPTS=(-sfk)
+  APP_URL="https://localhost:${GATEWAY_TLS_PUBLISH_PORT:-8443}"
+else
+  HEALTH_URL="http://localhost:${GATEWAY_PORT}/api/health"
+  CURL_OPTS=(-sf)
+  APP_URL="http://localhost:${GATEWAY_PORT}"
+fi
 healthy=0
 for i in $(seq 1 60); do
-  if curl -sf "http://localhost:${GATEWAY_PORT}/api/health" >/dev/null 2>&1; then
+  if curl "${CURL_OPTS[@]}" "$HEALTH_URL" >/dev/null 2>&1; then
     healthy=1; break
   fi
   sleep 5
 done
 
 echo
-docker compose ps
+dc ps
 echo
 if [[ $healthy -eq 1 ]]; then
   say "AranMed is up"
-  echo "  App  → http://localhost:${GATEWAY_PORT}"
-  echo "  API  → http://localhost:${GATEWAY_PORT}/api/health"
+  echo "  App  → ${APP_URL}"
+  echo "  API  → ${APP_URL}/api/health"
 else
   warn "Gateway didn't answer /api/health within 5 minutes — check: docker compose logs -f"
 fi

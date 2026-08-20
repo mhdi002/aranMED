@@ -60,16 +60,37 @@ services:
       LB_AI_BURST: "${LB_AI_BURST:-200}"
       LB_MAX_CONN_PER_IP: "${LB_MAX_CONN_PER_IP:-100}"
       LB_RATE_ZONE_SIZE: "${LB_RATE_ZONE_SIZE:-16m}"
+      # --- TLS (off by default; see docs/core/DEPLOYMENT.md) ----------------
+      # Set GATEWAY_TLS_ENABLED=1 and mount a cert/key to terminate HTTPS at
+      # the gateway. With it off, everything below is inert and the gateway
+      # serves plain HTTP exactly as before.
+      GATEWAY_TLS_ENABLED: "${GATEWAY_TLS_ENABLED:-0}"
+      GATEWAY_TLS_PORT: "${GATEWAY_TLS_PORT:-8443}"
+      GATEWAY_TLS_PUBLISH_PORT: "${GATEWAY_TLS_PUBLISH_PORT:-8443}"
+      GATEWAY_TLS_CERT: "${GATEWAY_TLS_CERT:-/etc/nginx/certs/tls.crt}"
+      GATEWAY_TLS_KEY: "${GATEWAY_TLS_KEY:-/etc/nginx/certs/tls.key}"
+      GATEWAY_TLS_PROTOCOLS: "${GATEWAY_TLS_PROTOCOLS:-TLSv1.2 TLSv1.3}"
+      GATEWAY_TLS_CIPHERS: "${GATEWAY_TLS_CIPHERS:-ECDHE-ECDSA-AES128-GCM-SHA256:ECDHE-RSA-AES128-GCM-SHA256:ECDHE-ECDSA-AES256-GCM-SHA384:ECDHE-RSA-AES256-GCM-SHA384:ECDHE-ECDSA-CHACHA20-POLY1305:ECDHE-RSA-CHACHA20-POLY1305}"
+      GATEWAY_TLS_SESSION_CACHE: "${GATEWAY_TLS_SESSION_CACHE:-10m}"
+      GATEWAY_TLS_SESSION_TIMEOUT: "${GATEWAY_TLS_SESSION_TIMEOUT:-1d}"
+      GATEWAY_HSTS_MAX_AGE: "${GATEWAY_HSTS_MAX_AGE:-31536000}"
       # Only substitute our own knobs; leave nginx's own $variables intact.
       NGINX_ENVSUBST_FILTER: "^(GATEWAY_|BACKEND_|FRONTEND_|LB_)"
     volumes:
-      - ./deploy/nginx/nginx.conf.template:/etc/nginx/templates/default.conf.template:ro
+      # Mounted as a source directory; 10-aranmed-tls.sh stages the template
+      # into /etc/nginx/templates (optionally rewriting it for TLS) before
+      # nginx's own envsubst pass runs.
+      - ./deploy/nginx/nginx.conf.template:/etc/nginx/aranmed/nginx.conf.template:ro
+      - ./deploy/nginx/10-aranmed-tls.sh:/docker-entrypoint.d/10-aranmed-tls.sh:ro
+      - ${GATEWAY_TLS_CERT_DIR:-./deploy/nginx/certs}:/etc/nginx/certs:ro
     # Lets BACKEND_SERVICE/FRONTEND_SERVICE point at host.docker.internal when
     # an upstream runs outside the compose network (e.g. a natively installed
     # backend during a partial rollout). See docs/core/DEPLOYMENT.md.
     extra_hosts:
       - "host.docker.internal:host-gateway"
     ports:
+      # The HTTPS port is published by docker-compose.tls.yml, not here, so a
+      # non-TLS deployment never binds a host port nothing listens on.
       - "${GATEWAY_PUBLISH_PORT:-8080}:${GATEWAY_PORT:-8080}"
     healthcheck:
       test: ["CMD", "wget", "-qO-", "http://127.0.0.1:${GATEWAY_PORT:-8080}/healthz"]

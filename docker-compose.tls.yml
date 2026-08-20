@@ -1,0 +1,33 @@
+# =============================================================================
+# TLS termination at the gateway — opt-in overlay.
+#
+#   docker compose -f docker-compose.yml -f docker-compose.tls.yml up -d
+#   # or: ./deploy.sh --tls
+#
+# Turns on the TLS branch of deploy/nginx/10-aranmed-tls.sh (HTTPS listener +
+# HTTP->HTTPS redirect + HSTS) and publishes the HTTPS port. Kept as an
+# overlay rather than a flag in the base file so a plain-HTTP deployment never
+# binds a host port that nothing is listening on.
+#
+# Bring your own certificate. Put tls.crt / tls.key in deploy/nginx/certs/
+# (gitignored), or point GATEWAY_TLS_CERT_DIR at wherever they already live —
+# a Let's Encrypt lineage, a corporate PKI checkout, a mounted secret.
+# Filenames are configurable via GATEWAY_TLS_CERT / GATEWAY_TLS_KEY.
+#
+# For a local test certificate:
+#   mkdir -p deploy/nginx/certs && openssl req -x509 -newkey rsa:2048 -nodes \
+#     -keyout deploy/nginx/certs/tls.key -out deploy/nginx/certs/tls.crt \
+#     -days 365 -subj "/CN=localhost"
+#
+# This terminates TLS at the gateway. Traffic from gateway to backend stays on
+# the internal compose network in plaintext, which is the normal arrangement
+# behind a terminator; if that network is not trusted, terminate upstream
+# instead. See docs/core/DEPLOYMENT.md.
+# =============================================================================
+services:
+  gateway:
+    environment:
+      GATEWAY_TLS_ENABLED: "1"
+    ports:
+      - "${GATEWAY_PUBLISH_PORT:-8080}:${GATEWAY_PORT:-8080}"
+      - "${GATEWAY_TLS_PUBLISH_PORT:-8443}:${GATEWAY_TLS_PORT:-8443}"

@@ -106,3 +106,20 @@ The gateway uses `least_conn`, not round-robin: ASR/LLM requests have wildly une
 6. In-code default constant
 
 Secrets (`ASR_AGENT_SECRET`, `HF_TOKEN`, SMTP/Twilio) belong in `.env`, which is gitignored and excluded from the Docker build context.
+
+---
+
+## 7. Security and durability knobs
+
+Added by the hardening pass. Full rationale in `docs/core/SECURITY.md`; every
+key is listed with its default in `.env.example`.
+
+| Area | Keys | Notes |
+| --- | --- | --- |
+| Token signing | `ASR_AGENT_SECRET`, `ASR_AGENT_TOKEN_TTL` | **Set the secret before running >1 backend replica** — otherwise each worker signs with its own random key and tokens fail across replicas. |
+| First-run admin | `ASR_AGENT_ADMIN_USER`, `ASR_AGENT_ADMIN_PASSWORD`, `ADMIN_CREDENTIALS_FILE`, `ASR_AGENT_ALLOW_INSECURE_ADMIN` | No well-known default password; a random one is generated and written to a `0600` file unless you set one. |
+| Login throttle | `LOGIN_THROTTLE_BACKEND`, `LOGIN_MAX_ATTEMPTS`, `LOGIN_WINDOW_SEC`, `LOGIN_LOCKOUT_SEC`, `LOGIN_THROTTLE_MAX_KEYS`, `REDIS_URL`, `LOGIN_THROTTLE_REDIS_PREFIX` | Defaults to a store shared across replicas (SQLite, or Redis when `REDIS_URL` is set). `memory` is per-process and only correct at one replica. |
+| SQLite concurrency | `DB_JOURNAL_MODE`, `DB_SYNCHRONOUS`, `DB_BUSY_TIMEOUT_MS` | WAL lets readers proceed during a write; `busy_timeout` makes a concurrent writer wait rather than fail with "database is locked". Both matter once replicas share `backend/data/app.db`. |
+| Gateway TLS | `GATEWAY_TLS_*`, `GATEWAY_HSTS_MAX_AGE` | Applied by the `docker-compose.tls.yml` overlay (`./deploy.sh --tls`), which also publishes the HTTPS port. |
+| Agent/memory runtime | `runtime.agent_*`, `runtime.memory_*` in `backend/models.yaml` | Loop iteration cap, per-call timeouts, generation budgets, memory window/eviction/purge interval. Not env vars — they live with the model registry they tune. |
+| Prompts | `PROMPTS_DIR` | System prompts are editable data files under `backend/data/prompts/`, with in-code fallbacks. |

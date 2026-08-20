@@ -29,10 +29,17 @@
 .PARAMETER Yes
   Don't pause for confirmations.
 
+.PARAMETER Tls
+  Terminate HTTPS at the gateway using deploy/nginx/certs/tls.{crt,key}
+  (override the directory with GATEWAY_TLS_CERT_DIR). Applies the
+  docker-compose.tls.yml overlay; plain HTTP then redirects to HTTPS.
+
 .EXAMPLE
   .\deploy.ps1
 .EXAMPLE
   .\deploy.ps1 -WithOllama -WithVllm -WithVllmEmbed
+.EXAMPLE
+  .\deploy.ps1 -Tls
 #>
 [CmdletBinding()]
 param(
@@ -42,7 +49,8 @@ param(
   [switch]$SkipModels,
   [switch]$NoUp,
   [switch]$InstallDocker,
-  [switch]$Yes
+  [switch]$Yes,
+  [switch]$Tls
 )
 
 $ErrorActionPreference = "Stop"
@@ -147,9 +155,28 @@ if ($WithOllama)    { $profileArgs += @("--profile", "ollama") }
 if ($WithVllm)      { $profileArgs += @("--profile", "vllm") }
 if ($WithVllmEmbed) { $profileArgs += @("--profile", "vllm-embed") }
 
+# TLS is an opt-in compose overlay (docker-compose.tls.yml). $fileArgs is
+# prepended to every compose call so the overlay can't be applied to some
+# commands and silently missed by others.
+$fileArgs = @()
+$tlsPublishPort = if ($envVars.ContainsKey("GATEWAY_TLS_PUBLISH_PORT")) { $envVars["GATEWAY_TLS_PUBLISH_PORT"] } else { "8443" }
+if ($Tls) {
+  $fileArgs = @("-f", "docker-compose.yml", "-f", "docker-compose.tls.yml")
+  $certDir = if ($envVars.ContainsKey("GATEWAY_TLS_CERT_DIR")) { $envVars["GATEWAY_TLS_CERT_DIR"] } else { "./deploy/nginx/certs" }
+  if (-not (Test-Path (Join-Path $certDir "tls.crt")) -or -not (Test-Path (Join-Path $certDir "tls.key"))) {
+    Warn "-Tls given but $certDir\tls.crt / tls.key not found."
+    Write-Host "  Generate a local test certificate with:"
+    Write-Host "    New-Item -ItemType Directory -Force $certDir | Out-Null"
+    Write-Host "    openssl req -x509 -newkey rsa:2048 -nodes ``"
+    Write-Host "      -keyout $certDir/tls.key -out $certDir/tls.crt -days 365 -subj '/CN=localhost'"
+    Die "no certificate to serve"
+  }
+  Ok "TLS enabled - HTTPS on $tlsPublishPort"
+}
+
 # ── 3) Build images (backend, frontend, medrag, triton - deps installed in-image) ──
 Step "3/6" "Building images (backend + frontend + medrag + triton; each installs its own deps)"
-docker compose @profileArgs build
+docker compose @fileArgs @profileArgs build
 if ($LASTEXITCODE -ne 0) { Die "docker compose build failed." }
 Ok "Images built"
 
@@ -157,7 +184,7 @@ Ok "Images built"
 if (-not $SkipModels) {
   Step "4/6" "Downloading models"
   Write-Host "  Whisper large-v3 -> shared hf-cache volume (used by backend + triton)"
-  docker compose run --rm backend python /app/scripts/install_models.py --skip-ollama
+  docker compose @fileArgs run --rm backend python /app/scripts/install_models.py --skip-ollama
   if ($LASTEXITCODE -ne 0) { Warn "Whisper prefetch failed - it will lazily download on first request instead." }
 
   $ollamaModel = if ($envVars.ContainsKey("OLLAMA_MODEL")) { $envVars["OLLAMA_MODEL"] } else { "qwen3.5-9b:latest" }
@@ -169,17 +196,17 @@ if (-not $SkipModels) {
 
   if ($WithOllama) {
     Write-Host "  Ollama model '$ollamaModel' -> in-compose ollama container"
-    docker compose --profile ollama up -d ollama
+    docker compose @fileArgs --profile ollama up -d ollama
     for ($i = 0; $i -lt 30; $i++) {
-      docker compose exec -T ollama ollama list *> $null
+      docker compose @fileArgs exec -T ollama ollama list *> $null
       if ($LASTEXITCODE -eq 0) { break }
       Start-Sleep -Seconds 2
     }
-    $listOut = docker compose exec -T ollama ollama list 2>$null
+    $listOut = docker compose @fileArgs exec -T ollama ollama list 2>$null
     if (Test-OllamaHasModel $listOut) {
       Ok "Ollama already has '$ollamaModel' - skipping pull"
     } else {
-      docker compose exec -T ollama ollama pull $ollamaModel
+      docker compose @fileArgs exec -T ollama ollama pull $ollamaModel
       if ($LASTEXITCODE -ne 0) {
         Warn "Ollama pull of '$ollamaModel' failed - it isn't on the public registry."
         if ($hasLocalModelfile) {
@@ -224,7 +251,7 @@ if ($NoUp) {
 }
 
 Step "5/6" "Starting the stack"
-docker compose @profileArgs up -d
+docker compose @fileArgs @profileArgs up -d
 if ($LASTEXITCODE -ne 0) { Die "docker compose up failed." }
 Ok "Containers started"
 
@@ -232,27 +259,38 @@ Ok "Containers started"
 # itself wasn't recreated but backend/medrag/etc. were (e.g. a re-run of this
 # script after a code change), it's left pointing at dead IPs -> 502s despite
 # every backend service reporting healthy. Force it to re-resolve.
-docker compose restart gateway *> $null
+docker compose @fileArgs restart gateway *> $null
 
 # ── 6) Wait for health ──────────────────────────────────────────────────────
 Step "6/6" "Waiting for services to become healthy"
 $gatewayPort = if ($envVars.ContainsKey("GATEWAY_PUBLISH_PORT")) { $envVars["GATEWAY_PUBLISH_PORT"] } else { "8090" }
+if ($Tls) {
+  # Plain HTTP now 301s to HTTPS, so probe the TLS listener directly.
+  $appUrl = "https://localhost:$tlsPublishPort"
+  # A local/self-signed cert is the normal case for a first run; PS 5.1 has no
+  # -SkipCertificateCheck, so relax validation for this probe only and restore.
+  $prevCertPolicy = [System.Net.ServicePointManager]::ServerCertificateValidationCallback
+  [System.Net.ServicePointManager]::ServerCertificateValidationCallback = { $true }
+} else {
+  $appUrl = "http://localhost:$gatewayPort"
+}
 $healthy = $false
 for ($i = 0; $i -lt 60; $i++) {
   try {
-    $resp = Invoke-WebRequest -Uri "http://localhost:$gatewayPort/api/health" -UseBasicParsing -TimeoutSec 5
+    $resp = Invoke-WebRequest -Uri "$appUrl/api/health" -UseBasicParsing -TimeoutSec 5
     if ($resp.StatusCode -eq 200) { $healthy = $true; break }
   } catch {}
   Start-Sleep -Seconds 5
 }
+if ($Tls) { [System.Net.ServicePointManager]::ServerCertificateValidationCallback = $prevCertPolicy }
 
 Write-Host ""
-docker compose ps
+docker compose @fileArgs ps
 Write-Host ""
 if ($healthy) {
   Say "AranMed is up"
-  Write-Host "  App  -> http://localhost:$gatewayPort"
-  Write-Host "  API  -> http://localhost:$gatewayPort/api/health"
+  Write-Host "  App  -> $appUrl"
+  Write-Host "  API  -> $appUrl/api/health"
 } else {
   Warn "Gateway didn't answer /api/health within 5 minutes - check: docker compose logs -f"
 }
