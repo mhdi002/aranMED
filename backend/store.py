@@ -96,6 +96,28 @@ def list_patients(*, owner_user_id: int) -> list[dict]:
     return out
 
 
+def find_patient_by_mrn(mrn: str, *, owner_user_id: int) -> str | None:
+    """Return the id of the caller's patient whose stored patient.mrn matches
+    (case/whitespace-insensitive), or None. Queries full records — MRN lives
+    inside the JSON ``data`` blob, not a summary column list_patients()
+    returns — so this can't be answered from that summary alone.
+    """
+    target = (mrn or "").strip().lower()
+    if not target:
+        return None
+    with db.connect() as c:
+        rows = c.execute(
+            "SELECT id, data FROM patients WHERE owner_user_id=?",
+            (owner_user_id,),
+        ).fetchall()
+    for r in rows:
+        d = db.loads_json(r["data"]) or {}
+        existing = ((d.get("patient") or {}).get("mrn") or "").strip().lower()
+        if existing and existing == target:
+            return r["id"]
+    return None
+
+
 def delete_patient(patient_id: str, *, owner_user_id: int) -> bool:
     with db.connect() as c:
         cur = c.execute("DELETE FROM patients WHERE id=? AND owner_user_id=?",

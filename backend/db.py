@@ -14,6 +14,9 @@ Tables
                    body, sent_at, dry_run)
 * ``quizzes``    — saved education content (id, owner_user_id, kind, topic,
                    language, data JSON, created_at)
+* ``agent_sessions`` — durable backing store for backend/memory.py's
+                   conversation cache (session_id, messages JSON, summary,
+                   last_used), so a restart/rescale doesn't lose history.
 
 The DB file lives at ``backend/data/app.db`` by default; tests override it
 via :func:`set_db_path`.
@@ -97,6 +100,14 @@ CREATE TABLE IF NOT EXISTS quizzes (
   created_at    REAL    NOT NULL
 );
 CREATE INDEX IF NOT EXISTS ix_quizzes_owner ON quizzes(owner_user_id);
+
+CREATE TABLE IF NOT EXISTS agent_sessions (
+  session_id  TEXT    PRIMARY KEY,
+  messages    TEXT    NOT NULL,
+  summary     TEXT    NOT NULL DEFAULT '',
+  last_used   REAL    NOT NULL
+);
+CREATE INDEX IF NOT EXISTS ix_agent_sessions_last_used ON agent_sessions(last_used);
 """
 
 

@@ -102,6 +102,8 @@ runtime:
   agent_max_tokens: 1400
   agent_final_max_tokens: 900
   agent_temperature: 0.2
+  agent_chat_timeout_sec: 90
+  agent_tool_timeout_sec: 60
   # Conversation memory (backend/memory.py)
   memory_summary_char_limit: 600
   memory_summary_max_tokens: 400

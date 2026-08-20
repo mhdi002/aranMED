@@ -25,7 +25,9 @@ import logging
 import re
 import time
 import uuid
-from typing import Any
+from typing import Optional
+
+from pydantic import BaseModel, Field, ValidationError
 
 import config
 import db
@@ -35,6 +37,71 @@ from auth import ensure_default_admin
 from .base import Tool, ToolContext, ToolResult, tool
 
 log = logging.getLogger("tools.ehr")
+
+
+# --------------------------------------------------------------------------
+# Schema validation for LLM-authored EHR JSON
+# --------------------------------------------------------------------------
+# The core LLM is instructed (see _EHR_SYS_EN/_EHR_SYS_FA below) to emit this
+# exact shape, but nothing enforced it before persistence -- a malformed
+# field (e.g. frequency_hours coming back as "every 8h" instead of 8) used
+# to flow straight into the dosing-alert math in tools/alerts.py. Pydantic
+# both validates and coerces (e.g. numeric strings -> float) so well-formed
+# but loosely-typed model output still passes.
+class _PatientInfo(BaseModel):
+    name: Optional[str] = None
+    age: Optional[float] = None
+    sex: Optional[str] = None
+    mrn: Optional[str] = None
+    weight_kg: Optional[float] = None
+
+
+class _Encounter(BaseModel):
+    date: Optional[str] = None
+    chief_complaint: Optional[str] = None
+    summary: Optional[str] = None
+
+
+class _Problem(BaseModel):
+    name: str
+    status: Optional[str] = None
+
+
+class _Allergy(BaseModel):
+    substance: str
+    reaction: Optional[str] = None
+
+
+class _Medication(BaseModel):
+    name: str
+    dose: Optional[str] = None
+    route: Optional[str] = None
+    frequency: Optional[str] = None
+    frequency_hours: Optional[float] = None
+    indication: Optional[str] = None
+    notes: Optional[str] = None
+
+
+class _Vitals(BaseModel):
+    bp: Optional[str] = None
+    hr: Optional[float] = None
+    temp_c: Optional[float] = None
+    spo2: Optional[float] = None
+    rr: Optional[float] = None
+
+
+class EHRRecordSchema(BaseModel):
+    """Validated shape of the LLM's build_ehr JSON output. Extra keys the
+    model invents are dropped rather than rejected -- we only guarantee the
+    fields downstream code (dosing alerts, EHR views) actually reads.
+    """
+    patient: _PatientInfo = Field(default_factory=_PatientInfo)
+    encounter: _Encounter = Field(default_factory=_Encounter)
+    problems: list[_Problem] = Field(default_factory=list)
+    allergies: list[_Allergy] = Field(default_factory=list)
+    medications: list[_Medication] = Field(default_factory=list)
+    vitals: _Vitals = Field(default_factory=_Vitals)
+    notes: Optional[str] = None
 
 
 def _slugify(name: str) -> str:
@@ -97,6 +164,36 @@ def save_record(record: dict, ctx: ToolContext | None = None) -> dict:
 
 def list_records(ctx: ToolContext | None = None) -> list[dict]:
     return store.list_patients(owner_user_id=_owner_id(ctx))
+
+
+def find_by_mrn(mrn: str, ctx: ToolContext | None = None) -> str | None:
+    """Return the id of an existing record whose patient.mrn matches (a real,
+    hospital-assigned identifier), case/whitespace-insensitive.
+    """
+    return store.find_patient_by_mrn(mrn, owner_user_id=_owner_id(ctx))
+
+
+def unique_new_id(name: str, ctx: ToolContext | None = None) -> str:
+    """Mint an id for a brand-new record, guaranteed not to collide with an
+    existing one.
+
+    Two different patients who happen to share a name (no MRN, no explicit
+    patient_id) previously collided silently: the id is deterministic
+    (slugify(name)), so the second "John Doe" would overwrite the first.
+    This checks the current record set (list_records()'s id field is safe
+    to use here -- unlike MRN, id is always present in the summary view) and
+    appends -2, -3, ... on conflict instead of ever reusing another
+    patient's id without positive evidence (an MRN match, or an explicit
+    patient_id from the caller).
+    """
+    base = _slugify(name)
+    existing_ids = {item.get("id") for item in list_records(ctx)}
+    if base not in existing_ids:
+        return base
+    n = 2
+    while f"{base}-{n}" in existing_ids:
+        n += 1
+    return f"{base}-{n}"
 
 
 # --------------------------------------------------------------------------
@@ -218,13 +315,30 @@ class BuildEHRTool(Tool):
             temperature=0.1, max_tokens=1200,
         )
         try:
-            data = _extract_json(out.content)
+            raw = _extract_json(out.content)
         except Exception as e:  # noqa: BLE001
             return ToolResult(content="", error=f"could not parse EHR JSON: {e}",
                               data={"raw": out.content})
 
-        name = (data.get("patient") or {}).get("name") or "patient"
-        pid = patient_id or load_existing_id(name, ctx) or _slugify(name)
+        try:
+            validated = EHRRecordSchema.model_validate(raw)
+        except ValidationError as e:
+            log.warning("build_ehr: model output failed schema validation: %s", e)
+            return ToolResult(
+                content="",
+                error=f"model produced an invalid EHR record: {e}",
+                data={"raw": raw},
+            )
+        data = validated.model_dump(exclude_none=False)
+
+        name = data["patient"].get("name") or "patient"
+        mrn = data["patient"].get("mrn")
+        if patient_id:
+            pid = patient_id
+        elif mrn and (existing := find_by_mrn(mrn, ctx)):
+            pid = existing
+        else:
+            pid = unique_new_id(name, ctx)
         record = {
             "id": pid,
             "language": language,
@@ -281,10 +395,3 @@ class ListEHRTool(Tool):
         )
 
 
-def load_existing_id(name: str, ctx: ToolContext | None = None) -> str | None:
-    """Return an existing record id whose patient name matches *name*."""
-    target = _slugify(name)
-    for item in list_records(ctx):
-        if item.get("id") == target:
-            return target
-    return None

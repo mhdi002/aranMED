@@ -13,9 +13,38 @@ import time
 from dataclasses import dataclass, field
 from typing import Any
 
-from providers.base import ChatMessage
+from providers.base import ChatMessage, ToolCall
 
 log = logging.getLogger("memory")
+
+
+def _msg_to_dict(m: ChatMessage) -> dict:
+    """Serialise a message for durable storage.
+
+    Binary attachments (``images``/``audio``) are intentionally dropped —
+    they're per-turn upload bytes already summarised into the persisted text
+    via the agent's attachment note, so keeping them would just bloat the
+    row without adding anything a reload needs.
+    """
+    return {
+        "role": m.role,
+        "content": m.content,
+        "tool_call_id": m.tool_call_id,
+        "name": m.name,
+        "tool_calls": [{"name": tc.name, "arguments": tc.arguments, "id": tc.id}
+                       for tc in (m.tool_calls or [])],
+    }
+
+
+def _msg_from_dict(d: dict) -> ChatMessage:
+    return ChatMessage(
+        role=d.get("role", "user"),
+        content=d.get("content", ""),
+        tool_call_id=d.get("tool_call_id"),
+        name=d.get("name"),
+        tool_calls=[ToolCall(name=tc["name"], arguments=tc.get("arguments") or {}, id=tc.get("id"))
+                   for tc in (d.get("tool_calls") or [])],
+    )
 
 
 @dataclass
@@ -32,28 +61,91 @@ class Conversation:
 
 
 class MemoryStore:
-    """In-process conversation cache. Swap with Redis/SQLite for multi-process.
+    """In-process conversation cache, durably backed by SQLite (``agent_sessions``).
 
-    ``max_sessions``/``idle_ttl_sec`` bound memory growth — every distinct
-    session would otherwise stay resident forever. Both are read from
-    ``registry.runtime`` (models.yaml) when a registry is supplied, so they
-    are deployment-configurable like every other runtime knob, not
+    The in-process dict stays the hot path for every read/append within a
+    process's lifetime — persistence only round-trips to SQLite on
+    :meth:`persist` (called once per agent turn) and on a cache miss in
+    :meth:`get` (rehydrating a session that was active in a previous process).
+    This means a backend restart, or a request landing on a different
+    horizontally-scaled worker, still finds the conversation instead of
+    silently starting over — the gap the module previously documented as
+    unsolved. Set ``persist=False`` to opt back into pure in-memory
+    (e.g. for tests that don't want SQLite side effects).
+
+    ``max_sessions``/``idle_ttl_sec`` bound in-process memory growth — every
+    distinct session would otherwise stay resident forever. Both are read
+    from ``registry.runtime`` (models.yaml) when a registry is supplied, so
+    they are deployment-configurable like every other runtime knob, not
     hardcoded Python defaults.
     """
 
-    def __init__(self, *, max_sessions: int = 2000, idle_ttl_sec: float = 6 * 3600) -> None:
+    def __init__(self, *, max_sessions: int = 2000, idle_ttl_sec: float = 6 * 3600,
+                persist: bool = True) -> None:
         self._sessions: dict[str, Conversation] = {}
         self.max_sessions = max_sessions
         self.idle_ttl_sec = idle_ttl_sec
+        self.persist_enabled = persist
 
     def get(self, session_id: str) -> Conversation:
         if session_id not in self._sessions:
             self._evict_if_needed()
-            self._sessions[session_id] = Conversation(session_id=session_id)
+            conv = self._load_from_db(session_id) if self.persist_enabled else None
+            self._sessions[session_id] = conv or Conversation(session_id=session_id)
         return self._sessions[session_id]
 
     def reset(self, session_id: str) -> None:
         self._sessions.pop(session_id, None)
+        if self.persist_enabled:
+            try:
+                import db
+                with db.connect() as c:
+                    c.execute("DELETE FROM agent_sessions WHERE session_id=?", (session_id,))
+            except Exception as e:  # noqa: BLE001
+                log.warning("memory: failed to delete persisted session %s: %s", session_id, e)
+
+    def persist(self, session_id: str) -> None:
+        """Flush one session's current state to SQLite. Call once per turn
+        (after the agent loop finishes appending) — not on every append, to
+        avoid a DB round-trip per message.
+        """
+        if not self.persist_enabled or session_id not in self._sessions:
+            return
+        conv = self._sessions[session_id]
+        try:
+            import db
+            payload = db.dumps_json([_msg_to_dict(m) for m in conv.messages])
+            with db.connect() as c:
+                c.execute(
+                    """INSERT INTO agent_sessions (session_id, messages, summary, last_used)
+                       VALUES (?, ?, ?, ?)
+                       ON CONFLICT(session_id) DO UPDATE SET
+                         messages=excluded.messages,
+                         summary=excluded.summary,
+                         last_used=excluded.last_used""",
+                    (session_id, payload, conv.summary, conv.last_used),
+                )
+        except Exception as e:  # noqa: BLE001
+            log.warning("memory: failed to persist session %s: %s", session_id, e)
+
+    @staticmethod
+    def _load_from_db(session_id: str) -> "Conversation | None":
+        try:
+            import db
+            with db.connect() as c:
+                row = c.execute(
+                    "SELECT messages, summary, last_used FROM agent_sessions WHERE session_id=?",
+                    (session_id,),
+                ).fetchone()
+            if row is None:
+                return None
+            messages = [_msg_from_dict(d) for d in (db.loads_json(row["messages"]) or [])]
+            log.info("memory: rehydrated session %s from disk (%d msgs)", session_id, len(messages))
+            return Conversation(session_id=session_id, messages=messages,
+                                summary=row["summary"] or "", last_used=row["last_used"])
+        except Exception as e:  # noqa: BLE001
+            log.warning("memory: failed to load persisted session %s: %s", session_id, e)
+            return None
 
     def _evict_if_needed(self) -> None:
         now = time.time()
