@@ -244,25 +244,95 @@ Note the gateway does not verify the upstream certificate by default. That
 still defeats passive sniffing; for authenticated upstreams add
 `proxy_ssl_trusted_certificate` and `proxy_ssl_verify on` to the template.
 
-## 14. Known limits
+## 14. Session management
 
-Bounded and deliberate, listed so nobody assumes otherwise:
+`revoked_tokens` answers "was this token revoked". `auth_sessions` answers
+"which sessions does this user have open" — the question a person actually
+needs answered when they lose a laptop.
 
-- **SQLite still serialises writers.** WAL, the off-loop flush, and the
-  `BEGIN IMMEDIATE` throttle path removed the blocking reads, the event-loop
-  stall, and the lost-update race — not the single-writer property. At
-  sustained high write volume the answer is Postgres, which is a genuine
-  storage-layer change (dialect differences across every module that touches
-  `db.connect`) and is worth measuring before building.
-- **No DICOM/PACS or HL7v2 integration.** The FHIR export is a read-only
-  projection, not a FHIR-native store, a full RESTful FHIR server, or an
-  imaging-workflow integration.
-- **Terminology coverage is a starter set,** not a full SNOMED/RxNorm
-  distribution. Unbound terms stay text-only by design; a terminology server
-  is the correct answer at scale and slots into the same lookup point.
-- **Token revocation is a deny-list, not a session store.** It answers "was
-  this token revoked", not "which sessions does this user have open".
-- **Audit retention is manual.** `purge_older_than` exists; scheduling it
-  against a retention policy (HIPAA asks for six years) is an operator task.
-- **No MFA recovery codes.** Losing the authenticator means an admin must
-  clear `totp_secret` for that account.
+- `GET /api/auth/sessions` — open sessions with IP, user agent, last seen.
+- `DELETE /api/auth/sessions/{jti}` — end one, scoped to its owner so a user
+  can only end their own.
+- `POST /api/auth/sessions/revoke-all?keep_current=true` — sign out
+  everywhere, optionally sparing the current device. The move after a
+  password change or a suspected compromise.
+
+`last_seen` is updated on every authenticated request, so the list reflects
+what is being used rather than what was once issued.
+
+## 15. MFA recovery codes
+
+Ten single-use codes are issued at the moment MFA is switched on — the one
+point where the user is guaranteed to be looking, and after which a lost
+authenticator would otherwise need an admin to clear `totp_secret` by hand.
+
+- Stored as salted hashes; shown exactly once.
+- Accepted in the same `client_secret` slot as a TOTP code at login, so no
+  client change is needed.
+- Consuming one is audited, with the remaining count recorded.
+- Regenerating requires a current TOTP code, so a stolen token cannot mint
+  codes for later use.
+
+## 16. PostgreSQL
+
+SQLite serialises writers. WAL, the off-loop flush and `BEGIN IMMEDIATE`
+removed the blocking reads and the lost-update races, but one writer is a
+ceiling. Set `DATABASE_URL` to a `postgresql://` DSN to lift it:
+
+```bash
+docker compose --profile postgres up -d postgres
+# .env: DATABASE_URL=postgresql://aranmed:aranmed@postgres:5432/aranmed
+```
+
+`backend/dialect.py` provides a connection wrapper speaking the same surface
+the codebase already uses, so **no application module changed**: the same
+`?`-style SQL runs on both backends. Two properties were deliberate — the
+SQLite path returns the raw `sqlite3.Connection` exactly as before (so the
+default deployment carries none of this code or its risk), and row access was
+already compatible, since `sqlite3.Row` and psycopg's `dict_row` both support
+`row["col"]`.
+
+Verified against a live Postgres: schema creation, auth, sessions, token
+revocation, PHI encryption, audit, the atomic throttle and recovery codes all
+work unchanged.
+
+## 17. Imaging and messaging interoperability
+
+**DICOM** (`backend/dicom_ingest.py`, `POST /api/dicom/ingest`) reads a Part 10
+file into study context (modality, body part, UIDs, accession) plus
+demographics, and renders a frame to PNG **with DICOM windowing applied** —
+a raw 16-bit array shown without windowing is a black rectangle, so a vision
+model reading it would be describing nothing. The modality tag is a fact
+where the transcript is a guess, so `modality_hint` feeds template selection
+more reliably than dictated words.
+
+**HL7 v2** (`backend/hl7v2.py`) parses ADT/ORM/ORU into the internal shape and
+builds `ORU^R01` to send a finished report back to the ordering system, with
+`ACK` generation. Encoding characters are read from MSH-2 rather than assumed,
+and report text is escaped so a `|` or `^` in a finding cannot forge fields.
+`final=false` marks the observation preliminary — a draft must never leave
+labelled final.
+
+Not included: MLLP networking and a DICOM C-STORE SCP. Both are listeners
+that belong in their own process with their own lifecycle, not inside the API.
+
+## 18. Known limits
+
+Bounded and deliberate:
+
+- **Terminology coverage.** The bundled file is a curated starter set; SNOMED
+  CT is licensed and cannot be vendored. `TERMINOLOGY_SERVER_URL` points at a
+  FHIR terminology server for everything else, consulted only on a local miss
+  and never on the critical path for a bound term. With no server configured,
+  unbound terms stay text-only by design.
+- **No MLLP listener or DICOM C-STORE SCP** (see §17).
+- **FHIR is a read-only projection**, not a FHIR-native store or a RESTful
+  FHIR server.
+- **PHI key custody is operational.** The system warns at startup, proves
+  every key in use is loaded (`missing_key_ids`), and can verify every record
+  decrypts (`verify_all_readable`) — but it cannot verify a backup exists.
+  Losing the key loses the data; that is the property that makes encryption
+  worth having.
+- **The gateway does not verify the upstream certificate** under internal TLS
+  (§13). That defeats passive sniffing; add `proxy_ssl_verify on` with a
+  trusted CA for authenticated upstreams.

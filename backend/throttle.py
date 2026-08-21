@@ -161,7 +161,7 @@ class SqliteThrottle(ThrottleBackend):
             try:
                 # isolation_level=None means autocommit, so the transaction
                 # boundary is explicit here rather than implied by the driver.
-                conn.execute("BEGIN IMMEDIATE")
+                db.begin_immediate(conn)
                 row = conn.execute(
                     "SELECT attempts, locked_until FROM login_throttle WHERE key=?",
                     (key,),

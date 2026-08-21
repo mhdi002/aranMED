@@ -222,6 +222,83 @@ def is_encrypted(stored: str | None) -> bool:
     return bool(stored) and stored.startswith(_MAGIC)
 
 
+def key_health() -> list[str]:
+    """Warnings about key configuration, for the startup posture check.
+
+    Losing the key means losing the data — that is exactly the property that
+    makes encryption worth having, and it makes key backup an operational
+    requirement rather than an optional step. The system cannot verify that a
+    backup exists, but it can refuse to let the risk go unmentioned, and it
+    can prove every key still in use is actually loaded.
+    """
+    _load_keys()
+    out: list[str] = []
+    if _active_key_id is None:
+        out.append(
+            "PHI encryption is OFF (PHI_ENCRYPTION_KEYS unset) — patient data is "
+            "stored in the clear. Required for the compliance posture in "
+            "docs/core/SECURITY.md."
+        )
+        return out
+
+    out.append(
+        f"PHI encryption ON (active key '{_active_key_id}', {len(_keys)} loaded). "
+        "LOSING THIS KEY MEANS LOSING THE DATA — keep a backup somewhere other "
+        "than alongside the database it protects."
+    )
+
+    # Every key id present in the data must be loadable, or those rows are
+    # already unreadable and nobody has noticed.
+    try:
+        missing = missing_key_ids()
+        if missing:
+            out.append(
+                "UNREADABLE DATA: rows are encrypted with key id(s) "
+                f"{sorted(missing)} which are not configured. Restore them in "
+                "PHI_ENCRYPTION_KEYS — those records cannot be decrypted."
+            )
+    except Exception as e:  # noqa: BLE001
+        out.append(f"could not audit key coverage: {e}")
+    return out
+
+
+def missing_key_ids() -> set[str]:
+    """Key ids referenced by stored rows that are not currently loaded."""
+    import db
+
+    _load_keys()
+    referenced: set[str] = set()
+    with db.connect() as c:
+        rows = c.execute("SELECT data FROM patients").fetchall()
+    for r in rows:
+        stored = r["data"]
+        if is_encrypted(stored):
+            referenced.add(stored[len(_MAGIC):].split(":", 1)[0])
+    return referenced - set(_keys)
+
+
+def verify_all_readable() -> dict[str, Any]:
+    """Decrypt every stored record and report what fails.
+
+    The check to run after a key rotation or a restore, before trusting that
+    the backup was the right one. Reads only; changes nothing.
+    """
+    import db
+
+    stats: dict[str, Any] = {"scanned": 0, "readable": 0, "unreadable": 0, "errors": []}
+    with db.connect() as c:
+        rows = c.execute("SELECT id, owner_user_id, data FROM patients").fetchall()
+    for r in rows:
+        stats["scanned"] += 1
+        try:
+            decrypt_json(r["data"], patient_id=r["id"], owner_user_id=r["owner_user_id"])
+            stats["readable"] += 1
+        except Exception as e:  # noqa: BLE001
+            stats["unreadable"] += 1
+            stats["errors"].append({"id": r["id"], "error": str(e)[:160]})
+    return stats
+
+
 def reencrypt_all() -> dict[str, int]:
     """Rewrite every patient row under the active key.
 

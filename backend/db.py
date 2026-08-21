@@ -65,7 +65,28 @@ def get_db_path() -> Path:
     return _db_path
 
 
-def connect() -> sqlite3.Connection:
+# --- Backend selection ------------------------------------------------------
+# Set DATABASE_URL to a postgresql:// DSN to use Postgres, which removes
+# SQLite's single-writer ceiling. Unset (the default) keeps the SQLite path
+# exactly as it was — connect() returns the raw sqlite3.Connection and none of
+# the dialect layer is involved, so the default deployment carries no new risk.
+DATABASE_URL = os.getenv("DATABASE_URL", "").strip()
+
+
+def is_postgres() -> bool:
+    return DATABASE_URL.startswith(("postgres://", "postgresql://"))
+
+
+def backend_name() -> str:
+    return "postgres" if is_postgres() else "sqlite"
+
+
+def connect():
+    """A connection speaking the sqlite3 API surface, on either backend."""
+    if is_postgres():
+        import dialect  # noqa: PLC0415
+        return dialect.connect(DATABASE_URL)
+
     _db_path.parent.mkdir(parents=True, exist_ok=True)
     conn = sqlite3.connect(_db_path, isolation_level=None, check_same_thread=False)
     conn.row_factory = sqlite3.Row
@@ -75,6 +96,16 @@ def connect() -> sqlite3.Connection:
     conn.execute(f"PRAGMA busy_timeout = {DB_BUSY_TIMEOUT_MS}")
     conn.execute(f"PRAGMA synchronous = {DB_SYNCHRONOUS}")
     return conn
+
+
+def begin_immediate(conn) -> None:
+    """Start a transaction that takes the write lock up front.
+
+    SQLite spells this ``BEGIN IMMEDIATE``; Postgres reaches the same place
+    with a plain ``BEGIN`` plus row locking. Callers that need a serialised
+    read-modify-write use this instead of writing either spelling directly.
+    """
+    conn.execute("BEGIN IMMEDIATE" if not is_postgres() else "BEGIN")
 
 
 _SCHEMA = """
@@ -151,6 +182,33 @@ CREATE TABLE IF NOT EXISTS revoked_tokens (
 );
 CREATE INDEX IF NOT EXISTS ix_revoked_expires ON revoked_tokens(expires_at);
 
+-- Active login sessions. revoked_tokens answers "was this token revoked";
+-- this answers "which sessions does this user have open", which is what a
+-- person needs to see and revoke a device they no longer trust.
+CREATE TABLE IF NOT EXISTS auth_sessions (
+  jti         TEXT    PRIMARY KEY,
+  user_id     INTEGER NOT NULL,
+  username    TEXT,
+  issued_at   REAL    NOT NULL,
+  expires_at  REAL    NOT NULL,
+  last_seen   REAL    NOT NULL,
+  client_ip   TEXT,
+  user_agent  TEXT,
+  revoked_at  REAL
+);
+CREATE INDEX IF NOT EXISTS ix_auth_sessions_user ON auth_sessions(user_id, expires_at);
+
+-- Single-use MFA recovery codes, stored hashed. Without these, losing the
+-- authenticator app means an admin has to clear totp_secret by hand.
+CREATE TABLE IF NOT EXISTS mfa_recovery_codes (
+  id          INTEGER PRIMARY KEY AUTOINCREMENT,
+  user_id     INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  code_hash   TEXT    NOT NULL,
+  created_at  REAL    NOT NULL,
+  used_at     REAL
+);
+CREATE INDEX IF NOT EXISTS ix_recovery_user ON mfa_recovery_codes(user_id);
+
 CREATE TABLE IF NOT EXISTS agent_sessions (
   session_id  TEXT    PRIMARY KEY,
   messages    TEXT    NOT NULL,
@@ -190,6 +248,13 @@ def _migrate(c: sqlite3.Connection) -> None:
 
 
 def _init_schema() -> None:
+    if is_postgres():
+        import dialect  # noqa: PLC0415
+        with _lock, connect() as c:
+            c.executescript(dialect.PG_SCHEMA)
+        log.info("db: schema ready on postgres")
+        return
+
     with _lock, connect() as c:
         # journal_mode persists in the file itself, so this only has to run
         # once per database, not per connection. Guarded because setting it

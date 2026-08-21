@@ -147,7 +147,7 @@ def codeable_concept(domain: str, text: str, *,
     if not text:
         return None
     concept = {"text": str(text)}
-    hit = lookup(domain, text, allow_substring=allow_substring)
+    hit = resolve(domain, text, allow_substring=allow_substring)
     if hit:
         concept["coding"] = [{"system": hit["system"], "code": hit["code"],
                               "display": hit["display"]}]
@@ -156,3 +156,92 @@ def codeable_concept(domain: str, text: str, *,
 
 def stats() -> dict[str, int]:
     return {domain: len(spec["lookup"]) for domain, spec in _load().items()}
+
+
+# ---------------------------------------------------------------------------
+# Remote terminology server
+# ---------------------------------------------------------------------------
+# The local file is a starter set and always will be: SNOMED CT is licensed
+# and far too large to vendor. A FHIR terminology server is the real answer at
+# scale, and it slots in at exactly this lookup point — try the local map
+# first (fast, offline, curated), then ask the server for anything unbound.
+#
+# Configure with TERMINOLOGY_SERVER_URL (a FHIR base URL, e.g.
+# https://tx.fhir.org/r4). Results are cached in-process; the server is never
+# on the critical path for a term the local file already knows.
+TX_URL = os.environ.get("TERMINOLOGY_SERVER_URL", "").strip().rstrip("/")
+TX_TIMEOUT = float(os.environ.get("TERMINOLOGY_SERVER_TIMEOUT_SEC", "3"))
+TX_CACHE_MAX = int(os.environ.get("TERMINOLOGY_CACHE_MAX", "5000"))
+
+_DOMAIN_SYSTEM = {
+    "condition": "http://snomed.info/sct",
+    "allergy": "http://snomed.info/sct",
+    "medication": "http://www.nlm.nih.gov/research/umls/rxnorm",
+}
+_tx_cache: dict[tuple[str, str], Optional[dict]] = {}
+_tx_lock = threading.Lock()
+
+
+def server_enabled() -> bool:
+    return bool(TX_URL)
+
+
+def lookup_remote(domain: str, text: str) -> Optional[dict]:
+    """Ask the configured terminology server to resolve *text*.
+
+    Uses ``ValueSet/$expand`` with a filter, which is the standard way to ask
+    "what concept matches this string" and is supported far more widely than
+    the various free-text search extensions. A miss, a timeout, or an
+    unreachable server all return None — the export degrades to text-only
+    rather than failing, because an unavailable terminology server must not
+    take the clinical pipeline down with it.
+    """
+    if not TX_URL:
+        return None
+    system = _DOMAIN_SYSTEM.get(domain)
+    if not system:
+        return None
+
+    key = (domain, normalise(text))
+    with _tx_lock:
+        if key in _tx_cache:
+            return _tx_cache[key]
+
+    result: Optional[dict] = None
+    try:
+        import httpx  # noqa: PLC0415
+
+        r = httpx.get(
+            f"{TX_URL}/ValueSet/$expand",
+            params={"url": f"{system}?fhir_vs", "filter": text, "count": 1},
+            timeout=TX_TIMEOUT,
+            headers={"Accept": "application/fhir+json"},
+        )
+        if r.status_code == 200:
+            contains = ((r.json() or {}).get("expansion") or {}).get("contains") or []
+            if contains:
+                c = contains[0]
+                if c.get("code") and c.get("display"):
+                    result = {"system": c.get("system") or system,
+                              "code": c["code"], "display": c["display"]}
+        else:
+            log.debug("terminology: server returned %s for %r", r.status_code, text)
+    except Exception as e:  # noqa: BLE001
+        log.debug("terminology: server lookup failed for %r (%s)", text, e)
+
+    with _tx_lock:
+        if len(_tx_cache) >= TX_CACHE_MAX:
+            _tx_cache.clear()
+        _tx_cache[key] = result
+    return result
+
+
+def resolve(domain: str, text: str, *, allow_substring: bool = False,
+            use_server: bool = True) -> Optional[dict]:
+    """Local bindings first, then the terminology server if one is configured."""
+    hit = lookup(domain, text, allow_substring=allow_substring)
+    if hit:
+        return hit
+    if use_server and TX_URL:
+        return lookup_remote(domain, text)
+    return None

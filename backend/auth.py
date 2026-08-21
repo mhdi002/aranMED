@@ -244,6 +244,206 @@ def revoke_token(payload: dict, *, reason: str = "logout") -> bool:
         return False
 
 
+# ---------------------------------------------------------------------------
+# Session store
+# ---------------------------------------------------------------------------
+# revoked_tokens answers "was this token revoked". That is enough to enforce a
+# logout but not enough for a person to *manage* their account: they cannot
+# see that a session is open on a device they lost. auth_sessions records each
+# issued token so it can be listed and revoked individually.
+def record_session(payload: dict, *, client_ip: str | None = None,
+                   user_agent: str | None = None) -> None:
+    jti = payload.get("jti")
+    if not jti:
+        return
+    try:
+        with db.connect() as c:
+            c.execute(
+                """INSERT INTO auth_sessions
+                     (jti, user_id, username, issued_at, expires_at, last_seen,
+                      client_ip, user_agent, revoked_at)
+                   VALUES (?,?,?,?,?,?,?,?,NULL)
+                   ON CONFLICT(jti) DO UPDATE SET last_seen=excluded.last_seen""",
+                (jti, int(payload.get("sub") or 0), payload.get("username"),
+                 float(payload.get("iat") or time.time()),
+                 float(payload.get("exp") or 0), time.time(),
+                 client_ip, (user_agent or "")[:300]),
+            )
+    except Exception as e:  # noqa: BLE001
+        log.warning("auth: could not record session %s: %s", jti, e)
+
+
+def touch_session(jti: str) -> None:
+    """Update last_seen so 'active sessions' reflects real use, not just issue
+    time. Best-effort: a failure here must never break a request.
+    """
+    if not jti:
+        return
+    try:
+        with db.connect() as c:
+            c.execute("UPDATE auth_sessions SET last_seen=? WHERE jti=?",
+                      (time.time(), jti))
+    except Exception:  # noqa: BLE001
+        pass
+
+
+def list_sessions(user_id: int, *, include_expired: bool = False) -> list[dict]:
+    now = time.time()
+    try:
+        with db.connect() as c:
+            if include_expired:
+                rows = c.execute(
+                    "SELECT * FROM auth_sessions WHERE user_id=? ORDER BY last_seen DESC",
+                    (user_id,),
+                ).fetchall()
+            else:
+                rows = c.execute(
+                    "SELECT * FROM auth_sessions WHERE user_id=? AND expires_at>? "
+                    "AND revoked_at IS NULL ORDER BY last_seen DESC",
+                    (user_id, now),
+                ).fetchall()
+    except Exception as e:  # noqa: BLE001
+        log.warning("auth: list_sessions failed: %s", e)
+        return []
+    out = []
+    for r in rows:
+        d = dict(r)
+        d["active"] = d.get("revoked_at") is None and float(d.get("expires_at") or 0) > now
+        out.append(d)
+    return out
+
+
+def revoke_session(jti: str, *, user_id: int, reason: str = "revoked") -> bool:
+    """Revoke one session, scoped to its owner so a user can only end their own."""
+    try:
+        with db.connect() as c:
+            row = c.execute(
+                "SELECT user_id, expires_at FROM auth_sessions WHERE jti=?", (jti,)
+            ).fetchone()
+            if row is None or int(row["user_id"]) != int(user_id):
+                return False
+            now = time.time()
+            c.execute("UPDATE auth_sessions SET revoked_at=? WHERE jti=?", (now, jti))
+            c.execute(
+                "INSERT OR IGNORE INTO revoked_tokens (jti, user_id, revoked_at, expires_at, reason) "
+                "VALUES (?,?,?,?,?)",
+                (jti, user_id, now, float(row["expires_at"] or 0), reason),
+            )
+        return True
+    except Exception as e:  # noqa: BLE001
+        log.error("auth: revoke_session %s failed: %s", jti, e)
+        return False
+
+
+def revoke_all_sessions(user_id: int, *, except_jti: str | None = None,
+                        reason: str = "revoke_all") -> int:
+    """End every session for a user. The classic 'sign out everywhere' after a
+    password change or a suspected compromise.
+    """
+    now = time.time()
+    count = 0
+    try:
+        with db.connect() as c:
+            rows = c.execute(
+                "SELECT jti, expires_at FROM auth_sessions WHERE user_id=? "
+                "AND revoked_at IS NULL AND expires_at>?",
+                (user_id, now),
+            ).fetchall()
+            for r in rows:
+                if except_jti and r["jti"] == except_jti:
+                    continue
+                c.execute("UPDATE auth_sessions SET revoked_at=? WHERE jti=?", (now, r["jti"]))
+                c.execute(
+                    "INSERT OR IGNORE INTO revoked_tokens (jti, user_id, revoked_at, expires_at, reason) "
+                    "VALUES (?,?,?,?,?)",
+                    (r["jti"], user_id, now, float(r["expires_at"] or 0), reason),
+                )
+                count += 1
+    except Exception as e:  # noqa: BLE001
+        log.error("auth: revoke_all_sessions failed: %s", e)
+    return count
+
+
+def purge_expired_sessions() -> int:
+    try:
+        with db.connect() as c:
+            cur = c.execute("DELETE FROM auth_sessions WHERE expires_at < ?", (time.time(),))
+            return cur.rowcount
+    except Exception as e:  # noqa: BLE001
+        log.warning("auth: purge_expired_sessions failed: %s", e)
+        return 0
+
+
+# ---------------------------------------------------------------------------
+# MFA recovery codes
+# ---------------------------------------------------------------------------
+RECOVERY_CODE_COUNT = int(os.environ.get("MFA_RECOVERY_CODE_COUNT", "10"))
+
+
+def _hash_recovery(code: str) -> str:
+    """Recovery codes are high-entropy, so a fast salted hash is appropriate —
+    unlike passwords, there is nothing to brute-force in a useful timeframe,
+    and scrypt per code would make verification needlessly slow.
+    """
+    return hashlib.sha256((SECRET + "|recovery|" + code.strip().lower()).encode()).hexdigest()
+
+
+def generate_recovery_codes(user_id: int) -> list[str]:
+    """Replace any existing codes with a fresh set. Returned in the clear
+    exactly once — only hashes are stored.
+    """
+    codes = []
+    for _ in range(RECOVERY_CODE_COUNT):
+        raw = secrets.token_hex(5)  # 10 hex chars, ~40 bits
+        codes.append(f"{raw[:5]}-{raw[5:]}")
+    with db.connect() as c:
+        c.execute("DELETE FROM mfa_recovery_codes WHERE user_id=?", (user_id,))
+        for code in codes:
+            c.execute(
+                "INSERT INTO mfa_recovery_codes (user_id, code_hash, created_at, used_at) "
+                "VALUES (?,?,?,NULL)",
+                (user_id, _hash_recovery(code), db.now()),
+            )
+    log.info("auth: issued %d recovery codes for user %s", len(codes), user_id)
+    return codes
+
+
+def consume_recovery_code(user_id: int, code: str) -> bool:
+    """Verify and burn a recovery code. Single-use by construction."""
+    if not code:
+        return False
+    h = _hash_recovery(code)
+    try:
+        with db.connect() as c:
+            row = c.execute(
+                "SELECT id FROM mfa_recovery_codes WHERE user_id=? AND code_hash=? "
+                "AND used_at IS NULL",
+                (user_id, h),
+            ).fetchone()
+            if row is None:
+                return False
+            c.execute("UPDATE mfa_recovery_codes SET used_at=? WHERE id=?",
+                      (db.now(), row["id"]))
+        log.warning("auth: MFA recovery code consumed for user %s", user_id)
+        return True
+    except Exception as e:  # noqa: BLE001
+        log.error("auth: consume_recovery_code failed: %s", e)
+        return False
+
+
+def count_recovery_codes(user_id: int) -> dict[str, int]:
+    try:
+        with db.connect() as c:
+            total = c.execute("SELECT COUNT(*) AS n FROM mfa_recovery_codes WHERE user_id=?",
+                              (user_id,)).fetchone()["n"]
+            unused = c.execute("SELECT COUNT(*) AS n FROM mfa_recovery_codes "
+                               "WHERE user_id=? AND used_at IS NULL",
+                               (user_id,)).fetchone()["n"]
+        return {"total": int(total), "remaining": int(unused)}
+    except Exception:  # noqa: BLE001
+        return {"total": 0, "remaining": 0}
+
+
 def purge_expired_revocations() -> int:
     """Drop revocation rows whose token has expired anyway. Safe to run on a
     schedule; an expired token is rejected on its own merits.
@@ -490,6 +690,9 @@ def current_user(token: Optional[str] = Depends(oauth2_scheme)) -> dict:
     user = get_user(int(payload["sub"]))
     if user is None:
         raise HTTPException(status.HTTP_401_UNAUTHORIZED, "user not found")
+    # Keep "active sessions" honest: it should reflect what is actually being
+    # used, not merely what was issued.
+    touch_session(payload.get("jti") or "")
     return user
 
 

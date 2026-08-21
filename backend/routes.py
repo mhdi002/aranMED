@@ -8,7 +8,8 @@ from __future__ import annotations
 import logging
 from typing import Any, Optional
 
-from fastapi import APIRouter, Depends, HTTPException, Request, status
+from fastapi import (APIRouter, Depends, File, HTTPException, Request, status,
+                     UploadFile)
 from fastapi.security import OAuth2PasswordRequestForm
 from pydantic import BaseModel, Field
 
@@ -104,21 +105,75 @@ async def login(request: Request,
                 headers={"WWW-Authenticate": 'Bearer error="mfa_required"'},
             )
         secret = auth.get_totp_secret(user["id"])
-        if not secret or not mfa.verify(secret, code, user_id=user["id"]):
-            # A wrong second factor counts toward the lockout too, otherwise
-            # MFA turns the code into an unthrottled guessing surface.
-            auth.record_login_failure(key)
-            audit.record("auth.login", actor=user, outcome="deny", client_ip=client_ip,
-                         detail={"reason": "mfa_invalid"})
-            raise HTTPException(status.HTTP_401_UNAUTHORIZED, "invalid multi-factor code")
+        used_recovery = False
+        if not (secret and mfa.verify(secret, code, user_id=user["id"])):
+            # Fall back to a single-use recovery code, so losing the
+            # authenticator is a self-service problem rather than one that
+            # needs an admin to clear totp_secret by hand.
+            used_recovery = auth.consume_recovery_code(user["id"], code)
+            if not used_recovery:
+                # A wrong second factor counts toward the lockout too, otherwise
+                # MFA turns the code into an unthrottled guessing surface.
+                auth.record_login_failure(key)
+                audit.record("auth.login", actor=user, outcome="deny", client_ip=client_ip,
+                             detail={"reason": "mfa_invalid"})
+                raise HTTPException(status.HTTP_401_UNAUTHORIZED, "invalid multi-factor code")
+        if used_recovery:
+            remaining = auth.count_recovery_codes(user["id"])["remaining"]
+            audit.record("auth.mfa.recovery_used", actor=user, client_ip=client_ip,
+                         detail={"remaining": remaining})
 
     auth.record_login_success(key)
     audit.record("auth.login", actor=user, client_ip=client_ip,
                  detail={"mfa": bool(user.get("mfa_enabled"))})
-    token = auth.create_token({"sub": str(user["id"]),
-                               "role": user["role"],
-                               "username": user["username"]})
+    payload = {"sub": str(user["id"]), "role": user["role"],
+               "username": user["username"]}
+    token = auth.create_token(payload)
+    auth.record_session(auth.decode_token(token), client_ip=client_ip,
+                        user_agent=request.headers.get("user-agent"))
     return TokenOut(access_token=token, user=user)
+
+
+# --- Session management -----------------------------------------------------
+@router.get("/auth/sessions")
+async def list_sessions(request: Request,
+                        include_expired: bool = False,
+                        user: dict = Depends(auth.current_user)) -> dict:
+    """Every session open for the calling user, so a lost device can be found
+    and ended without rotating the signing secret for everyone.
+    """
+    sessions = auth.list_sessions(user["id"], include_expired=include_expired)
+    audit.record("auth.sessions.list", actor=user, client_ip=_ip(request),
+                 detail={"count": len(sessions)})
+    return {"count": len(sessions), "sessions": sessions}
+
+
+@router.delete("/auth/sessions/{jti}")
+async def revoke_session(jti: str, request: Request,
+                         user: dict = Depends(auth.current_user)) -> dict:
+    ok = auth.revoke_session(jti, user_id=user["id"], reason="user_revoked")
+    audit.record("auth.sessions.revoke", actor=user, resource=f"session:{jti}",
+                 outcome="allow" if ok else "deny", client_ip=_ip(request))
+    if not ok:
+        raise HTTPException(404, "session not found")
+    return {"ok": True, "revoked": jti}
+
+
+@router.post("/auth/sessions/revoke-all")
+async def revoke_all_sessions(request: Request,
+                              keep_current: bool = True,
+                              token: str = Depends(auth.oauth2_scheme),
+                              user: dict = Depends(auth.current_user)) -> dict:
+    current_jti = None
+    if keep_current and token:
+        try:
+            current_jti = auth.decode_token(token).get("jti")
+        except ValueError:
+            current_jti = None
+    n = auth.revoke_all_sessions(user["id"], except_jti=current_jti)
+    audit.record("auth.sessions.revoke_all", actor=user, client_ip=_ip(request),
+                 detail={"revoked": n, "kept_current": bool(current_jti)})
+    return {"ok": True, "revoked": n, "kept_current": bool(current_jti)}
 
 
 @router.post("/auth/logout")
@@ -180,8 +235,39 @@ async def mfa_verify(request: Request, body: MfaVerifyIn,
                      client_ip=_ip(request))
         raise HTTPException(status.HTTP_400_BAD_REQUEST, "invalid code")
     auth.set_totp_secret(user["id"], secret, enabled=True)
-    audit.record("auth.mfa.enabled", actor=user, client_ip=_ip(request))
-    return {"ok": True, "mfa_enabled": True}
+    # Issue recovery codes at the moment MFA becomes mandatory for this
+    # account — that is the only point where the user is guaranteed to be
+    # looking, and after it a lost authenticator would otherwise be an
+    # admin-only fix. Shown once; only hashes are stored.
+    codes = auth.generate_recovery_codes(user["id"])
+    audit.record("auth.mfa.enabled", actor=user, client_ip=_ip(request),
+                 detail={"recovery_codes_issued": len(codes)})
+    return {"ok": True, "mfa_enabled": True, "recovery_codes": codes,
+            "recovery_codes_note": "Store these now — they are shown once and "
+                                   "each works a single time."}
+
+
+@router.post("/auth/mfa/recovery-codes")
+async def regenerate_recovery_codes(request: Request, body: MfaVerifyIn,
+                                    user: dict = Depends(auth.current_user)) -> dict:
+    """Issue a fresh set, invalidating the old ones. Requires a current TOTP
+    code so a stolen token cannot mint recovery codes for later use.
+    """
+    secret = auth.get_totp_secret(user["id"])
+    if not secret or not mfa.verify(secret, body.code, user_id=user["id"]):
+        audit.record("auth.mfa.recovery_regenerate", actor=user, outcome="deny",
+                     client_ip=_ip(request))
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, "invalid code")
+    codes = auth.generate_recovery_codes(user["id"])
+    audit.record("auth.mfa.recovery_regenerate", actor=user, client_ip=_ip(request),
+                 detail={"issued": len(codes)})
+    return {"ok": True, "recovery_codes": codes}
+
+
+@router.get("/auth/mfa/recovery-codes")
+async def recovery_code_status(user: dict = Depends(auth.current_user)) -> dict:
+    """How many codes remain — the codes themselves are never retrievable."""
+    return auth.count_recovery_codes(user["id"])
 
 
 @router.post("/auth/mfa/disable")
@@ -724,3 +810,113 @@ async def fhir_everything(patient_id: str, request: Request,
                  client_ip=_ip(request),
                  detail={"resource_type": "Bundle", "entries": len(bundle.get("entry", []))})
     return bundle
+
+
+# ===========================================================================
+# Imaging & messaging interoperability (DICOM, HL7 v2)
+# ===========================================================================
+@router.post("/dicom/ingest")
+async def dicom_ingest(request: Request,
+                       file: UploadFile = File(...),
+                       render: bool = True,
+                       user: dict = Depends(rbac.require("report.write"))) -> dict:
+    """Read a DICOM Part 10 file: study context, patient demographics, and
+    optionally a windowed PNG the vision model can actually read.
+
+    The modality tag is a fact where the transcript is a guess, so the study
+    context returned here is a stronger template-selection signal than
+    dictated words — `modality_hint` is shaped to feed straight into
+    /api/templates/suggest.
+    """
+    import base64
+    import dicom_ingest
+
+    if not dicom_ingest.available():
+        raise HTTPException(503, "DICOM support unavailable (pydicom not installed)")
+
+    raw = await file.read()
+    if not raw:
+        raise HTTPException(400, "empty upload")
+    try:
+        meta = dicom_ingest.read_metadata(raw)
+    except Exception as e:  # noqa: BLE001
+        audit.record("dicom.ingest", actor=user, outcome="error", client_ip=_ip(request),
+                     detail={"reason": str(e)[:160]})
+        raise HTTPException(400, f"not a readable DICOM file: {e}") from e
+
+    out: dict[str, Any] = {
+        "study": {k: v for k, v in meta.items() if not k.startswith("patient_")},
+        "patient": dicom_ingest.to_ehr_patient(meta),
+    }
+    if render and meta.get("has_pixel_data"):
+        try:
+            png = dicom_ingest.render_png(raw)
+            out["image_png_base64"] = base64.b64encode(png).decode("ascii")
+            out["image_bytes"] = len(png)
+        except Exception as e:  # noqa: BLE001
+            # Metadata is still useful without pixels; say so rather than 500.
+            out["image_error"] = str(e)[:200]
+
+    # Identifiers only — never the demographics themselves.
+    audit.record("dicom.ingest", actor=user, client_ip=_ip(request),
+                 resource=f"study:{meta.get('study_instance_uid', '?')}",
+                 detail={"modality": meta.get("modality"),
+                         "rendered": "image_png_base64" in out})
+    return out
+
+
+class Hl7In(BaseModel):
+    message: str = Field(min_length=8)
+
+
+@router.post("/hl7/parse")
+async def hl7_parse(request: Request, body: Hl7In,
+                    user: dict = Depends(rbac.require("ehr.read"))) -> dict:
+    """Parse an inbound HL7 v2 message (ADT/ORM/ORU) into the internal shape."""
+    import hl7v2
+
+    try:
+        msg = hl7v2.parse(body.message)
+    except ValueError as e:
+        raise HTTPException(400, str(e)) from e
+    ehr = hl7v2.to_ehr(msg)
+    audit.record("hl7.parse", actor=user, client_ip=_ip(request),
+                 detail={"message_type": msg.message_type,
+                         "segments": [s[0] for s in msg.segments]})
+    return {"message_type": msg.message_type, "control_id": msg.control_id,
+            "segments": [s[0] for s in msg.segments], "ehr": ehr,
+            "ack": hl7v2.build_ack(msg)}
+
+
+class Hl7OruIn(BaseModel):
+    patient_id: str
+    report_text: str
+    patient_name: str = ""
+    accession: str = ""
+    study_description: str = ""
+    receiving_app: str = ""
+    receiving_facility: str = ""
+    final: bool = True
+
+
+@router.post("/hl7/oru")
+async def hl7_oru(request: Request, body: Hl7OruIn,
+                  user: dict = Depends(rbac.require("report.write"))) -> dict:
+    """Build an ORU^R01 carrying a finished report, for the ordering system.
+
+    `final=false` marks the observation preliminary (OBX-11 `P`) — a draft
+    must never leave here labelled final.
+    """
+    import hl7v2
+
+    msg = hl7v2.build_oru(
+        patient_id=body.patient_id, patient_name=body.patient_name,
+        report_text=body.report_text, accession=body.accession,
+        study_description=body.study_description,
+        receiving_app=body.receiving_app, receiving_facility=body.receiving_facility,
+        observation_status="F" if body.final else "P",
+    )
+    audit.record("hl7.oru", actor=user, resource=f"patient:{body.patient_id}",
+                 client_ip=_ip(request),
+                 detail={"final": body.final, "chars": len(body.report_text)})
+    return {"message": msg, "status": "F" if body.final else "P"}

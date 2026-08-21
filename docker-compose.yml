@@ -139,6 +139,12 @@ services:
       # in the clear and a warning logged on first write.
       PHI_ENCRYPTION_KEYS: "${PHI_ENCRYPTION_KEYS:-}"
       PHI_ENCRYPTION_KEY_FILE: "${PHI_ENCRYPTION_KEY_FILE:-}"
+      # Unset = SQLite (the default). Set to a postgresql:// DSN to lift the
+      # single-writer ceiling; with the `postgres` profile running, that is
+      # postgresql://aranmed:aranmed@postgres:5432/aranmed
+      DATABASE_URL: "${DATABASE_URL:-}"
+      AUDIT_RETENTION_DAYS: "${AUDIT_RETENTION_DAYS:-2192}"
+      TERMINOLOGY_SERVER_URL: "${TERMINOLOGY_SERVER_URL:-}"
     volumes:
       - hf-cache:${DOCKER_HF_HOME:-/models}
       - ./backend/models.docker.yaml:/app/backend/models.yaml:ro
@@ -353,6 +359,30 @@ services:
     logging: *default-logging
 
   # ── Optional: Ollama in-compose (else point DOCKER_OLLAMA_HOST at a host) ──
+  # ── Optional: PostgreSQL, when SQLite's single writer becomes the ceiling ──
+  # Opt in with `--profile postgres` and set DATABASE_URL. The backend keeps
+  # SQLite as its default, so nothing here affects a deployment that doesn't
+  # ask for it. See docs/core/CONFIGURATION.md.
+  postgres:
+    profiles: ["postgres"]
+    image: postgres:${POSTGRES_VERSION:-16-alpine}
+    environment:
+      POSTGRES_USER: "${POSTGRES_USER:-aranmed}"
+      POSTGRES_PASSWORD: "${POSTGRES_PASSWORD:-aranmed}"
+      POSTGRES_DB: "${POSTGRES_DB:-aranmed}"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    ports:
+      - "${POSTGRES_PUBLISH_PORT:-5432}:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER:-aranmed} -d $${POSTGRES_DB:-aranmed}"]
+      interval: "${HEALTHCHECK_INTERVAL:-30s}"
+      timeout: 5s
+      retries: 10
+      start_period: 30s
+    restart: unless-stopped
+    logging: *default-logging
+
   ollama:
     profiles: ["ollama"]
     image: ollama/ollama:${OLLAMA_VERSION:-latest}
@@ -419,3 +449,4 @@ services:
 volumes:
   hf-cache:
   ollama:
+  pgdata:

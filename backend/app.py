@@ -32,7 +32,9 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel
 
+import audit
 import auth
+import db
 import templates as templates_mod
 from agent import Agent
 from config import HOST, PORT
@@ -195,10 +197,18 @@ async def _purge_stale_sessions_loop() -> None:
             # Revocation rows for tokens that have expired anyway are dead
             # weight — an expired token is rejected on its own merits.
             await asyncio.to_thread(auth.purge_expired_revocations)
+            await asyncio.to_thread(auth.purge_expired_sessions)
+            # Audit retention. HIPAA asks for six years, so the default keeps
+            # rows well past any plausible investigation; set
+            # AUDIT_RETENTION_DAYS=0 to disable automatic trimming entirely
+            # when an external archiver owns the lifecycle.
+            retention_days = float(os.getenv("AUDIT_RETENTION_DAYS", "2192"))
+            if retention_days > 0:
+                await asyncio.to_thread(audit.purge_older_than, retention_days * 86400)
         except asyncio.CancelledError:
             raise
         except Exception:  # noqa: BLE001
-            log.exception("memory purge loop iteration failed; continuing")
+            log.exception("maintenance loop iteration failed; continuing")
 
 
 @app.on_event("startup")
@@ -208,6 +218,15 @@ async def _startup() -> None:
     from auth import ensure_default_admin
 
     ensure_default_admin()
+
+    # Startup posture check: surface the settings that quietly break a
+    # multi-replica or compliance deployment, at the one moment an operator
+    # is reading the logs.
+    import phi_crypto
+    log.info("storage backend: %s", db.backend_name())
+    for line in phi_crypto.key_health():
+        log.warning("startup check: %s", line)
+
     global _purge_task
     _purge_task = asyncio.create_task(_purge_stale_sessions_loop())
     log.info(
