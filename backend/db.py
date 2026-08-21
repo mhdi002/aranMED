@@ -120,6 +120,37 @@ CREATE TABLE IF NOT EXISTS quizzes (
 );
 CREATE INDEX IF NOT EXISTS ix_quizzes_owner ON quizzes(owner_user_id);
 
+-- Append-only record of security- and PHI-relevant actions. Required by
+-- HIPAA §164.312(b) / ISO 27001 A.12.4 and by the platform's own governance
+-- claims. Never UPDATEd or DELETEd by application code; retention trimming is
+-- an explicit operator action (see backend/audit.py:purge_older_than).
+CREATE TABLE IF NOT EXISTS audit_log (
+  id           INTEGER PRIMARY KEY AUTOINCREMENT,
+  ts           REAL    NOT NULL,
+  actor_id     INTEGER,                   -- NULL for anonymous/failed auth
+  actor_name   TEXT,                      -- denormalised: survives user deletion
+  action       TEXT    NOT NULL,          -- e.g. ehr.read, auth.login
+  resource     TEXT,                      -- e.g. patient:ali-reza
+  outcome      TEXT    NOT NULL,          -- allow | deny | error
+  client_ip    TEXT,
+  detail       TEXT                       -- JSON, no PHI values
+);
+CREATE INDEX IF NOT EXISTS ix_audit_ts ON audit_log(ts);
+CREATE INDEX IF NOT EXISTS ix_audit_actor ON audit_log(actor_id, ts);
+CREATE INDEX IF NOT EXISTS ix_audit_action ON audit_log(action, ts);
+
+-- Token revocation. Tokens carry a jti; logout/revoke inserts it here and
+-- current_user() rejects any token whose jti is present. Rows are prunable
+-- once past the token TTL, since an expired token is rejected anyway.
+CREATE TABLE IF NOT EXISTS revoked_tokens (
+  jti         TEXT    PRIMARY KEY,
+  user_id     INTEGER,
+  revoked_at  REAL    NOT NULL,
+  expires_at  REAL    NOT NULL,
+  reason      TEXT
+);
+CREATE INDEX IF NOT EXISTS ix_revoked_expires ON revoked_tokens(expires_at);
+
 CREATE TABLE IF NOT EXISTS agent_sessions (
   session_id  TEXT    PRIMARY KEY,
   messages    TEXT    NOT NULL,
@@ -138,6 +169,26 @@ CREATE INDEX IF NOT EXISTS ix_login_throttle_updated ON login_throttle(updated_a
 """
 
 
+# Columns added after the initial release. CREATE TABLE IF NOT EXISTS does not
+# add them to a database that already has the table, so they are applied
+# idempotently here. Append-only list of (table, column, DDL).
+_ADDED_COLUMNS: list[tuple[str, str, str]] = [
+    ("users", "totp_secret", "TEXT"),
+    ("users", "mfa_enabled", "INTEGER NOT NULL DEFAULT 0"),
+    ("users", "password_changed_at", "REAL"),
+]
+
+
+def _migrate(c: sqlite3.Connection) -> None:
+    for table, column, ddl in _ADDED_COLUMNS:
+        existing = {r["name"] for r in c.execute(f"PRAGMA table_info({table})")}
+        if not existing:
+            continue  # table doesn't exist yet; _SCHEMA created it above
+        if column not in existing:
+            c.execute(f"ALTER TABLE {table} ADD COLUMN {column} {ddl}")
+            log.info("db: migrated — added column %s.%s", table, column)
+
+
 def _init_schema() -> None:
     with _lock, connect() as c:
         # journal_mode persists in the file itself, so this only has to run
@@ -153,6 +204,7 @@ def _init_schema() -> None:
         except sqlite3.Error as e:
             log.warning("db: could not set journal_mode=%s (%s)", DB_JOURNAL_MODE, e)
         c.executescript(_SCHEMA)
+        _migrate(c)
 
 
 # Initialise default DB at import time so casual scripts work.

@@ -127,16 +127,94 @@ cannot list or fetch another clinician's patients. Unauthenticated chat falls
 back to a configured system-owner account
 (`EHR_TOOL_SYSTEM_OWNER_USERNAME`), never to another user's namespace.
 
-## 7. Known limits
+## 7. Audit trail
+
+Every authentication event, every access to patient data, and every
+authorisation denial is written to `audit_log` (`backend/audit.py`). This is
+the control HIPAA §164.312(b) and ISO 27001 A.12.4 require, and the platform
+claims both.
+
+- **Append-only in practice** — no application path UPDATEs or DELETEs a row.
+  Retention trimming is `audit.purge_older_than()`, called deliberately.
+- **No PHI in the trail.** `resource` is an identifier (`patient:ali-reza`);
+  `detail` carries field names, counts, and reasons — never diagnoses, names,
+  or note text. An audit log that leaks PHI widens the breach surface.
+- **Reading the trail is itself audited**, and requires `audit.read`
+  (admin-only by default).
+- `AUDIT_STRICT=1` refuses the action when the trail cannot be written. Some
+  regimes require that trade; it is a setting, not a hardcoded choice.
+
+## 8. RBAC
+
+Roles were stored from the start but enforced nowhere — any authenticated
+account could call every route, including deleting another clinician's
+record. `backend/rbac.py` closes that.
+
+The policy is **data** (`backend/data/rbac.json`, overridable with
+`RBAC_POLICY_FILE`): role → grants, supporting exact permissions
+(`ehr.read`), namespace wildcards (`ehr.*`), and `*`. Deny by default —
+unknown role, missing file, or unlisted permission all deny. `admin` keeps
+break-glass access even if the policy file is unreadable, so a bad edit
+cannot lock every operator out.
+
+RBAC and ownership are independent and both apply: RBAC decides *whether* a
+caller may touch EHR, `owner_user_id` decides *which* records.
+
+## 9. Multi-factor authentication
+
+TOTP (RFC 6238) on stdlib only, compatible with any authenticator app.
+
+- **Two-phase enrolment** — the secret is stored, but MFA switches on only
+  after the user proves a valid code, so nobody locks themselves out.
+- **Replay-blocked** — a code that verified once is refused for the rest of
+  its step, per RFC 6238 §5.2.
+- **Constant-time across the drift window**, and a wrong second factor counts
+  toward the login lockout, so MFA is not an unthrottled guessing surface.
+- Disabling MFA requires a current code, so a stolen token cannot strip it.
+
+## 10. Password policy
+
+Configurable, defaulting to NIST SP 800-63B's shape: length carries the
+strength (minimum 12), character-class rules are opt-in, and a weak-password
+blocklist is always on. The blocklist matches both the whole password and its
+alphabetic core, so `admin12345678` and `password2026` are rejected — padding
+a blocklisted word with digits is not a new password.
+
+## 11. Token revocation
+
+Tokens carry a `jti`. `POST /api/auth/logout` records it in `revoked_tokens`
+and `decode_token` rejects any token listed there. The revocation check
+**fails closed**: if the list cannot be read, the token is rejected, because
+a revoked-but-accepted token is worse than a spurious 401. Expired rows are
+purged on the background maintenance loop.
+
+## 12. Known limits
 
 Bounded and deliberate, listed so nobody assumes otherwise:
 
 - **Gateway→upstream traffic is plaintext** on the compose network (see §4).
-- **`memory` throttle backend is per-process.** Only correct at one replica;
-  the default is not `memory`.
-- **Token revocation is expiry-only.** There is no deny-list, so a stolen
-  token stays valid until `ASR_AGENT_TOKEN_TTL` elapses. Shorten the TTL if
-  that window matters; rotating `ASR_AGENT_SECRET` invalidates everything at once.
-- **No MFA, no password-complexity policy** beyond a minimum length.
-- **The credentials file is plaintext on disk** by design — it is meant to be
-  read once and deleted.
+- **SQLite still serialises writers.** WAL and the off-loop flush removed the
+  blocking reads and the event-loop stall, not the single-writer property. At
+  sustained high write volume the answer is Postgres — worth measuring first.
+- **Throttle counters are shared but Redis's path was made atomic via Lua;
+  the SQLite path is still read-modify-write.** Two simultaneous failures can
+  count as one there. Irrelevant to the lockout guarantee at these thresholds.
+- **PHI is not encrypted at rest.** Disk/volume encryption is the deployment's
+  responsibility today; application-level field encryption is not implemented.
+- **No DICOM/PACS or HL7v2 integration.** FHIR export (§13) is a read-only
+  projection, not a FHIR-native store or a full RESTful FHIR server.
+- **The generated credentials file is plaintext on disk** until first sign-in,
+  which now deletes it automatically.
+
+## 13. FHIR export
+
+`GET /api/fhir/Patient/{id}` and `/$everything` project the internal record
+into FHIR R4 (Patient, Condition, AllergyIntolerance, MedicationStatement,
+Observation). Vitals carry real LOINC codes and UCUM units; blood pressure is
+a proper two-component panel; dosing intervals become FHIR timing.
+
+Conditions, allergies and medications are emitted as `text`-only
+`CodeableConcept`s. The source is dictated free text, and minting
+SNOMED/RxNorm codes from it would fabricate clinical precision the data does
+not have. Binding a terminology server is the correct fix and is not
+attempted here.

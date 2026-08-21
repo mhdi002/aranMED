@@ -192,6 +192,9 @@ async def _purge_stale_sessions_loop() -> None:
         try:
             await asyncio.sleep(interval)
             await asyncio.to_thread(memory.purge_stale)
+            # Revocation rows for tokens that have expired anyway are dead
+            # weight — an expired token is rejected on its own merits.
+            await asyncio.to_thread(auth.purge_expired_revocations)
         except asyncio.CancelledError:
             raise
         except Exception:  # noqa: BLE001

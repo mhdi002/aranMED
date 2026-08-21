@@ -12,7 +12,10 @@ from fastapi import APIRouter, Depends, HTTPException, Request, status
 from fastapi.security import OAuth2PasswordRequestForm
 from pydantic import BaseModel, Field
 
+import audit
 import auth
+import mfa
+import rbac
 import store
 from providers.base import ChatMessage
 from registry import Registry
@@ -22,12 +25,19 @@ log = logging.getLogger("routes")
 router = APIRouter(prefix="/api")
 
 
+def _ip(request: Request) -> Optional[str]:
+    return request.client.host if request.client else None
+
+
 # ===========================================================================
 # Auth
 # ===========================================================================
 class RegisterIn(BaseModel):
     username: str = Field(min_length=3, max_length=64)
-    password: str = Field(min_length=6, max_length=256)
+    # Length policy is enforced in auth.validate_password (configurable per
+    # deployment); keep the schema bound generous so the API returns the
+    # specific policy message rather than a generic 422.
+    password: str = Field(min_length=1, max_length=1024)
     email: Optional[str] = None
     role: str = "doctor"
 
@@ -39,12 +49,16 @@ class TokenOut(BaseModel):
 
 
 @router.post("/auth/register", response_model=TokenOut)
-async def register(body: RegisterIn) -> TokenOut:
+async def register(request: Request, body: RegisterIn) -> TokenOut:
     try:
         user = auth.create_user(username=body.username, password=body.password,
                                 email=body.email, role=body.role)
     except ValueError as e:
+        audit.record("auth.register", actor_name=body.username, outcome="deny",
+                     client_ip=_ip(request), detail={"reason": str(e)})
         raise HTTPException(status.HTTP_400_BAD_REQUEST, str(e)) from e
+    audit.record("auth.register", actor=user, client_ip=_ip(request),
+                 detail={"role": user["role"]})
     token = auth.create_token({"sub": str(user["id"]),
                                "role": user["role"],
                                "username": user["username"]})
@@ -54,10 +68,13 @@ async def register(body: RegisterIn) -> TokenOut:
 @router.post("/auth/login", response_model=TokenOut)
 async def login(request: Request,
                 form: OAuth2PasswordRequestForm = Depends()) -> TokenOut:
-    client_ip = request.client.host if request.client else ""
+    client_ip = _ip(request) or ""
     key = auth.throttle_key(form.username, client_ip)
     locked_for = auth.login_is_locked(key)
     if locked_for > 0:
+        audit.record("auth.login", actor_name=form.username, outcome="deny",
+                     client_ip=client_ip, detail={"reason": "locked_out",
+                                                  "retry_after_sec": int(locked_for)})
         raise HTTPException(
             status.HTTP_429_TOO_MANY_REQUESTS,
             f"too many failed login attempts — try again in {int(locked_for)}s",
@@ -66,15 +83,120 @@ async def login(request: Request,
     user = auth.authenticate(username=form.username, password=form.password)
     if user is None:
         auth.record_login_failure(key)
+        audit.record("auth.login", actor_name=form.username, outcome="deny",
+                     client_ip=client_ip, detail={"reason": "bad_credentials"})
         # Deliberately identical message for "no such user" and "wrong
         # password" — anything more specific is a user-enumeration oracle.
         raise HTTPException(status.HTTP_401_UNAUTHORIZED,
                             "invalid username or password")
+
+    # Second factor, when the account has it enabled. OAuth2PasswordRequestForm
+    # has no TOTP field, so the code rides in the standard `client_secret`
+    # slot — keeps the endpoint a plain OAuth2 password grant for clients.
+    if user.get("mfa_enabled"):
+        code = (getattr(form, "client_secret", None) or "").strip()
+        if not code:
+            audit.record("auth.login", actor=user, outcome="deny", client_ip=client_ip,
+                         detail={"reason": "mfa_required"})
+            raise HTTPException(
+                status.HTTP_401_UNAUTHORIZED,
+                "multi-factor code required — resend with the 6-digit code in client_secret",
+                headers={"WWW-Authenticate": 'Bearer error="mfa_required"'},
+            )
+        secret = auth.get_totp_secret(user["id"])
+        if not secret or not mfa.verify(secret, code, user_id=user["id"]):
+            # A wrong second factor counts toward the lockout too, otherwise
+            # MFA turns the code into an unthrottled guessing surface.
+            auth.record_login_failure(key)
+            audit.record("auth.login", actor=user, outcome="deny", client_ip=client_ip,
+                         detail={"reason": "mfa_invalid"})
+            raise HTTPException(status.HTTP_401_UNAUTHORIZED, "invalid multi-factor code")
+
     auth.record_login_success(key)
+    audit.record("auth.login", actor=user, client_ip=client_ip,
+                 detail={"mfa": bool(user.get("mfa_enabled"))})
     token = auth.create_token({"sub": str(user["id"]),
                                "role": user["role"],
                                "username": user["username"]})
     return TokenOut(access_token=token, user=user)
+
+
+@router.post("/auth/logout")
+async def logout(request: Request,
+                 token: str = Depends(auth.oauth2_scheme)) -> dict:
+    """Revoke the presented token. Without this, a leaked token stays valid
+    until it expires and the only remedy is rotating the signing secret,
+    which logs out every user at once.
+    """
+    if not token:
+        raise HTTPException(status.HTTP_401_UNAUTHORIZED, "missing bearer token")
+    try:
+        payload = auth.decode_token(token)
+    except ValueError as e:
+        # Already expired/revoked — nothing to do, and saying so is harmless.
+        return {"ok": True, "detail": str(e)}
+    revoked = auth.revoke_token(payload, reason="logout")
+    audit.record("auth.logout", actor_id=int(payload.get("sub") or 0) or None,
+                 actor_name=payload.get("username"), client_ip=_ip(request),
+                 detail={"revoked": revoked})
+    return {"ok": True, "revoked": revoked}
+
+
+# --- Multi-factor authentication -------------------------------------------
+class MfaVerifyIn(BaseModel):
+    code: str = Field(min_length=4, max_length=12)
+
+
+@router.post("/auth/mfa/enroll")
+async def mfa_enroll(request: Request,
+                     user: dict = Depends(auth.current_user)) -> dict:
+    """Start enrolment: mint a secret and return it plus an otpauth:// URI.
+
+    The secret is stored but MFA is *not* enabled until the user proves they
+    can generate a code from it (``/auth/mfa/verify``), so nobody locks
+    themselves out by enabling it against a secret their app never received.
+    """
+    secret = mfa.generate_secret()
+    auth.set_totp_secret(user["id"], secret, enabled=False)
+    audit.record("auth.mfa.enroll_start", actor=user, client_ip=_ip(request))
+    return {
+        "secret": secret,
+        "otpauth_uri": mfa.provisioning_uri(secret, account=user["username"]),
+        "digits": mfa.TOTP_DIGITS,
+        "period": mfa.TOTP_STEP_SEC,
+    }
+
+
+@router.post("/auth/mfa/verify")
+async def mfa_verify(request: Request, body: MfaVerifyIn,
+                     user: dict = Depends(auth.current_user)) -> dict:
+    """Confirm enrolment by proving a valid code, which switches MFA on."""
+    secret = auth.get_totp_secret(user["id"])
+    if not secret:
+        raise HTTPException(status.HTTP_400_BAD_REQUEST,
+                            "no enrolment in progress — call /auth/mfa/enroll first")
+    if not mfa.verify(secret, body.code, user_id=user["id"]):
+        audit.record("auth.mfa.enroll_verify", actor=user, outcome="deny",
+                     client_ip=_ip(request))
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, "invalid code")
+    auth.set_totp_secret(user["id"], secret, enabled=True)
+    audit.record("auth.mfa.enabled", actor=user, client_ip=_ip(request))
+    return {"ok": True, "mfa_enabled": True}
+
+
+@router.post("/auth/mfa/disable")
+async def mfa_disable(request: Request, body: MfaVerifyIn,
+                      user: dict = Depends(auth.current_user)) -> dict:
+    """Turn MFA off. Requires a current code — otherwise anyone holding a
+    stolen token could strip the second factor off the account.
+    """
+    secret = auth.get_totp_secret(user["id"])
+    if not secret or not mfa.verify(secret, body.code, user_id=user["id"]):
+        audit.record("auth.mfa.disable", actor=user, outcome="deny", client_ip=_ip(request))
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, "invalid code")
+    auth.clear_totp_secret(user["id"])
+    audit.record("auth.mfa.disabled", actor=user, client_ip=_ip(request))
+    return {"ok": True, "mfa_enabled": False}
 
 
 @router.get("/auth/me")
@@ -93,7 +215,7 @@ class BuildEHRIn(BaseModel):
 
 @router.post("/ehr/build")
 async def ehr_build(body: BuildEHRIn,
-                    user: dict = Depends(auth.current_user)) -> dict:
+                    user: dict = Depends(rbac.require("ehr.write"))) -> dict:
     from tools.ehr import _EHR_SYS_EN, _EHR_SYS_FA, _extract_json
 
     if not body.patient_info.strip():
@@ -117,25 +239,41 @@ async def ehr_build(body: BuildEHRIn,
 
 
 @router.get("/ehr")
-async def ehr_list(user: dict = Depends(auth.current_user)) -> dict:
-    return {"records": store.list_patients(owner_user_id=user["id"])}
+async def ehr_list(request: Request,
+                   user: dict = Depends(rbac.require("ehr.read"))) -> dict:
+    records = store.list_patients(owner_user_id=user["id"])
+    audit.record("ehr.list", actor=user, client_ip=_ip(request),
+                 detail={"count": len(records)})
+    return {"records": records}
 
 
 @router.get("/ehr/{patient_id}")
-async def ehr_get(patient_id: str,
-                  user: dict = Depends(auth.current_user)) -> dict:
+async def ehr_get(patient_id: str, request: Request,
+                  user: dict = Depends(rbac.require("ehr.read"))) -> dict:
     rec = store.get_patient(patient_id, owner_user_id=user["id"])
     if rec is None:
+        # Audited as a denial: a miss here is either a typo or someone probing
+        # for another owner's record id, and both are worth having on record.
+        audit.record("ehr.read", actor=user, resource=f"patient:{patient_id}",
+                     outcome="deny", client_ip=_ip(request),
+                     detail={"reason": "not_found_or_not_owned"})
         raise HTTPException(404, "patient not found")
+    audit.record("ehr.read", actor=user, resource=f"patient:{patient_id}",
+                 client_ip=_ip(request))
     return {"patient_id": patient_id, "record": rec}
 
 
 @router.delete("/ehr/{patient_id}")
-async def ehr_delete(patient_id: str,
-                     user: dict = Depends(auth.current_user)) -> dict:
+async def ehr_delete(patient_id: str, request: Request,
+                     user: dict = Depends(rbac.require("ehr.delete"))) -> dict:
     ok = store.delete_patient(patient_id, owner_user_id=user["id"])
     if not ok:
+        audit.record("ehr.delete", actor=user, resource=f"patient:{patient_id}",
+                     outcome="deny", client_ip=_ip(request),
+                     detail={"reason": "not_found_or_not_owned"})
         raise HTTPException(404, "patient not found")
+    audit.record("ehr.delete", actor=user, resource=f"patient:{patient_id}",
+                 client_ip=_ip(request))
     return {"ok": True}
 
 
@@ -146,7 +284,7 @@ class RecordDoseIn(BaseModel):
 
 @router.post("/ehr/{patient_id}/dose")
 async def ehr_record_dose(patient_id: str, body: RecordDoseIn,
-                          user: dict = Depends(auth.current_user)) -> dict:
+                          user: dict = Depends(rbac.require("ehr.write"))) -> dict:
     import time as _time
     rec = store.get_patient(patient_id, owner_user_id=user["id"])
     if rec is None:
@@ -177,7 +315,7 @@ class CheckIn(BaseModel):
 
 @router.post("/alerts/check")
 async def alerts_check(body: CheckIn,
-                       user: dict = Depends(auth.current_user)) -> dict:
+                       user: dict = Depends(rbac.require("alerts.read"))) -> dict:
     from tools.alerts import build_alert_text, compute_due_medications
     rec = store.get_patient(body.patient_id, owner_user_id=user["id"])
     if rec is None:
@@ -199,7 +337,7 @@ class SendAlertIn(BaseModel):
 
 @router.post("/alerts/send")
 async def alerts_send(body: SendAlertIn,
-                      user: dict = Depends(auth.current_user)) -> dict:
+                      user: dict = Depends(rbac.require("alerts.send"))) -> dict:
     from tools.alerts import (build_alert_text, compute_due_medications,
                               send_email, send_sms)
     rec = store.get_patient(body.patient_id, owner_user_id=user["id"])
@@ -228,7 +366,7 @@ async def alerts_send(body: SendAlertIn,
 
 @router.get("/alerts")
 async def alerts_list(patient_id: Optional[str] = None,
-                      user: dict = Depends(auth.current_user)) -> dict:
+                      user: dict = Depends(rbac.require("alerts.read"))) -> dict:
     return {"alerts": store.list_alerts(patient_id=patient_id,
                                         owner_user_id=user["id"])}
 
@@ -263,7 +401,7 @@ async def _run_edu_tool(name: str, **kwargs) -> dict:
 
 @router.post("/education/mcq")
 async def edu_mcq(body: EduIn,
-                  user: dict = Depends(auth.current_user)) -> dict:
+                  user: dict = Depends(rbac.require("education.write"))) -> dict:
     out = await _run_edu_tool("make_mcq", topic=body.topic,
                               language=body.language, count=body.count,
                               difficulty=body.difficulty)
@@ -276,7 +414,7 @@ async def edu_mcq(body: EduIn,
 
 @router.post("/education/case")
 async def edu_case(body: EduIn,
-                   user: dict = Depends(auth.current_user)) -> dict:
+                   user: dict = Depends(rbac.require("education.write"))) -> dict:
     out = await _run_edu_tool("make_case_study", topic=body.topic,
                               language=body.language,
                               difficulty=body.difficulty)
@@ -289,7 +427,7 @@ async def edu_case(body: EduIn,
 
 @router.post("/education/exam")
 async def edu_exam(body: EduIn,
-                   user: dict = Depends(auth.current_user)) -> dict:
+                   user: dict = Depends(rbac.require("education.write"))) -> dict:
     out = await _run_edu_tool("make_mock_exam", topic=body.topic,
                               language=body.language,
                               mcq_count=body.count,
@@ -309,7 +447,7 @@ class ExplainIn(BaseModel):
 
 @router.post("/education/explain")
 async def edu_explain(body: ExplainIn,
-                      user: dict = Depends(auth.current_user)) -> dict:
+                      user: dict = Depends(rbac.require("education.write"))) -> dict:
     """Prefer MedicalRAG for grounded explanations; fall back to core LLM."""
     from integrations.medrag_client import MedragClient, MedragError, get_medrag_client
 
@@ -359,7 +497,7 @@ class KnowledgeAskIn(BaseModel):
 
 @router.post("/knowledge/ask")
 async def knowledge_ask(body: KnowledgeAskIn,
-                        user: dict = Depends(auth.current_user)) -> dict:
+                        user: dict = Depends(rbac.require("knowledge.read"))) -> dict:
     """Proxy medical knowledge questions to MedicalRAG POST /ask."""
     from integrations.medrag_client import MedragClient, MedragError, get_medrag_client
     from clinical_safety import enrich_text_payload
@@ -413,7 +551,7 @@ class EhrAskIn(BaseModel):
 
 @router.post("/ehr/{patient_id}/ask")
 async def ehr_ask(patient_id: str, body: EhrAskIn,
-                  user: dict = Depends(auth.current_user)) -> dict:
+                  user: dict = Depends(rbac.require("ehr.read"))) -> dict:
     """Q&A about a stored EHR via MedicalRAG (context prepended into query).
 
     Structured EHR *build* remains on the core LLM (``POST /ehr/build``).
@@ -471,7 +609,7 @@ async def ehr_ask(patient_id: str, body: EhrAskIn,
 
 
 @router.get("/rules")
-async def rules_list(user: dict = Depends(auth.current_user)) -> dict:
+async def rules_list(user: dict = Depends(rbac.require("knowledge.read"))) -> dict:
     """Read-only Rule Engine introspection — docs/core/RULE_MODEL_SCHEMA_v1.md.
 
     Lists every rule known to the backend's Rule Engine (safety bank plus
@@ -493,7 +631,7 @@ async def rules_list(user: dict = Depends(auth.current_user)) -> dict:
 
 
 @router.get("/medrag/health")
-async def medrag_health(user: dict = Depends(auth.current_user)) -> dict:
+async def medrag_health(user: dict = Depends(rbac.require("models.read"))) -> dict:
     from integrations.medrag_client import MedragError, get_medrag_client
 
     try:
@@ -504,14 +642,85 @@ async def medrag_health(user: dict = Depends(auth.current_user)) -> dict:
 
 
 @router.get("/education/saved")
-async def edu_saved(user: dict = Depends(auth.current_user)) -> dict:
+async def edu_saved(user: dict = Depends(rbac.require("education.read"))) -> dict:
     return {"items": store.list_quizzes(owner_user_id=user["id"])}
 
 
 @router.get("/education/saved/{quiz_id}")
 async def edu_saved_get(quiz_id: int,
-                        user: dict = Depends(auth.current_user)) -> dict:
+                        user: dict = Depends(rbac.require("education.read"))) -> dict:
     q = store.get_quiz(quiz_id, owner_user_id=user["id"])
     if q is None:
         raise HTTPException(404, "quiz not found")
     return q
+
+
+# ===========================================================================
+# Audit trail (governance)
+# ===========================================================================
+@router.get("/audit")
+async def audit_list(
+    request: Request,
+    limit: int = 100,
+    offset: int = 0,
+    action_prefix: Optional[str] = None,
+    outcome: Optional[str] = None,
+    actor_id: Optional[int] = None,
+    since: Optional[float] = None,
+    user: dict = Depends(rbac.require("audit.read")),
+) -> dict:
+    """Read the audit trail. Restricted to roles granted ``audit.read``
+    (admin only by default) — the trail records who looked at whose record,
+    so unrestricted access to it would itself be a disclosure.
+
+    Reading the trail is *itself* audited, which is the point: an
+    investigator's access to an investigation is part of the record.
+    """
+    rows = audit.query(limit=limit, offset=offset, action_prefix=action_prefix,
+                       outcome=outcome, actor_id=actor_id, since=since)
+    total = audit.count(action_prefix=action_prefix, outcome=outcome,
+                        actor_id=actor_id, since=since)
+    audit.record("audit.read", actor=user, client_ip=_ip(request),
+                 detail={"returned": len(rows), "filters": {
+                     "action_prefix": action_prefix, "outcome": outcome,
+                     "actor_id": actor_id, "since": since}})
+    return {"total": total, "count": len(rows), "offset": offset, "entries": rows}
+
+
+# ===========================================================================
+# FHIR R4 export (interoperability)
+# ===========================================================================
+@router.get("/fhir/Patient/{patient_id}")
+async def fhir_patient(patient_id: str, request: Request,
+                       user: dict = Depends(rbac.require("ehr.read"))) -> dict:
+    """The stored record as a FHIR R4 ``Patient`` resource."""
+    import fhir
+
+    rec = store.get_patient(patient_id, owner_user_id=user["id"])
+    if rec is None:
+        raise HTTPException(404, "patient not found")
+    audit.record("fhir.read", actor=user, resource=f"patient:{patient_id}",
+                 client_ip=_ip(request), detail={"resource_type": "Patient"})
+    return fhir.to_patient(rec, patient_id)
+
+
+@router.get("/fhir/Patient/{patient_id}/$everything")
+async def fhir_everything(patient_id: str, request: Request,
+                          user: dict = Depends(rbac.require("ehr.read"))) -> dict:
+    """The whole record as a FHIR ``Bundle`` — Patient plus Conditions,
+    AllergyIntolerances, MedicationStatements and Observations.
+
+    Named after the standard ``$everything`` operation so FHIR clients find
+    it where they expect. This is a read-only projection of AranMed's
+    internal model, not a FHIR-native store.
+    """
+    import fhir
+
+    rec = store.get_patient(patient_id, owner_user_id=user["id"])
+    if rec is None:
+        raise HTTPException(404, "patient not found")
+    bundle = fhir.to_bundle(rec, patient_id)
+    audit.record("fhir.read", actor=user, resource=f"patient:{patient_id}",
+                 client_ip=_ip(request),
+                 detail={"resource_type": "Bundle", "entries": len(bundle.get("entry", []))})
+    return bundle

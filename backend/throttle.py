@@ -188,6 +188,68 @@ class RedisThrottle(ThrottleBackend):
         except Exception as e:  # noqa: BLE001
             log.warning("throttle: redis clear failed (%s)", e)
 
+    # Server-side Lua so the prune → append → lock decision is one atomic
+    # step. Without this, two simultaneous failed logins can both read the
+    # same count and one increment is lost.
+    _LUA_RECORD_FAILURE = """
+    local raw = redis.call('GET', KEYS[1])
+    local now = tonumber(ARGV[1])
+    local window = tonumber(ARGV[2])
+    local maxatt = tonumber(ARGV[3])
+    local lockout = tonumber(ARGV[4])
+    local attempts = {}
+    local locked_until = 0
+    if raw then
+      local ok, doc = pcall(cjson.decode, raw)
+      if ok and doc then
+        locked_until = tonumber(doc['locked_until']) or 0
+        for _, t in ipairs(doc['attempts'] or {}) do
+          local tv = tonumber(t)
+          if tv and (now - tv) < window then attempts[#attempts + 1] = tv end
+        end
+      end
+    end
+    if locked_until > now then
+      return 1
+    end
+    attempts[#attempts + 1] = now
+    local ttl
+    if #attempts >= maxatt then
+      locked_until = now + lockout
+      attempts = {}
+      ttl = lockout
+    else
+      locked_until = 0
+      ttl = window
+    end
+    local payload = cjson.encode({attempts = attempts, locked_until = locked_until})
+    redis.call('SETEX', KEYS[1], math.max(1, math.floor(ttl)), payload)
+    if locked_until > 0 then return 1 else return 0 end
+    """
+
+    def record_failure_atomic(self, key: str) -> bool:
+        """Returns True when this failure caused (or found) a lockout."""
+        try:
+            script = getattr(self, "_script", None)
+            if script is None:
+                script = self._r.register_script(self._LUA_RECORD_FAILURE)
+                self._script = script
+            res = script(keys=[self._k(key)],
+                        args=[time.time(), WINDOW_SEC, MAX_ATTEMPTS, LOCKOUT_SEC])
+            return bool(int(res or 0))
+        except Exception as e:  # noqa: BLE001
+            log.warning("throttle: redis atomic record_failure failed (%s) — "
+                        "falling back to read-modify-write", e)
+            now = time.time()
+            attempts, _ = self.load(key)
+            attempts = [t for t in attempts if now - t < WINDOW_SEC]
+            attempts.append(now)
+            if len(attempts) >= MAX_ATTEMPTS:
+                self.save(key, [], now + LOCKOUT_SEC)
+                return True
+            self.save(key, attempts, 0.0)
+            return False
+
 
 def _build_backend() -> ThrottleBackend:
     choice = BACKEND_NAME
@@ -248,9 +310,23 @@ def seconds_locked(key: str) -> float:
 
 
 def record_failure(key: str) -> None:
-    """Count a failed attempt; lock the key out once it exceeds the window."""
-    now = time.time()
+    """Count a failed attempt; lock the key out once it exceeds the window.
+
+    Backends that can do the whole read-modify-write atomically implement
+    :meth:`ThrottleBackend.record_failure_atomic` and are used directly —
+    otherwise two simultaneous failures can read the same count and one
+    increment is lost, letting an attacker running parallel requests get
+    slightly more attempts than the policy allows.
+    """
     b = backend()
+    atomic = getattr(b, "record_failure_atomic", None)
+    if atomic is not None:
+        locked = atomic(key)
+        if locked:
+            log.warning("auth: login locked out for %ss (key=%s)", LOCKOUT_SEC, key)
+        return
+
+    now = time.time()
     attempts, _ = b.load(key)
     attempts = [t for t in attempts if now - t < WINDOW_SEC]
     attempts.append(now)

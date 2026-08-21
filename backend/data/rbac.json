@@ -1,0 +1,61 @@
+{
+  "_comment": "Role -> permission grants. Edit this file (not Python) to change who can do what; PROMPTS-style data-driven config, overridable with RBAC_POLICY_FILE. '*' grants everything. A trailing '.*' grants a whole namespace, e.g. 'ehr.*' covers ehr.read/write/delete. Unknown roles get no permissions (deny by default).",
+  "roles": {
+    "admin": ["*"],
+
+    "doctor": [
+      "ehr.*",
+      "alerts.*",
+      "report.*",
+      "knowledge.*",
+      "education.*",
+      "chat.*",
+      "models.read"
+    ],
+
+    "radiologist": [
+      "ehr.read",
+      "report.*",
+      "knowledge.*",
+      "chat.*",
+      "alerts.read",
+      "models.read"
+    ],
+
+    "resident": [
+      "ehr.read",
+      "report.read",
+      "report.write",
+      "knowledge.*",
+      "education.*",
+      "chat.*",
+      "alerts.read",
+      "models.read"
+    ],
+
+    "student": [
+      "knowledge.read",
+      "education.*",
+      "chat.read",
+      "models.read"
+    ]
+  },
+
+  "_permission_notes": {
+    "ehr.read": "List/fetch patient records (still scoped to records the caller owns)",
+    "ehr.write": "Create or update a patient record, record a dose",
+    "ehr.delete": "Delete a patient record",
+    "alerts.read": "View computed due-medication alerts and alert history",
+    "alerts.send": "Actually dispatch an alert to a clinician (email/SMS)",
+    "report.read": "List/fetch report templates",
+    "report.write": "Generate a structured report from a transcript or audio",
+    "knowledge.read": "Ask the MedicalRAG knowledge base",
+    "education.read": "Read saved education content",
+    "education.write": "Generate MCQs, cases, exams, explanations",
+    "chat.read": "Use the chat endpoint",
+    "chat.write": "Use chat paths that can mutate data via tools",
+    "models.read": "Read the model registry / health introspection",
+    "audit.read": "Read the audit trail (admin-only by default)",
+    "users.manage": "Create/modify other user accounts"
+  }
+}

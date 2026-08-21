@@ -68,6 +68,76 @@ oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/api/auth/login", auto_error=Fals
 
 
 # ---------------------------------------------------------------------------
+# Password policy
+# ---------------------------------------------------------------------------
+# Every threshold is configurable: a hospital's policy is theirs to set, and
+# baking one in guarantees it is wrong somewhere. Defaults follow NIST SP
+# 800-63B's shape — length carries most of the strength, so the minimum is
+# 12 and character-class requirements are opt-in rather than mandatory.
+PW_MIN_LENGTH = int(os.environ.get("PASSWORD_MIN_LENGTH", "12"))
+PW_MAX_LENGTH = int(os.environ.get("PASSWORD_MAX_LENGTH", "1024"))
+PW_REQUIRE_UPPER = os.environ.get("PASSWORD_REQUIRE_UPPER", "0").strip().lower() in ("1", "true", "yes", "on")
+PW_REQUIRE_LOWER = os.environ.get("PASSWORD_REQUIRE_LOWER", "0").strip().lower() in ("1", "true", "yes", "on")
+PW_REQUIRE_DIGIT = os.environ.get("PASSWORD_REQUIRE_DIGIT", "0").strip().lower() in ("1", "true", "yes", "on")
+PW_REQUIRE_SYMBOL = os.environ.get("PASSWORD_REQUIRE_SYMBOL", "0").strip().lower() in ("1", "true", "yes", "on")
+PW_BLOCKLIST_FILE = os.environ.get("PASSWORD_BLOCKLIST_FILE", "").strip()
+
+_BUILTIN_WEAK = {
+    "password", "passw0rd", "123456", "12345678", "123456789", "qwerty",
+    "admin", "administrator", "letmein", "welcome", "changeme", "iloveyou",
+    "abc123", "111111", "000000", "aranmed", "hospital", "clinic", "doctor",
+}
+
+
+def _blocklist() -> set[str]:
+    words = set(_BUILTIN_WEAK)
+    if PW_BLOCKLIST_FILE:
+        try:
+            with open(PW_BLOCKLIST_FILE, "r", encoding="utf-8", errors="ignore") as f:
+                words |= {ln.strip().lower() for ln in f if ln.strip()}
+        except OSError as e:
+            log.warning("auth: could not read PASSWORD_BLOCKLIST_FILE (%s)", e)
+    return words
+
+
+def validate_password(password: str, *, username: str = "") -> None:
+    """Raise ``ValueError`` describing the first unmet requirement.
+
+    NIST's guidance is that a long password beats a short one with forced
+    symbol substitutions, and that checking against known-weak values matters
+    more than composition rules — so length and the blocklist are always on,
+    while character-class rules default off and can be enabled per site.
+    """
+    if password is None:
+        raise ValueError("password is required")
+    if len(password) < PW_MIN_LENGTH:
+        raise ValueError(f"password must be at least {PW_MIN_LENGTH} characters")
+    if len(password) > PW_MAX_LENGTH:
+        raise ValueError(f"password must be at most {PW_MAX_LENGTH} characters")
+    if PW_REQUIRE_UPPER and not any(c.isupper() for c in password):
+        raise ValueError("password must contain an uppercase letter")
+    if PW_REQUIRE_LOWER and not any(c.islower() for c in password):
+        raise ValueError("password must contain a lowercase letter")
+    if PW_REQUIRE_DIGIT and not any(c.isdigit() for c in password):
+        raise ValueError("password must contain a digit")
+    if PW_REQUIRE_SYMBOL and password.isalnum():
+        raise ValueError("password must contain a symbol")
+
+    lowered = password.strip().lower()
+    blocked = _blocklist()
+    if lowered in blocked:
+        raise ValueError("password is too common — choose something less guessable")
+    # "admin12345678" and "password2026" are a blocklisted word with padding,
+    # not new passwords. Strip the padding and check the core word too,
+    # otherwise the blocklist is trivially defeated by appending digits.
+    core = "".join(ch for ch in lowered if ch.isalpha())
+    if core and core in blocked:
+        raise ValueError("password is too common — choose something less guessable")
+    if username and username.strip().lower() and username.strip().lower() in lowered:
+        raise ValueError("password must not contain the username")
+
+
+# ---------------------------------------------------------------------------
 # Password hashing
 # ---------------------------------------------------------------------------
 def hash_password(password: str) -> str:
@@ -105,8 +175,11 @@ def _b64d(s: str) -> bytes:
 
 def create_token(payload: dict) -> str:
     header = {"alg": "HS256", "typ": "JWT"}
+    # jti makes a specific token revocable. Without it, "log out everywhere"
+    # can only be done by rotating the signing secret, which logs out everyone.
     payload = {"iat": int(time.time()),
-               "exp": int(time.time()) + TOKEN_TTL_SEC, **payload}
+               "exp": int(time.time()) + TOKEN_TTL_SEC,
+               "jti": secrets.token_urlsafe(12), **payload}
     h = _b64(json.dumps(header, separators=(",", ":")).encode("utf-8"))
     p = _b64(json.dumps(payload, separators=(",", ":")).encode("utf-8"))
     sig = _b64(hmac.new(SECRET.encode("utf-8"),
@@ -128,7 +201,60 @@ def decode_token(token: str) -> dict:
     payload = json.loads(_b64d(p))
     if payload.get("exp", 0) < time.time():
         raise ValueError("token expired")
+    jti = payload.get("jti")
+    if jti and is_token_revoked(jti):
+        raise ValueError("token revoked")
     return payload
+
+
+# ---------------------------------------------------------------------------
+# Token revocation
+# ---------------------------------------------------------------------------
+def is_token_revoked(jti: str) -> bool:
+    try:
+        with db.connect() as c:
+            row = c.execute("SELECT 1 FROM revoked_tokens WHERE jti=?", (jti,)).fetchone()
+        return row is not None
+    except Exception as e:  # noqa: BLE001
+        # Fail *closed*: if the revocation list can't be consulted we cannot
+        # prove the token is still valid, and a revoked-but-accepted token is
+        # the worse outcome than a spurious 401.
+        log.error("auth: revocation check failed (%s) — rejecting token", e)
+        return True
+
+
+def revoke_token(payload: dict, *, reason: str = "logout") -> bool:
+    """Revoke the token described by *payload* (a decoded token). Returns
+    False when the token carries no jti (issued before revocation existed).
+    """
+    jti = payload.get("jti")
+    if not jti:
+        return False
+    try:
+        with db.connect() as c:
+            c.execute(
+                "INSERT OR IGNORE INTO revoked_tokens (jti, user_id, revoked_at, expires_at, reason) "
+                "VALUES (?,?,?,?,?)",
+                (jti, int(payload.get("sub") or 0) or None, time.time(),
+                 float(payload.get("exp") or 0), reason),
+            )
+        return True
+    except Exception as e:  # noqa: BLE001
+        log.error("auth: failed to revoke token %s: %s", jti, e)
+        return False
+
+
+def purge_expired_revocations() -> int:
+    """Drop revocation rows whose token has expired anyway. Safe to run on a
+    schedule; an expired token is rejected on its own merits.
+    """
+    try:
+        with db.connect() as c:
+            cur = c.execute("DELETE FROM revoked_tokens WHERE expires_at < ?", (time.time(),))
+            return cur.rowcount
+    except Exception as e:  # noqa: BLE001
+        log.warning("auth: purge_expired_revocations failed: %s", e)
+        return 0
 
 
 # ---------------------------------------------------------------------------
@@ -144,8 +270,7 @@ def create_user(*, username: str, password: str, email: str | None = None,
     username = username.strip().lower()
     if not username or len(username) < 3:
         raise ValueError("username must be at least 3 characters")
-    if len(password) < 6:
-        raise ValueError("password must be at least 6 characters")
+    validate_password(password, username=username)
     if role not in ("doctor", "student", "resident", "admin", "radiologist"):
         raise ValueError("invalid role")
     with db.connect() as c:
@@ -175,7 +300,27 @@ def authenticate(*, username: str, password: str) -> dict | None:
         return None
     if not verify_password(password, row["password_hash"]):
         return None
-    return _user_to_dict(row)
+    user = _user_to_dict(row)
+    # The bootstrap password file has served its purpose the moment its owner
+    # signs in; leaving a plaintext credential on disk indefinitely is the
+    # thing that turns a convenience into a liability.
+    _consume_admin_credentials_file(user["username"])
+    return user
+
+
+def _consume_admin_credentials_file(username: str) -> None:
+    path = _admin_credentials_path()
+    try:
+        if not path.is_file():
+            return
+        content = path.read_text(encoding="utf-8", errors="ignore")
+        if f"username: {username}" not in content:
+            return  # belongs to a different account; leave it alone
+        path.unlink()
+        log.warning("auth: deleted bootstrap credentials file %s after first "
+                    "successful sign-in as %r", path, username)
+    except OSError as e:
+        log.warning("auth: could not remove bootstrap credentials file %s: %s", path, e)
 
 
 def get_user(user_id: int) -> dict | None:
@@ -250,7 +395,8 @@ def ensure_default_admin(*, username: str = "admin",
         path.write_text(
             f"username: {username}\npassword: {secret}\n\n"
             "Generated on first start because ASR_AGENT_ADMIN_PASSWORD was not set.\n"
-            "Sign in, change the password, then delete this file.\n",
+            "This file is deleted automatically on the first successful sign-in\n"
+            "as this user, so read it now. Change the password afterwards.\n",
             encoding="utf-8",
         )
         os.chmod(path, 0o600)
@@ -274,13 +420,36 @@ def _admin_credentials_path() -> Path:
 
 
 def _user_to_dict(row) -> dict:
+    keys = row.keys()
     return {
         "id": row["id"],
         "username": row["username"],
         "email": row["email"],
         "role": row["role"],
         "created_at": row["created_at"],
+        # Never expose totp_secret — this dict is returned to clients.
+        "mfa_enabled": bool(row["mfa_enabled"]) if "mfa_enabled" in keys else False,
     }
+
+
+# ---------------------------------------------------------------------------
+# TOTP secret storage (see backend/mfa.py for the algorithm)
+# ---------------------------------------------------------------------------
+def get_totp_secret(user_id: int) -> str | None:
+    with db.connect() as c:
+        row = c.execute("SELECT totp_secret FROM users WHERE id=?", (user_id,)).fetchone()
+    return (row["totp_secret"] if row else None) or None
+
+
+def set_totp_secret(user_id: int, secret: str, *, enabled: bool) -> None:
+    with db.connect() as c:
+        c.execute("UPDATE users SET totp_secret=?, mfa_enabled=? WHERE id=?",
+                  (secret, 1 if enabled else 0, user_id))
+
+
+def clear_totp_secret(user_id: int) -> None:
+    with db.connect() as c:
+        c.execute("UPDATE users SET totp_secret=NULL, mfa_enabled=0 WHERE id=?", (user_id,))
 
 
 # ---------------------------------------------------------------------------
