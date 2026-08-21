@@ -1,0 +1,60 @@
+{
+  "_comment": "Terminology bindings for the FHIR export. Maps free-text clinical terms (as dictated) onto coded concepts. Data, not code: edit this file or point TERMINOLOGY_FILE elsewhere. Matching is case-insensitive on a normalised form; 'aliases' lists alternative spellings, including Persian. Anything unmatched stays a text-only CodeableConcept rather than being guessed at.",
+
+  "condition": {
+    "system": "http://snomed.info/sct",
+    "concepts": [
+      {"code": "36971009", "display": "Sinusitis", "aliases": ["sinusitis", "acute sinusitis", "chronic sinusitis", "سینوزیت"]},
+      {"code": "38341003", "display": "Hypertensive disorder", "aliases": ["hypertension", "htn", "high blood pressure", "فشار خون بالا"]},
+      {"code": "73211009", "display": "Diabetes mellitus", "aliases": ["diabetes", "diabetes mellitus", "dm", "دیابت"]},
+      {"code": "195967001", "display": "Asthma", "aliases": ["asthma", "آسم"]},
+      {"code": "13645005", "display": "Chronic obstructive lung disease", "aliases": ["copd", "chronic obstructive pulmonary disease"]},
+      {"code": "44054006", "display": "Type 2 diabetes mellitus", "aliases": ["type 2 diabetes", "t2dm", "niddm"]},
+      {"code": "233604007", "display": "Pneumonia", "aliases": ["pneumonia", "ذات الریه"]},
+      {"code": "22298006", "display": "Myocardial infarction", "aliases": ["myocardial infarction", "mi", "heart attack", "سکته قلبی"]},
+      {"code": "230690007", "display": "Cerebrovascular accident", "aliases": ["stroke", "cva", "cerebrovascular accident", "سکته مغزی"]},
+      {"code": "197480006", "display": "Renal calculus", "aliases": ["kidney stone", "renal calculus", "nephrolithiasis", "سنگ کلیه"]},
+      {"code": "197321007", "display": "Steatosis of liver", "aliases": ["fatty liver", "hepatic steatosis", "کبد چرب"]},
+      {"code": "266569009", "display": "Cholelithiasis", "aliases": ["gallstone", "gallstones", "cholelithiasis", "سنگ کیسه صفرا"]},
+      {"code": "40733004", "display": "Infectious disease", "aliases": ["infection"]},
+      {"code": "363346000", "display": "Malignant neoplastic disease", "aliases": ["cancer", "malignancy", "سرطان"]}
+    ]
+  },
+
+  "allergy": {
+    "system": "http://snomed.info/sct",
+    "concepts": [
+      {"code": "373270004", "display": "Penicillin", "aliases": ["penicillin", "penicillins", "پنی سیلین"]},
+      {"code": "387207008", "display": "Ibuprofen", "aliases": ["ibuprofen", "brufen"]},
+      {"code": "387458008", "display": "Aspirin", "aliases": ["aspirin", "asa", "acetylsalicylic acid", "آسپرین"]},
+      {"code": "764146007", "display": "Sulfonamide", "aliases": ["sulfa", "sulfonamide", "sulphonamide"]},
+      {"code": "111088007", "display": "Latex", "aliases": ["latex", "لاتکس"]},
+      {"code": "227493005", "display": "Cashew nut", "aliases": ["cashew"]},
+      {"code": "256349002", "display": "Peanut", "aliases": ["peanut", "peanuts", "بادام زمینی"]},
+      {"code": "412583005", "display": "Bee venom", "aliases": ["bee sting", "bee venom"]},
+      {"code": "1912002", "display": "Iodinated contrast media", "aliases": ["contrast", "iodinated contrast", "contrast media", "ماده حاجب"]}
+    ]
+  },
+
+  "medication": {
+    "system": "http://www.nlm.nih.gov/research/umls/rxnorm",
+    "concepts": [
+      {"code": "723", "display": "Amoxicillin", "aliases": ["amoxicillin", "amoxil", "آموکسی سیلین"]},
+      {"code": "1191", "display": "Aspirin", "aliases": ["aspirin", "asa", "آسپرین"]},
+      {"code": "5640", "display": "Ibuprofen", "aliases": ["ibuprofen", "brufen"]},
+      {"code": "161", "display": "Acetaminophen", "aliases": ["acetaminophen", "paracetamol", "استامینوفن"]},
+      {"code": "6809", "display": "Metformin", "aliases": ["metformin", "متفورمین"]},
+      {"code": "29046", "display": "Lisinopril", "aliases": ["lisinopril"]},
+      {"code": "36567", "display": "Simvastatin", "aliases": ["simvastatin"]},
+      {"code": "83367", "display": "Atorvastatin", "aliases": ["atorvastatin", "lipitor", "آتورواستاتین"]},
+      {"code": "8787", "display": "Prednisolone", "aliases": ["prednisolone", "پردنیزولون"]},
+      {"code": "7646", "display": "Omeprazole", "aliases": ["omeprazole", "امپرازول"]},
+      {"code": "2551", "display": "Ciprofloxacin", "aliases": ["ciprofloxacin", "cipro", "سیپروفلوکساسین"]},
+      {"code": "18631", "display": "Azithromycin", "aliases": ["azithromycin", "zithromax", "آزیترومایسین"]},
+      {"code": "4450", "display": "Furosemide", "aliases": ["furosemide", "lasix", "فوروزماید"]},
+      {"code": "1998", "display": "Ceftriaxone", "aliases": ["ceftriaxone", "سفتریاکسون"]},
+      {"code": "11289", "display": "Warfarin", "aliases": ["warfarin", "coumadin", "وارفارین"]},
+      {"code": "5224", "display": "Heparin", "aliases": ["heparin", "هپارین"]}
+    ]
+  }
+}

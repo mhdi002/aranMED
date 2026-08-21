@@ -48,6 +48,17 @@ RUN python -m pip install --upgrade pip wheel \
     && pip install -r /app/backend/requirements.txt \
     && python -c "import torch; import transformers; print('torch', torch.__version__, 'cuda', torch.cuda.is_available())"
 
+# Security dependencies live in their own layer, deliberately AFTER the heavy
+# one above. Appending to backend/requirements.txt invalidates that layer and
+# forces a full torch reinstall (~2GB) on every rebuild — which is both slow
+# and a real failure mode when the network hiccups mid-download. Adding one
+# here costs seconds instead.
+#   cryptography -> backend/phi_crypto.py, AES-256-GCM for PHI at rest.
+#     Stdlib has no AEAD and hand-rolling a cipher is not acceptable, so this
+#     is the one place the project takes a crypto dependency.
+RUN pip install --no-cache-dir "cryptography>=43.0.0" \
+    && python -c "from cryptography.hazmat.primitives.ciphers.aead import AESGCM; print('cryptography OK')"
+
 COPY backend /app/backend
 COPY scripts /app/scripts
 
@@ -64,7 +75,22 @@ HEALTHCHECK --interval=30s --timeout=10s --start-period=120s --retries=3 \
 # of an 8 GB card). Scale out with container replicas behind the gateway
 # instead — see docs/core/DEPLOYMENT.md — or raise BACKEND_WORKERS on a host
 # with VRAM to spare.
-CMD ["sh", "-c", "python -m uvicorn app:app --host ${HOST:-0.0.0.0} --port ${PORT:-8010} --workers ${BACKEND_WORKERS:-1} --backlog ${BACKEND_BACKLOG:-2048}"]
+# BACKEND_TLS_ENABLED=1 makes the backend serve HTTPS directly, for
+# deployments where the gateway->backend hop must also be encrypted (see
+# docs/core/SECURITY.md). Off by default: the hop is a private compose
+# network behind the terminator, and adding TLS there costs a handshake per
+# connection for no gain when that network is trusted.
+CMD ["sh", "-c", "\
+if [ \"${BACKEND_TLS_ENABLED:-0}\" = \"1\" ]; then \
+  echo 'backend: serving HTTPS (BACKEND_TLS_ENABLED=1)'; \
+  exec python -m uvicorn app:app --host ${HOST:-0.0.0.0} --port ${PORT:-8010} \
+       --workers ${BACKEND_WORKERS:-1} --backlog ${BACKEND_BACKLOG:-2048} \
+       --ssl-keyfile ${BACKEND_TLS_KEY:-/etc/aranmed/certs/tls.key} \
+       --ssl-certfile ${BACKEND_TLS_CERT:-/etc/aranmed/certs/tls.crt}; \
+else \
+  exec python -m uvicorn app:app --host ${HOST:-0.0.0.0} --port ${PORT:-8010} \
+       --workers ${BACKEND_WORKERS:-1} --backlog ${BACKEND_BACKLOG:-2048}; \
+fi"]
 
 
 # ── MedicalRAG (Knowledge Engine microservice) ───────────────────────────────

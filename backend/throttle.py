@@ -145,6 +145,65 @@ class SqliteThrottle(ThrottleBackend):
         except Exception as e:  # noqa: BLE001
             log.warning("throttle: sqlite clear failed (%s)", e)
 
+    def record_failure_atomic(self, key: str) -> bool:
+        """Read-modify-write inside a single write transaction.
+
+        ``BEGIN IMMEDIATE`` takes the write lock up front, so two concurrent
+        failed logins cannot both read the same count and have one increment
+        lost — the second waits (up to ``DB_BUSY_TIMEOUT_MS``) and then sees
+        the first one's result. Returns True when this failure caused, or
+        found, a lockout.
+        """
+        import db
+        now = time.time()
+        try:
+            conn = db.connect()
+            try:
+                # isolation_level=None means autocommit, so the transaction
+                # boundary is explicit here rather than implied by the driver.
+                conn.execute("BEGIN IMMEDIATE")
+                row = conn.execute(
+                    "SELECT attempts, locked_until FROM login_throttle WHERE key=?",
+                    (key,),
+                ).fetchone()
+                attempts: list[float] = []
+                locked_until = 0.0
+                if row is not None:
+                    locked_until = float(row["locked_until"] or 0.0)
+                    attempts = [float(t) for t in (db.loads_json(row["attempts"]) or [])
+                                if now - float(t) < WINDOW_SEC]
+                if locked_until > now:
+                    conn.execute("COMMIT")
+                    return True
+                attempts.append(now)
+                if len(attempts) >= MAX_ATTEMPTS:
+                    locked_until, attempts = now + LOCKOUT_SEC, []
+                else:
+                    locked_until = 0.0
+                conn.execute(
+                    """INSERT INTO login_throttle (key, attempts, locked_until, updated_at)
+                       VALUES (?,?,?,?)
+                       ON CONFLICT(key) DO UPDATE SET
+                         attempts=excluded.attempts,
+                         locked_until=excluded.locked_until,
+                         updated_at=excluded.updated_at""",
+                    (key, db.dumps_json(attempts), locked_until, now),
+                )
+                conn.execute("COMMIT")
+                return locked_until > 0
+            except Exception:
+                try:
+                    conn.execute("ROLLBACK")
+                except Exception:  # noqa: BLE001
+                    pass
+                raise
+            finally:
+                conn.close()
+        except Exception as e:  # noqa: BLE001
+            log.warning("throttle: sqlite atomic record_failure failed (%s); "
+                        "attempt not recorded", e)
+            return False
+
 
 class RedisThrottle(ThrottleBackend):
     """Shared counters via Redis. Entries expire on their own."""

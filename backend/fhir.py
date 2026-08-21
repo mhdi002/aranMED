@@ -14,12 +14,14 @@ Scope, stated plainly:
   and ``$everything`` are what exist.
 * **Mapped resources:** Patient, Condition, AllergyIntolerance,
   MedicationStatement, Observation (vitals).
-* **Terminology is partial.** Vitals carry proper LOINC codes because those
-  are stable and few. Conditions, allergies and medications are emitted as
-  ``text``-only ``CodeableConcept``s — the source is dictated free text, and
-  inventing SNOMED/RxNorm codes from it would fabricate clinical precision
-  the data does not have. A terminology-server binding is the correct fix and
-  is not attempted here.
+* **Terminology is bound conservatively.** Vitals carry LOINC codes because
+  those are stable and few. Conditions, allergies and medications are looked
+  up in ``backend/data/terminology.json`` (SNOMED CT / RxNorm) via
+  :mod:`terminology`; a term that is not bound stays a ``text``-only
+  ``CodeableConcept`` rather than being guessed at, because a wrong code
+  asserts a clinical fact nobody stated. The dictated wording is always kept
+  in ``.text`` alongside any coding. A terminology *server* would supersede
+  the local file and slot into the same lookup point.
 
 FHIR R4 spec: https://hl7.org/fhir/R4/
 """
@@ -27,6 +29,8 @@ from __future__ import annotations
 
 import hashlib
 from typing import Any, Optional
+
+import terminology
 
 # LOINC codes for the vitals we capture. Small, stable, unambiguous.
 _VITAL_LOINC: dict[str, tuple[str, str, str]] = {
@@ -119,7 +123,7 @@ def to_conditions(record: dict, patient_id: str) -> list[dict]:
             "resourceType": "Condition",
             "id": _stable_id(patient_id, "condition", name),
             "subject": {"reference": f"Patient/{patient_id}"},
-            "code": _text(name),
+            "code": terminology.codeable_concept("condition", name) or _text(name),
         }
         status = (prob.get("status") or "").strip().lower()
         if status in ("active", "resolved"):
@@ -141,7 +145,7 @@ def to_allergies(record: dict, patient_id: str) -> list[dict]:
             "resourceType": "AllergyIntolerance",
             "id": _stable_id(patient_id, "allergy", substance),
             "patient": {"reference": f"Patient/{patient_id}"},
-            "code": _text(substance),
+            "code": terminology.codeable_concept("allergy", substance) or _text(substance),
             "clinicalStatus": {"coding": [{
                 "system": "http://terminology.hl7.org/CodeSystem/allergyintolerance-clinical",
                 "code": "active",
@@ -165,7 +169,8 @@ def to_medication_statements(record: dict, patient_id: str) -> list[dict]:
             "id": _stable_id(patient_id, "medication", name),
             "status": "active",
             "subject": {"reference": f"Patient/{patient_id}"},
-            "medicationCodeableConcept": _text(name),
+            "medicationCodeableConcept": terminology.codeable_concept(
+                "medication", name, allow_substring=True) or _text(name),
         }
 
         dosage: dict[str, Any] = {}

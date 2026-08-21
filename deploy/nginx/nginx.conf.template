@@ -75,7 +75,7 @@ server {
 
     # Cheap backend reads: no rate limit, short timeouts.
     location = /api/health {
-        proxy_pass http://aranmed_backend;
+        proxy_pass ${BACKEND_UPSTREAM_SCHEME}://aranmed_backend;
         proxy_read_timeout ${LB_HEALTH_TIMEOUT};
         access_log off;
     }
@@ -84,18 +84,18 @@ server {
     location ~ ^/api/(transcribe|dictate|report|chat|vision) {
         limit_req  zone=aranmed_ai burst=${LB_AI_BURST} nodelay;
         limit_conn aranmed_conn ${LB_MAX_CONN_PER_IP};
-        proxy_pass http://aranmed_backend;
+        proxy_pass ${BACKEND_UPSTREAM_SCHEME}://aranmed_backend;
         proxy_request_buffering off;   # stream uploads straight through
     }
 
     location /api/ {
         limit_conn aranmed_conn ${LB_MAX_CONN_PER_IP};
-        proxy_pass http://aranmed_backend;
+        proxy_pass ${BACKEND_UPSTREAM_SCHEME}://aranmed_backend;
     }
 
     # Everything else is the Next.js UI (incl. /_next static assets + HMR).
     location / {
-        proxy_pass http://aranmed_frontend;
+        proxy_pass ${FRONTEND_UPSTREAM_SCHEME}://aranmed_frontend;
         proxy_set_header Upgrade    $http_upgrade;
         proxy_set_header Connection $connection_upgrade;
     }

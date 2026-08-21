@@ -1,0 +1,35 @@
+# =============================================================================
+# Encrypt the gateway->backend hop as well as the public one.
+#
+#   docker compose -f docker-compose.yml \
+#                  -f docker-compose.tls.yml \
+#                  -f docker-compose.internal-tls.yml up -d
+#
+# Use when the compose network itself is not trusted — a shared/multi-tenant
+# Docker host, an overlay network spanning machines, or a policy that requires
+# encryption in transit end to end rather than only at the edge.
+#
+# Not the default, deliberately: on a single-host private compose network
+# behind the gateway, this adds a TLS handshake per upstream connection and
+# another certificate to rotate, in exchange for protecting a hop that is
+# already inside the trust boundary. Turn it on when that boundary is real.
+#
+# Certificates: reuses GATEWAY_TLS_CERT_DIR (default deploy/nginx/certs),
+# which the backend now mounts at /etc/aranmed/certs. In production, issue the
+# backend its own certificate from an internal CA rather than sharing the
+# public one — set BACKEND_TLS_CERT / BACKEND_TLS_KEY to point at it.
+#
+# nginx verification: the gateway does not verify the upstream certificate by
+# default (proxy_ssl_verify is off in nginx unless configured). This still
+# defeats passive sniffing on the network; for authenticated upstreams add
+# proxy_ssl_trusted_certificate + proxy_ssl_verify on to the template.
+# See docs/core/SECURITY.md.
+# =============================================================================
+services:
+  backend:
+    environment:
+      BACKEND_TLS_ENABLED: "1"
+
+  gateway:
+    environment:
+      BACKEND_UPSTREAM_SCHEME: "https"

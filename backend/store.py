@@ -12,6 +12,7 @@ import uuid
 from typing import Any
 
 import db
+import phi_crypto
 
 log = logging.getLogger("store")
 
@@ -45,6 +46,15 @@ def upsert_patient(*, owner_user_id: int, data: dict,
                         (pid,)).fetchone()
         created_at = row["created_at"] if row else now
 
+        # `name` is a denormalised copy of data.patient.name kept for listing.
+        # It is PHI in its own right, so when encryption is on it is not
+        # written in the clear -- the display name comes from the decrypted
+        # blob instead (see list_patients). Nothing queries this column.
+        stored_name = "" if phi_crypto.enabled() else name
+        stored_data = phi_crypto.encrypt_json(
+            record, patient_id=pid, owner_user_id=owner_user_id
+        )
+
         c.execute("""
             INSERT INTO patients(id, owner_user_id, name, language, data,
                                  created_at, updated_at)
@@ -54,7 +64,7 @@ def upsert_patient(*, owner_user_id: int, data: dict,
               language=excluded.language,
               data=excluded.data,
               updated_at=excluded.updated_at
-        """, (pid, owner_user_id, name, language, db.dumps_json(record),
+        """, (pid, owner_user_id, stored_name, language, stored_data,
               created_at, now))
     return get_patient(pid, owner_user_id=owner_user_id) or record
 
@@ -71,7 +81,8 @@ def get_patient(patient_id: str, *, owner_user_id: int | None = None) -> dict | 
             ).fetchone()
     if row is None:
         return None
-    rec = db.loads_json(row["data"]) or {}
+    rec = phi_crypto.decrypt_json(row["data"], patient_id=row["id"],
+                                  owner_user_id=row["owner_user_id"]) or {}
     rec.update({"id": row["id"], "language": row["language"],
                 "created_at": row["created_at"],
                 "updated_at": row["updated_at"]})
@@ -81,16 +92,30 @@ def get_patient(patient_id: str, *, owner_user_id: int | None = None) -> dict | 
 def list_patients(*, owner_user_id: int) -> list[dict]:
     with db.connect() as c:
         rows = c.execute(
-            "SELECT id, name, language, updated_at, data "
+            "SELECT id, owner_user_id, name, language, updated_at, data "
             "FROM patients WHERE owner_user_id=? ORDER BY updated_at DESC",
             (owner_user_id,),
         ).fetchall()
     out = []
     for r in rows:
-        d = db.loads_json(r["data"]) or {}
+        try:
+            d = phi_crypto.decrypt_json(r["data"], patient_id=r["id"],
+                                        owner_user_id=r["owner_user_id"]) or {}
+        except ValueError as e:
+            # One unreadable record must not blank the whole list; surface it
+            # as an explicitly broken entry so it is visible rather than
+            # quietly missing from a clinician's patient list.
+            log.error("store: cannot read record %s: %s", r["id"], e)
+            out.append({"id": r["id"], "name": None, "language": r["language"],
+                        "updated_at": r["updated_at"], "medications": 0,
+                        "error": "unreadable"})
+            continue
         meds = d.get("medications") or []
+        # Prefer the decrypted name; fall back to the legacy plaintext column
+        # for rows written before encryption was enabled.
+        name = (d.get("patient") or {}).get("name") or r["name"] or None
         out.append({
-            "id": r["id"], "name": r["name"], "language": r["language"],
+            "id": r["id"], "name": name, "language": r["language"],
             "updated_at": r["updated_at"], "medications": len(meds),
         })
     return out
@@ -107,11 +132,15 @@ def find_patient_by_mrn(mrn: str, *, owner_user_id: int) -> str | None:
         return None
     with db.connect() as c:
         rows = c.execute(
-            "SELECT id, data FROM patients WHERE owner_user_id=?",
+            "SELECT id, owner_user_id, data FROM patients WHERE owner_user_id=?",
             (owner_user_id,),
         ).fetchall()
     for r in rows:
-        d = db.loads_json(r["data"]) or {}
+        try:
+            d = phi_crypto.decrypt_json(r["data"], patient_id=r["id"],
+                                        owner_user_id=r["owner_user_id"]) or {}
+        except ValueError:
+            continue  # unreadable row can't match; logged by list_patients
         existing = ((d.get("patient") or {}).get("mrn") or "").strip().lower()
         if existing and existing == target:
             return r["id"]

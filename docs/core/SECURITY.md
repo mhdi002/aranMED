@@ -188,33 +188,81 @@ and `decode_token` rejects any token listed there. The revocation check
 a revoked-but-accepted token is worse than a spurious 401. Expired rows are
 purged on the background maintenance loop.
 
-## 12. Known limits
+## 12. PHI encryption at rest
+
+Disk encryption protects a stolen laptop; it does nothing once the machine is
+running, a database file is copied out, or a backup lands somewhere it should
+not. `backend/phi_crypto.py` encrypts the patient payload itself, so the
+SQLite file, its WAL, and any backup carry ciphertext while the key lives
+outside the database.
+
+- **AES-256-GCM** via `cryptography` — the one place the project takes a
+  crypto dependency, because stdlib has no AEAD and hand-rolling a cipher is
+  the mistake this module exists to avoid.
+- **Per-record random nonce.** GCM's security collapses under nonce reuse.
+- **AAD binds ciphertext to its row.** Patient id and owner id are
+  authenticated, so a blob moved between rows fails to decrypt rather than
+  silently swapping records.
+- **Key ids allow rotation.** The first key in `PHI_ENCRYPTION_KEYS` encrypts
+  new writes; the rest stay available for decryption.
+- **A missing key refuses rather than returning nothing.** Silently yielding
+  an empty record would read as "this patient has no medications", which is a
+  dangerous thing to be wrong about.
+- **The denormalised `patients.name` column is PHI too** and is left empty
+  once encryption is on; the display name comes from the decrypted record.
+
+Enabling it needs no migration — existing plaintext rows stay readable and are
+encrypted on next write. To convert everything at once (this also clears any
+leftover plaintext name columns):
+
+```bash
+docker compose exec backend python -c \
+  "import sys;sys.path.insert(0,'/app/backend');import phi_crypto;print(phi_crypto.reencrypt_all())"
+```
+
+**Losing the key means losing the data.** Back it up wherever your other
+secrets live, not next to the database it protects.
+
+## 13. Internal TLS (gateway → backend)
+
+The public hop is covered by §4. To encrypt the gateway→backend hop as well:
+
+```bash
+docker compose -f docker-compose.yml -f docker-compose.tls.yml \
+               -f docker-compose.internal-tls.yml up -d
+```
+
+The backend then serves HTTPS directly (uvicorn `--ssl-*`) and the gateway
+proxies to `https://`. Off by default: on a single-host private compose
+network behind the terminator it adds a handshake per upstream connection and
+another certificate to rotate, protecting a hop already inside the trust
+boundary. Turn it on when that boundary is real — a shared Docker host, an
+overlay network spanning machines, or a policy requiring encryption in transit
+end to end.
+
+Note the gateway does not verify the upstream certificate by default. That
+still defeats passive sniffing; for authenticated upstreams add
+`proxy_ssl_trusted_certificate` and `proxy_ssl_verify on` to the template.
+
+## 14. Known limits
 
 Bounded and deliberate, listed so nobody assumes otherwise:
 
-- **Gateway→upstream traffic is plaintext** on the compose network (see §4).
-- **SQLite still serialises writers.** WAL and the off-loop flush removed the
-  blocking reads and the event-loop stall, not the single-writer property. At
-  sustained high write volume the answer is Postgres — worth measuring first.
-- **Throttle counters are shared but Redis's path was made atomic via Lua;
-  the SQLite path is still read-modify-write.** Two simultaneous failures can
-  count as one there. Irrelevant to the lockout guarantee at these thresholds.
-- **PHI is not encrypted at rest.** Disk/volume encryption is the deployment's
-  responsibility today; application-level field encryption is not implemented.
-- **No DICOM/PACS or HL7v2 integration.** FHIR export (§13) is a read-only
-  projection, not a FHIR-native store or a full RESTful FHIR server.
-- **The generated credentials file is plaintext on disk** until first sign-in,
-  which now deletes it automatically.
-
-## 13. FHIR export
-
-`GET /api/fhir/Patient/{id}` and `/$everything` project the internal record
-into FHIR R4 (Patient, Condition, AllergyIntolerance, MedicationStatement,
-Observation). Vitals carry real LOINC codes and UCUM units; blood pressure is
-a proper two-component panel; dosing intervals become FHIR timing.
-
-Conditions, allergies and medications are emitted as `text`-only
-`CodeableConcept`s. The source is dictated free text, and minting
-SNOMED/RxNorm codes from it would fabricate clinical precision the data does
-not have. Binding a terminology server is the correct fix and is not
-attempted here.
+- **SQLite still serialises writers.** WAL, the off-loop flush, and the
+  `BEGIN IMMEDIATE` throttle path removed the blocking reads, the event-loop
+  stall, and the lost-update race — not the single-writer property. At
+  sustained high write volume the answer is Postgres, which is a genuine
+  storage-layer change (dialect differences across every module that touches
+  `db.connect`) and is worth measuring before building.
+- **No DICOM/PACS or HL7v2 integration.** The FHIR export is a read-only
+  projection, not a FHIR-native store, a full RESTful FHIR server, or an
+  imaging-workflow integration.
+- **Terminology coverage is a starter set,** not a full SNOMED/RxNorm
+  distribution. Unbound terms stay text-only by design; a terminology server
+  is the correct answer at scale and slots into the same lookup point.
+- **Token revocation is a deny-list, not a session store.** It answers "was
+  this token revoked", not "which sessions does this user have open".
+- **Audit retention is manual.** `purge_older_than` exists; scheduling it
+  against a retention policy (HIPAA asks for six years) is an operator task.
+- **No MFA recovery codes.** Losing the authenticator means an admin must
+  clear `totp_secret` for that account.

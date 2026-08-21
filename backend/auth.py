@@ -310,6 +310,8 @@ def authenticate(*, username: str, password: str) -> dict | None:
 
 def _consume_admin_credentials_file(username: str) -> None:
     path = _admin_credentials_path()
+    if path is None:
+        return
     try:
         if not path.is_file():
             return
@@ -389,6 +391,17 @@ def ensure_default_admin(*, username: str = "admin",
         return
 
     path = _admin_credentials_path()
+    if path is None:
+        # Explicitly opted out of writing a credential to disk: emit it once
+        # and never persist it. Whoever is watching the boot log gets one
+        # chance to capture it, which is the point.
+        log.warning(
+            "No ASR_AGENT_ADMIN_PASSWORD set and ADMIN_CREDENTIALS_FILE is disabled — "
+            "generated password for %r (shown once, not stored anywhere): %s",
+            username, secret,
+        )
+        return
+
     written = False
     try:
         path.parent.mkdir(parents=True, exist_ok=True)
@@ -412,8 +425,17 @@ def ensure_default_admin(*, username: str = "admin",
     )
 
 
-def _admin_credentials_path() -> Path:
+def _admin_credentials_path() -> Path | None:
+    """Where to write the bootstrap password, or None to never write it.
+
+    Set ``ADMIN_CREDENTIALS_FILE`` to ``none``/``off``/``-`` to keep the
+    generated password off disk entirely; it is then logged once and nowhere
+    else. The default writes a 0600 file that deletes itself on first
+    successful sign-in.
+    """
     override = os.environ.get("ADMIN_CREDENTIALS_FILE", "").strip()
+    if override.lower() in ("none", "off", "false", "0", "-"):
+        return None
     if override:
         return Path(override)
     return db.get_db_path().parent / "initial-admin-password.txt"
