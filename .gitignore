@@ -78,3 +78,8 @@ reports/*.zip
 .DS_Store
 Thumbs.db
 Desktop.ini
+
+# SQLite WAL sidecars — created when DB_JOURNAL_MODE=WAL. Runtime state, and
+# committing them alongside a stale app.db would corrupt the pair.
+*.db-wal
+*.db-shm
