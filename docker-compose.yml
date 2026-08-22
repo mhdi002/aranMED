@@ -228,6 +228,10 @@ services:
       # Local snapshot mounted above (see backend's LOCAL_MODELS_DIR comment);
       # falls back to the HF hub id if not present.
       WHISPER_MODEL_DIR: "${DOCKER_WHISPER_MODEL_DIR:-/app/models/whisper-large-v3}"
+      # Used when the path above holds no weights — which is the normal case
+      # on a host that never pre-downloaded a snapshot and relies on the
+      # shared hf-cache volume instead.
+      WHISPER_HUB_MODEL_ID: "${WHISPER_HUB_MODEL_ID:-openai/whisper-large-v3}"
       # CPU by default: the GPU is already shared by backend's hf_asr and
       # medrag's local embeddings on an 8GB card. Set cuda if you have VRAM
       # to spare and want this replica to genuinely add throughput, not just

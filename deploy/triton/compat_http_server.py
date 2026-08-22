@@ -17,6 +17,7 @@ so the full waveform is covered end-to-end.
 """
 from __future__ import annotations
 
+import logging
 import os
 from pathlib import Path
 from typing import Any, Optional
@@ -28,6 +29,12 @@ from pydantic import BaseModel
 
 ROOT = Path(__file__).resolve().parents[2]
 DEFAULT_WEIGHTS = ROOT / "models" / "whisper-large-v3"
+
+log = logging.getLogger("triton.compat")
+logging.basicConfig(
+    level=os.environ.get("TRITON_COMPAT_LOG_LEVEL", "INFO").upper(),
+    format="%(asctime)s [%(levelname)s] %(name)s: %(message)s",
+)
 
 app = FastAPI(title="triton-http-v2-whisper-compat", version="1.0")
 _pipe = None
@@ -50,13 +57,49 @@ _chunk_length_s = float(os.environ.get("WHISPER_CHUNK_LENGTH_S", "30"))
 _stride_length_s = float(os.environ.get("WHISPER_STRIDE_LENGTH_S", "0"))
 
 
+# The hub id to fall back to when no local snapshot is present. Env-driven
+# like every other model reference in the project (docs/core/CONFIGURATION.md)
+# so a deployment can serve a different Whisper size without a code change.
+HUB_MODEL_ID = os.environ.get("WHISPER_HUB_MODEL_ID", "openai/whisper-large-v3").strip()
+
+
+def _has_weights(path: Path) -> bool:
+    """True when *path* looks like a usable local snapshot.
+
+    A directory alone is not enough: docker-compose bind-mounts
+    ``LOCAL_MODELS_DIR`` (default ``./models``) whether or not it contains a
+    Whisper snapshot, so the mount point exists and is empty on any host that
+    never pre-downloaded one.
+    """
+    if not path.is_dir():
+        return False
+    return any(path.glob("*.safetensors")) or any(path.glob("*.bin"))
+
+
 def _model_id() -> str:
+    """Local snapshot when one is really there, else the hub id.
+
+    ``WHISPER_MODEL_DIR`` used to be returned unconditionally, which made the
+    fallback below unreachable: compose always sets it, so a host without a
+    pre-downloaded snapshot got a hard
+    `OSError: Error no file named model.safetensors` and the container
+    crash-looped -- even though the weights were sitting in the shared
+    hf-cache volume and the hub id would have found them.
+    """
     env = (os.environ.get("WHISPER_MODEL_DIR") or os.environ.get("ASR_WHISPER_PATH") or "").strip()
     if env:
-        return env
-    if DEFAULT_WEIGHTS.is_dir():
+        # A hub id (org/name) is not a path -- pass it straight through.
+        if "/" in env and not env.startswith(("/", "./", "../")):
+            return env
+        if _has_weights(Path(env)):
+            return env
+        log.warning(
+            "WHISPER_MODEL_DIR=%s has no model weights; falling back to %s "
+            "(resolved from the HF cache if present)", env, HUB_MODEL_ID,
+        )
+    if _has_weights(DEFAULT_WEIGHTS):
         return str(DEFAULT_WEIGHTS)
-    return "openai/whisper-large-v3"
+    return HUB_MODEL_ID
 
 
 def _get_pipe():
