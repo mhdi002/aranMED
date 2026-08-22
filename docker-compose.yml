@@ -423,6 +423,18 @@ services:
       - "${VLLM_MAX_MODEL_LEN:-2048}"
       - "--gpu-memory-utilization"
       - "${VLLM_GPU_MEM_UTIL:-0.55}"
+      # VLLM_QUANTIZATION was documented in .env.example but never reached the
+      # container, so setting it did nothing and an unquantised model would
+      # OOM on a small card with no clue why. "none" means "let vLLM read the
+      # model's own quantization_config", which is right for pre-quantised
+      # checkpoints (AWQ/GPTQ) that describe themselves.
+      - "--quantization"
+      - "${VLLM_QUANTIZATION:-none}"
+      # Turing (sm75, e.g. RTX 2080 Ti) has no bfloat16. vLLM warns and falls
+      # back on its own, but saying float16 explicitly keeps the log honest
+      # and avoids a silent precision change on newer cards.
+      - "--dtype"
+      - "${VLLM_DTYPE:-auto}"
     ports:
       - "${VLLM_PORT:-8000}:${VLLM_CONTAINER_PORT:-8000}"
     deploy: *gpu-reservation
@@ -440,8 +452,13 @@ services:
     command:
       - "--model"
       - "${VLLM_EMBED_MODEL}"
-      - "--task"
-      - "${VLLM_EMBED_TASK:-embed}"
+      # `--task embed` was removed from vLLM; current builds reject it with
+      # "unrecognized arguments: --task embed" and the container crash-loops.
+      # `--runner pooling` is the replacement (`--convert embed` is the other
+      # half of the split, for adapting a generation model to pooling — not
+      # needed for a model like bge-m3 that is natively an embedder).
+      - "--runner"
+      - "${VLLM_EMBED_RUNNER:-pooling}"
       - "--host"
       - "0.0.0.0"
       - "--port"
