@@ -50,9 +50,29 @@ class OpenAIProvider(TextProvider):
     kind = "openai"
     supports_tools = True
 
+    #: Where requests go when no endpoint is configured.
+    PUBLIC_DEFAULT = "https://api.openai.com/v1"
+
     def __init__(self, *, name: str, config: dict) -> None:
         super().__init__(name=name, config=config)
-        self.base_url = config.get("base_url", "https://api.openai.com/v1").rstrip("/")
+        # `api_base` is accepted as an alias because it is the name most other
+        # OpenAI-compatible tooling uses, and a config that spells it that way
+        # would otherwise be ignored in silence.
+        endpoint = config.get("base_url") or config.get("api_base")
+        if not endpoint:
+            # Defaulting to the public API is the wrong direction to fail in a
+            # self-hosted clinical deployment: a typo'd key name would send
+            # patient text to a third party, and the only symptom is a 401 --
+            # or none at all, if a key happens to be present. Say so loudly.
+            log.warning(
+                "provider %r has no base_url/api_base configured — falling back to "
+                "the PUBLIC endpoint %s. If this is meant to be a local vLLM or "
+                "other self-hosted server, set base_url; otherwise clinical text "
+                "will be sent off-machine.",
+                name, self.PUBLIC_DEFAULT,
+            )
+            endpoint = self.PUBLIC_DEFAULT
+        self.base_url = endpoint.rstrip("/")
         self.model = config["model"]
         self.api_key = config.get("api_key", "sk-no-key-required")
         self.timeout = float(config.get("timeout", 600))

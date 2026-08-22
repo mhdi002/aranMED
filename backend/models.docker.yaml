@@ -39,7 +39,12 @@ models:
   default: ${VLLM_CORE_DEFAULT:-false}
   config:
     model: ${VLLM_MODEL}
-    api_base: ${DOCKER_VLLM_BASE_URL:-http://vllm:8000/v1}
+    # OpenAIProvider reads `base_url`, not `api_base`. Getting this key wrong
+    # is silently catastrophic: the provider falls back to its default of
+    # https://api.openai.com/v1 and every request leaves the machine, failing
+    # with 401 — or worse, succeeding and sending clinical text to a third
+    # party. Keep this key name in sync with providers/openai_compat.py.
+    base_url: ${DOCKER_VLLM_BASE_URL:-http://vllm:8000/v1}
     api_key: ${VLLM_API_KEY:-EMPTY}
     temperature: 0.2
 
