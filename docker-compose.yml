@@ -446,6 +446,16 @@ services:
       # and avoids a silent precision change on newer cards.
       - "--dtype"
       - "${VLLM_DTYPE:-auto}"
+      # The agent always sends `tools`, and vLLM rejects that with
+      # `"auto" tool choice requires --enable-auto-tool-choice and
+      # --tool-call-parser to be set` -- a 400 on every report while plain
+      # chat still works, which makes it look like a prompt problem rather
+      # than a server flag. Tool calling is required for the agent, so it is
+      # on; the parser must match the model family (hermes suits Qwen2.5 and
+      # Hermes-style models, llama3_json for Llama 3, mistral for Mistral).
+      - "--enable-auto-tool-choice"
+      - "--tool-call-parser"
+      - "${VLLM_TOOL_CALL_PARSER:-hermes}"
     ports:
       - "${VLLM_PORT:-8000}:${VLLM_CONTAINER_PORT:-8000}"
     deploy: *gpu-reservation
