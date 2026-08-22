@@ -58,8 +58,11 @@ models:
 - role: asr
   name: whisper-large-v3
   provider: hf_asr
-  enabled: true
-  default: true
+  # In-process Whisper. Default ASR, but both slots are env-gated so a
+  # deployment can serve Whisper from Triton instead without editing YAML
+  # inside the image -- set ASR_HF_DEFAULT=false and ASR_TRITON_DEFAULT=true.
+  enabled: ${ASR_HF_ENABLED:-true}
+  default: ${ASR_HF_DEFAULT:-true}
   config:
     model_id: "openai/whisper-large-v3"
     device: "cuda"
@@ -91,8 +94,8 @@ models:
 - role: asr
   name: whisper-triton
   provider: triton_asr
-  enabled: true
-  default: false
+  enabled: ${ASR_TRITON_ENABLED:-true}
+  default: ${ASR_TRITON_DEFAULT:-false}
   config:
     url: "${TRITON_URL}"
     model_name: "${TRITON_MODEL:-whisper}"

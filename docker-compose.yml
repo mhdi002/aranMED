@@ -155,6 +155,13 @@ services:
       VLLM_MODEL: "${VLLM_MODEL:-}"
       VLLM_API_KEY: "${VLLM_API_KEY:-EMPTY}"
       DOCKER_VLLM_BASE_URL: "${DOCKER_VLLM_BASE_URL:-http://vllm:8000/v1}"
+      # ASR topology. Default is in-process Whisper (hf_asr); flip these to
+      # serve it from the Triton container instead, which keeps the model out
+      # of the API process and lets ASR scale on its own.
+      ASR_HF_ENABLED: "${ASR_HF_ENABLED:-true}"
+      ASR_HF_DEFAULT: "${ASR_HF_DEFAULT:-true}"
+      ASR_TRITON_ENABLED: "${ASR_TRITON_ENABLED:-true}"
+      ASR_TRITON_DEFAULT: "${ASR_TRITON_DEFAULT:-false}"
     volumes:
       - hf-cache:${DOCKER_HF_HOME:-/models}
       - ./backend/models.docker.yaml:/app/backend/models.yaml:ro
