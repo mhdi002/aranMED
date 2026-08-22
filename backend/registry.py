@@ -58,6 +58,30 @@ PROVIDER_CLS: dict[str, type[BaseProvider]] = {
 _ENV_RE = re.compile(r"\$\{([A-Z0-9_]+)(?::-(.*?))?\}")
 
 
+_TRUE = {"1", "true", "yes", "on"}
+_FALSE = {"0", "false", "no", "off", ""}
+
+
+def _as_bool(value, *, default: bool) -> bool:
+    """Interpret a YAML bool or an interpolated string as a boolean.
+
+    ``enabled: ${OLLAMA_ENABLED:-true}`` is a string by the time it gets
+    here, and Python would read the string "false" as True. Anything
+    unrecognised falls back to *default* rather than guessing.
+    """
+    if isinstance(value, bool):
+        return value
+    if value is None:
+        return default
+    s = str(value).strip().lower()
+    if s in _TRUE:
+        return True
+    if s in _FALSE:
+        return False
+    log.warning("registry: cannot read %r as a boolean; using %s", value, default)
+    return default
+
+
 def _interp_env(value):
     """Recursively replace ``${ENV_VAR}`` / ``${ENV_VAR:-default}`` tokens
     inside config strings."""
@@ -116,7 +140,11 @@ class Registry:
         self.runtime = doc.get("runtime", {}) or {}
 
         for entry in doc.get("models", []) or []:
-            if not entry.get("enabled", True):
+            # enabled/default may arrive as a real YAML bool, or as a string
+            # once `${VAR:-true}` has been interpolated. A bare truthiness
+            # test would read the string "false" as True -- which silently
+            # enables a provider the operator explicitly turned off.
+            if not _as_bool(_interp_env(entry.get("enabled", True)), default=True):
                 continue
             role = entry["role"]
             name = entry["name"]
@@ -130,7 +158,8 @@ class Registry:
             inst.role = role  # override class default with the YAML-declared role
             self._providers[name] = inst
             self._role_index.setdefault(role, []).append(name)
-            if entry.get("default") and role not in self._defaults:
+            if (_as_bool(_interp_env(entry.get("default", False)), default=False)
+                    and role not in self._defaults):
                 self._defaults[role] = name
 
         for role, names in self._role_index.items():

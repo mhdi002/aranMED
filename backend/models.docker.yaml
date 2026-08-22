@@ -19,13 +19,29 @@ models:
   # See docs/core/CONFIGURATION.md.
   name: ollama-core
   provider: ollama
-  enabled: true
-  default: true
+  enabled: ${OLLAMA_ENABLED:-true}
+  default: ${OLLAMA_DEFAULT:-true}
   config:
     model: ${OLLAMA_MODEL}
     api_base: ${OLLAMA_HOST}
     temperature: 0.2
     num_ctx: 8192
+
+# vLLM serves an OpenAI-compatible API, so the existing `openai` provider
+# drives it with no new adapter. Disabled by default so the shipped config
+# keeps working on a box with only Ollama; set VLLM_CORE_ENABLED=true and
+# OLLAMA_ENABLED=false to run a GPU-served core model instead. Both are
+# env-driven so the same image serves either topology.
+- role: core
+  name: vllm-core
+  provider: openai
+  enabled: ${VLLM_CORE_ENABLED:-false}
+  default: ${VLLM_CORE_DEFAULT:-false}
+  config:
+    model: ${VLLM_MODEL}
+    api_base: ${DOCKER_VLLM_BASE_URL:-http://vllm:8000/v1}
+    api_key: ${VLLM_API_KEY:-EMPTY}
+    temperature: 0.2
 
 # Optional: enable if you created a custom Modelfile and set OLLAMA_MODEL in .env
 - role: core

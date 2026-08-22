@@ -145,6 +145,16 @@ services:
       DATABASE_URL: "${DATABASE_URL:-}"
       AUDIT_RETENTION_DAYS: "${AUDIT_RETENTION_DAYS:-2192}"
       TERMINOLOGY_SERVER_URL: "${TERMINOLOGY_SERVER_URL:-}"
+      # Core-LLM topology. Default is Ollama; set VLLM_CORE_ENABLED=true and
+      # OLLAMA_ENABLED=false to serve the core model from vLLM instead. The
+      # registry reads these, so the same image serves either arrangement.
+      OLLAMA_ENABLED: "${OLLAMA_ENABLED:-true}"
+      OLLAMA_DEFAULT: "${OLLAMA_DEFAULT:-true}"
+      VLLM_CORE_ENABLED: "${VLLM_CORE_ENABLED:-false}"
+      VLLM_CORE_DEFAULT: "${VLLM_CORE_DEFAULT:-false}"
+      VLLM_MODEL: "${VLLM_MODEL:-}"
+      VLLM_API_KEY: "${VLLM_API_KEY:-EMPTY}"
+      DOCKER_VLLM_BASE_URL: "${DOCKER_VLLM_BASE_URL:-http://vllm:8000/v1}"
     volumes:
       - hf-cache:${DOCKER_HF_HOME:-/models}
       - ./backend/models.docker.yaml:/app/backend/models.yaml:ro
