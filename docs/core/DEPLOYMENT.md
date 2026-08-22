@@ -284,3 +284,77 @@ Before `--scale backend=N`:
    default rollback journal blocks readers for the whole of every write.
 4. Conversation memory is already durable in SQLite (`agent_sessions`), so a
    request landing on a different replica rehydrates rather than starting over.
+
+---
+
+## GPU sizing: what actually fits
+
+Measured on an RTX 2080 Ti (11.26 GB, ~10.57 GB usable, Turing/sm75). The
+card has to hold the core LLM *and* Whisper at once, so model choice is a
+budget decision, not a preference.
+
+| Model | Weights | Fits alongside Whisper? |
+| --- | --- | --- |
+| `Qwen/Qwen2.5-7B-Instruct-AWQ` | ~5.5 GB | **Yes** — 0.62 utilisation leaves ~3.8 GB for Whisper |
+| `Qwen/Qwen2.5-7B-Instruct` (fp16) | ~15 GB | No — exceeds the card outright |
+| `Qwen/Qwen3.5-4B` | 9.32 GB | **No** — OOMs even with the whole card to itself |
+
+`Qwen3.5-4B` is worth calling out because the name suggests it should be
+comfortable: it is a *vision-language* model
+(`Qwen3_5ForConditionalGeneration`), so a "4B" checkpoint carries 9.32 GB of
+weights. With `--gpu-memory-utilization 0.95`, context reduced to 4096 and
+Whisper moved to CPU, it still allocated 10.20 GiB and failed needing 128 MiB
+more. It needs a larger card, not tuning.
+
+Turing-specific notes, both harmless but noisy in the logs:
+
+- **No bfloat16.** vLLM falls back to float16 and says so. Set
+  `VLLM_DTYPE=float16` to make the intent explicit.
+- **No FlashAttention 2** (needs sm80+) and **no FlashInfer sampler**
+  (needs sm80+). Both fall back automatically.
+
+### Whisper: in-process or on Triton
+
+Both are supported and switch entirely from `.env`:
+
+```bash
+# in-process (default)
+ASR_HF_DEFAULT=true   ASR_TRITON_DEFAULT=false
+# served by the Triton container
+ASR_HF_ENABLED=false  ASR_HF_DEFAULT=false
+ASR_TRITON_ENABLED=true ASR_TRITON_DEFAULT=true
+TRITON_WHISPER_DEVICE=cuda   # or cpu, to free the GPU for a larger LLM
+```
+
+Serving from Triton keeps the model out of the API process, so ASR and report
+generation no longer share VRAM inside one container and can scale apart.
+
+### Context length is not a free parameter
+
+`VLLM_MAX_MODEL_LEN` must exceed the report prompt (hospital naming rules
+~4.5 KB + template ~1.5 KB + transcript) plus the requested output tokens.
+Below that, report generation returns HTTP 400 while plain chat keeps
+working — which looks like a model problem and is not. 8192 is the default
+for that reason.
+
+### Tool calling must be enabled explicitly
+
+The agent always sends a `tools` array. vLLM rejects that unless started with
+`--enable-auto-tool-choice --tool-call-parser <parser>`, and the parser is
+model-family specific (`hermes` for Qwen2.5, `qwen3_xml` for Qwen3,
+`llama3_json`, `mistral`). The entrypoint passes both when
+`VLLM_TOOL_CALL_PARSER` is set.
+
+## Deploying from a Windows checkout
+
+Git on Windows checks files out with CRLF, and `git archive` applies the same
+filters — so a deployment bundle built on Windows used to carry CRLF into
+files Linux has to execute, failing with
+`/usr/bin/env: 'bash\r': No such file or directory`. `.gitattributes` now
+pins `eol=lf` for shell/Python/compose/Dockerfile and `eol=crlf` for
+`.ps1`/`.bat`.
+
+A `.env` copied from a Windows machine has the same problem in a subtler
+form: `source .env` yields values with a trailing `\r`, and compose then
+reports `invalid hostPort: 8000` with the `\r` invisible in the message. If
+you hand-copy a `.env` onto a server, run `sed -i 's/\r$//' .env` first.
