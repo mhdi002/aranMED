@@ -431,7 +431,12 @@ services:
       - "--port"
       - "${VLLM_CONTAINER_PORT:-8000}"
       - "--max-model-len"
-      - "${VLLM_MAX_MODEL_LEN:-2048}"
+      # 2048 is too small for this application's own prompts: a report
+      # request carries the naming rules (~4.5KB) plus the chosen template
+      # (~1.5KB) plus the transcript, then asks for up to 1400 output tokens
+      # -- which returns 400 "maximum context length is 2048". 8192 fits that
+      # with room to spare; the KV cache cost is modest for a 7B with GQA.
+      - "${VLLM_MAX_MODEL_LEN:-8192}"
       - "--gpu-memory-utilization"
       - "${VLLM_GPU_MEM_UTIL:-0.55}"
       # VLLM_QUANTIZATION was documented in .env.example but never reached the
