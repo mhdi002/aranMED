@@ -421,46 +421,24 @@ services:
     image: vllm/vllm-openai:${VLLM_VERSION:-latest}
     environment:
       HUGGING_FACE_HUB_TOKEN: "${HF_TOKEN:-}"
+      # The entrypoint below assembles `vllm serve` from these, omitting any
+      # flag left empty. Compose's static command list cannot do that, and
+      # several of these flags are invalid rather than inert when passed a
+      # falsy value (see deploy/vllm/entrypoint.sh).
+      VLLM_MODEL: "${VLLM_MODEL:-}"
+      VLLM_HOST: "0.0.0.0"
+      VLLM_CONTAINER_PORT: "${VLLM_CONTAINER_PORT:-8000}"
+      VLLM_MAX_MODEL_LEN: "${VLLM_MAX_MODEL_LEN:-8192}"
+      VLLM_GPU_MEM_UTIL: "${VLLM_GPU_MEM_UTIL:-0.55}"
+      VLLM_DTYPE: "${VLLM_DTYPE:-auto}"
+      VLLM_QUANTIZATION: "${VLLM_QUANTIZATION:-}"
+      VLLM_ENABLE_TOOL_CHOICE: "${VLLM_ENABLE_TOOL_CHOICE:-1}"
+      VLLM_TOOL_CALL_PARSER: "${VLLM_TOOL_CALL_PARSER:-hermes}"
+      VLLM_EXTRA_ARGS: "${VLLM_EXTRA_ARGS:-}"
     volumes:
       - hf-cache:/root/.cache/huggingface
-    command:
-      - "--model"
-      - "${VLLM_MODEL}"
-      - "--host"
-      - "0.0.0.0"
-      - "--port"
-      - "${VLLM_CONTAINER_PORT:-8000}"
-      - "--max-model-len"
-      # 2048 is too small for this application's own prompts: a report
-      # request carries the naming rules (~4.5KB) plus the chosen template
-      # (~1.5KB) plus the transcript, then asks for up to 1400 output tokens
-      # -- which returns 400 "maximum context length is 2048". 8192 fits that
-      # with room to spare; the KV cache cost is modest for a 7B with GQA.
-      - "${VLLM_MAX_MODEL_LEN:-8192}"
-      - "--gpu-memory-utilization"
-      - "${VLLM_GPU_MEM_UTIL:-0.55}"
-      # VLLM_QUANTIZATION was documented in .env.example but never reached the
-      # container, so setting it did nothing and an unquantised model would
-      # OOM on a small card with no clue why. "none" means "let vLLM read the
-      # model's own quantization_config", which is right for pre-quantised
-      # checkpoints (AWQ/GPTQ) that describe themselves.
-      - "--quantization"
-      - "${VLLM_QUANTIZATION:-none}"
-      # Turing (sm75, e.g. RTX 2080 Ti) has no bfloat16. vLLM warns and falls
-      # back on its own, but saying float16 explicitly keeps the log honest
-      # and avoids a silent precision change on newer cards.
-      - "--dtype"
-      - "${VLLM_DTYPE:-auto}"
-      # The agent always sends `tools`, and vLLM rejects that with
-      # `"auto" tool choice requires --enable-auto-tool-choice and
-      # --tool-call-parser to be set` -- a 400 on every report while plain
-      # chat still works, which makes it look like a prompt problem rather
-      # than a server flag. Tool calling is required for the agent, so it is
-      # on; the parser must match the model family (hermes suits Qwen2.5 and
-      # Hermes-style models, llama3_json for Llama 3, mistral for Mistral).
-      - "--enable-auto-tool-choice"
-      - "--tool-call-parser"
-      - "${VLLM_TOOL_CALL_PARSER:-hermes}"
+      - ./deploy/vllm/entrypoint.sh:/usr/local/bin/aranmed-vllm-entrypoint.sh:ro
+    entrypoint: ["/bin/sh", "/usr/local/bin/aranmed-vllm-entrypoint.sh"]
     ports:
       - "${VLLM_PORT:-8000}:${VLLM_CONTAINER_PORT:-8000}"
     deploy: *gpu-reservation
