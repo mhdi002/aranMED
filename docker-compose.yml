@@ -243,6 +243,12 @@ services:
       WHISPER_MAX_SHORTFORM_S: "${WHISPER_MAX_SHORTFORM_S:-30}"
       WHISPER_CHUNK_LENGTH_S: "${WHISPER_CHUNK_LENGTH_S:-30}"
     command: ["python", "/app/deploy/triton/compat_http_server.py"]
+    # Without this the container has no GPU at all, so WHISPER_DEVICE=cuda
+    # silently degrades to CPU -- compat_http_server.py guards on
+    # torch.cuda.is_available(), which is False with no device attached. The
+    # setting above then looks honoured while ASR quietly runs on CPU.
+    # Reserving a GPU here does not pin memory; WHISPER_DEVICE still decides.
+    deploy: *gpu-reservation
     expose:
       - "${TRITON_COMPAT_PORT:-8002}"
     healthcheck:
@@ -440,6 +446,20 @@ services:
       - hf-cache:/root/.cache/huggingface
       - ./deploy/vllm/entrypoint.sh:/usr/local/bin/aranmed-vllm-entrypoint.sh:ro
     entrypoint: ["/bin/sh", "/usr/local/bin/aranmed-vllm-entrypoint.sh"]
+    # The vLLM image ships CUDA forward-compatibility libraries (a newer
+    # libcuda than the host driver). When the host driver is OLDER than that
+    # target, the runtime activates them -- and forward compatibility is a
+    # datacenter-GPU feature that GeForce cards do not support, so CUDA init
+    # fails with "Error 804: forward compatibility was attempted on non
+    # supported HW" and the engine never starts. Masking the directory makes
+    # the container use the host driver libs directly.
+    #
+    # Observed: host 580.65.06 vs image compat libs 580.95.05 on an RTX 2080
+    # Ti -- torch.cuda.is_available() went False -> True with this mount.
+    # Harmless when the host driver is new enough (compat is unused anyway).
+    # Datacenter GPUs that genuinely rely on forward compat should remove it.
+    tmpfs:
+      - /usr/local/cuda/compat
     ports:
       - "${VLLM_PORT:-8000}:${VLLM_CONTAINER_PORT:-8000}"
     deploy: *gpu-reservation
@@ -472,6 +492,20 @@ services:
       - "${VLLM_EMBED_MAX_MODEL_LEN:-512}"
       - "--gpu-memory-utilization"
       - "${VLLM_EMBED_GPU_MEM_UTIL:-0.25}"
+    # The vLLM image ships CUDA forward-compatibility libraries (a newer
+    # libcuda than the host driver). When the host driver is OLDER than that
+    # target, the runtime activates them -- and forward compatibility is a
+    # datacenter-GPU feature that GeForce cards do not support, so CUDA init
+    # fails with "Error 804: forward compatibility was attempted on non
+    # supported HW" and the engine never starts. Masking the directory makes
+    # the container use the host driver libs directly.
+    #
+    # Observed: host 580.65.06 vs image compat libs 580.95.05 on an RTX 2080
+    # Ti -- torch.cuda.is_available() went False -> True with this mount.
+    # Harmless when the host driver is new enough (compat is unused anyway).
+    # Datacenter GPUs that genuinely rely on forward compat should remove it.
+    tmpfs:
+      - /usr/local/cuda/compat
     ports:
       - "${VLLM_EMBED_PORT:-8001}:${VLLM_EMBED_CONTAINER_PORT:-8001}"
     deploy: *gpu-reservation
