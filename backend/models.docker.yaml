@@ -47,6 +47,11 @@ models:
     base_url: ${DOCKER_VLLM_BASE_URL:-http://vllm:8000/v1}
     api_key: ${VLLM_API_KEY:-EMPTY}
     temperature: 0.2
+    # Merged into every request. Reasoning models (Qwen3/3.5) otherwise spend
+    # the entire token budget inside their thinking block and return an empty
+    # `content`, so the report arrives blank with no error to explain it.
+    # Example: {"chat_template_kwargs": {"enable_thinking": false}}
+    extra_body: ${VLLM_EXTRA_BODY:-}
 
 # Optional: enable if you created a custom Modelfile and set OLLAMA_MODEL in .env
 - role: core

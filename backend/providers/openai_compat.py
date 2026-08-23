@@ -77,6 +77,16 @@ class OpenAIProvider(TextProvider):
         self.api_key = config.get("api_key", "sk-no-key-required")
         self.timeout = float(config.get("timeout", 600))
         self.supports_vision = bool(config.get("vision", False))
+        # Arbitrary extra fields merged into every chat request body. Accepts a
+        # dict, or a JSON string so it can come straight from an env var.
+        raw_extra = config.get("extra_body") or {}
+        if isinstance(raw_extra, str):
+            try:
+                raw_extra = json.loads(raw_extra) if raw_extra.strip() else {}
+            except ValueError:
+                log.warning("provider %r: extra_body is not valid JSON; ignoring", name)
+                raw_extra = {}
+        self.extra_body: dict = raw_extra if isinstance(raw_extra, dict) else {}
 
     async def health(self) -> dict:
         try:
@@ -108,6 +118,14 @@ class OpenAIProvider(TextProvider):
             body["stop"] = stop
         if tools:
             body["tools"] = [{"type": "function", "function": t} for t in tools]
+        # Extra request fields, e.g. chat_template_kwargs for reasoning models.
+        # A reasoning model asked to fill a template will otherwise spend the
+        # whole max_tokens budget inside its thinking block and return an
+        # EMPTY `content` -- the report comes back blank with no error. Setting
+        # {"chat_template_kwargs": {"enable_thinking": false}} turns thinking
+        # off for a task that wants structured output, not deliberation.
+        if self.extra_body:
+            body.update(self.extra_body)
             body["tool_choice"] = "auto"
 
         async with httpx.AsyncClient(timeout=self.timeout) as c:

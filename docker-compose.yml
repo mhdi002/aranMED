@@ -154,6 +154,7 @@ services:
       VLLM_CORE_DEFAULT: "${VLLM_CORE_DEFAULT:-false}"
       VLLM_MODEL: "${VLLM_MODEL:-}"
       VLLM_API_KEY: "${VLLM_API_KEY:-EMPTY}"
+      VLLM_EXTRA_BODY: '${VLLM_EXTRA_BODY:-}'
       DOCKER_VLLM_BASE_URL: "${DOCKER_VLLM_BASE_URL:-http://vllm:8000/v1}"
       # ASR topology. Default is in-process Whisper (hf_asr); flip these to
       # serve it from the Triton container instead, which keeps the model out
