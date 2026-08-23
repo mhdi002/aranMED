@@ -54,6 +54,14 @@ case "$(printf '%s' "${VLLM_ENABLE_TOOL_CHOICE:-1}" | tr '[:upper:]' '[:lower:]'
         ;;
 esac
 
+# Reasoning models (Qwen3/Qwen3.5, DeepSeek-R1) emit chain-of-thought as part
+# of the completion. Without a parser that lands in `content`, so a generated
+# report begins "Thinking Process: 1. Analyse the request..." instead of the
+# report -- clinically unusable, and it looks like a prompting failure rather
+# than a serving one. The parser splits reasoning into `reasoning_content`,
+# leaving `content` clean for callers that only read the answer.
+[ -n "${VLLM_REASONING_PARSER:-}" ] && set -- "$@" --reasoning-parser "$VLLM_REASONING_PARSER"
+
 # Anything else the operator wants, passed through verbatim.
 if [ -n "${VLLM_EXTRA_ARGS:-}" ]; then
     # shellcheck disable=SC2086  # deliberate word-splitting: it is an arg list
