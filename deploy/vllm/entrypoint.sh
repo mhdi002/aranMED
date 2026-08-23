@@ -26,6 +26,13 @@ set -- serve "${VLLM_MODEL:?VLLM_MODEL must be set}" \
 [ -n "${VLLM_GPU_MEM_UTIL:-}" ]  && set -- "$@" --gpu-memory-utilization "$VLLM_GPU_MEM_UTIL"
 [ -n "${VLLM_DTYPE:-}" ]         && set -- "$@" --dtype "$VLLM_DTYPE"
 
+# Concurrent sequence cap. Defaults to 256 in vLLM, which a memory-constrained
+# card cannot always back: hybrid Mamba/attention models (the Qwen3.5 family)
+# allocate one Mamba cache block per decode sequence, and vLLM refuses to
+# start with "max_num_seqs (256) exceeds available Mamba cache blocks (46)".
+# Lowering this costs peak concurrency, not correctness.
+[ -n "${VLLM_MAX_NUM_SEQS:-}" ]  && set -- "$@" --max-num-seqs "$VLLM_MAX_NUM_SEQS"
+
 # Empty, "none" and "auto" all mean "let vLLM read the checkpoint's own
 # quantization_config", which is expressed by omitting the flag.
 case "$(printf '%s' "${VLLM_QUANTIZATION:-}" | tr '[:upper:]' '[:lower:]')" in
