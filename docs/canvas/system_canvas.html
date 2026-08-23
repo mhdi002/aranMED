@@ -1,0 +1,787 @@
+<title>AranMed System Canvas</title>
+<style>
+:root{
+  --ink:#12181c; --ink-soft:#48545b; --ink-faint:#77848b;
+  --paper:#f4f6f5; --panel:#ffffff; --panel-2:#eef2f1;
+  --line:#d9e0de; --line-soft:#e9edec;
+  --teal:#0f766e; --teal-deep:#0b5a54; --teal-soft:#e0f4f1;
+  --amber:#a45a06; --amber-soft:#fcf0dc;
+  --red:#b0241d; --red-soft:#fbe8e6;
+  --violet:#5b4bb5; --violet-soft:#ece9fa;
+  --mono: ui-monospace, "SFMono-Regular", "Cascadia Code", Consolas, monospace;
+  --sans: -apple-system, "Segoe UI", system-ui, sans-serif;
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    --ink:#e9edeb; --ink-soft:#a9b3af; --ink-faint:#7d8a86;
+    --paper:#0d1413; --panel:#151d1c; --panel-2:#1b2423;
+    --line:#293433; --line-soft:#1f2827;
+    --teal:#35d6c1; --teal-deep:#6ceadb; --teal-soft:#10312e;
+    --amber:#f0ae53; --amber-soft:#2c2314;
+    --red:#f28a82; --red-soft:#2d1a18;
+    --violet:#a99cf0; --violet-soft:#211d3a;
+  }
+}
+:root[data-theme="dark"]{
+  --ink:#e9edeb; --ink-soft:#a9b3af; --ink-faint:#7d8a86;
+  --paper:#0d1413; --panel:#151d1c; --panel-2:#1b2423;
+  --line:#293433; --line-soft:#1f2827;
+  --teal:#35d6c1; --teal-deep:#6ceadb; --teal-soft:#10312e;
+  --amber:#f0ae53; --amber-soft:#2c2314;
+  --red:#f28a82; --red-soft:#2d1a18;
+  --violet:#a99cf0; --violet-soft:#211d3a;
+}
+*{box-sizing:border-box}
+html{scroll-behavior:smooth}
+@media (prefers-reduced-motion:reduce){html{scroll-behavior:auto}}
+body{background:var(--paper);color:var(--ink);font-family:var(--sans);margin:0;line-height:1.58;
+     -webkit-font-smoothing:antialiased}
+.wrap{max-width:960px;margin:0 auto;padding:52px 22px 120px}
+
+.masthead{border:1px solid var(--line);border-radius:14px;background:var(--panel);padding:30px 30px 26px;margin-bottom:14px}
+.eyebrow{font-family:var(--mono);font-size:11.5px;letter-spacing:.11em;text-transform:uppercase;color:var(--teal);margin:0 0 12px}
+h1{font-family:var(--mono);font-size:clamp(26px,3.6vw,37px);line-height:1.12;margin:0 0 14px;letter-spacing:-.02em;text-wrap:balance}
+.sub{color:var(--ink-soft);font-size:15.5px;max-width:66ch;margin:0}
+.statline{display:flex;flex-wrap:wrap;gap:0;margin-top:24px;border-top:1px solid var(--line-soft);padding-top:18px}
+.stat{flex:1 1 auto;min-width:112px;padding-right:18px}
+.stat b{display:block;font-family:var(--mono);font-size:20px;letter-spacing:-.02em;font-variant-numeric:tabular-nums}
+.stat span{display:block;font-size:11.5px;color:var(--ink-faint);text-transform:uppercase;letter-spacing:.055em;margin-top:3px}
+
+nav.toc{display:flex;flex-wrap:wrap;gap:7px 16px;font-family:var(--mono);font-size:11.5px;
+        margin:0 0 46px;padding:15px 18px;border:1px solid var(--line);border-radius:12px;background:var(--panel-2)}
+nav.toc a{color:var(--ink-soft);text-decoration:none;white-space:nowrap}
+nav.toc a:hover{color:var(--teal)}
+nav.toc a:focus-visible{outline:2px solid var(--teal);outline-offset:3px;border-radius:3px}
+
+h2{font-family:var(--mono);font-size:21px;margin:60px 0 4px;letter-spacing:-.015em;
+   border-top:1px solid var(--line);padding-top:26px;scroll-margin-top:20px}
+h2 .n{color:var(--teal);margin-right:11px}
+h3{font-size:15.5px;margin:28px 0 7px;font-weight:700}
+p{color:var(--ink-soft);max-width:72ch}
+p.lead{color:var(--ink);font-size:15px}
+ul,ol{color:var(--ink-soft);max-width:70ch;padding-left:21px}
+li{margin:5px 0}
+code{font-family:var(--mono);font-size:.9em;background:var(--panel-2);padding:1px 5px;border-radius:4px}
+.mono{font-family:var(--mono)}
+
+.card{background:var(--panel);border:1px solid var(--line);border-radius:11px;padding:19px 21px;margin:15px 0}
+.card h3{margin-top:0}
+.grid2{display:grid;grid-template-columns:1fr 1fr;gap:15px}
+.grid3{display:grid;grid-template-columns:repeat(3,1fr);gap:13px}
+@media (max-width:760px){.grid2,.grid3{grid-template-columns:1fr}}
+.tile{background:var(--panel);border:1px solid var(--line);border-radius:11px;padding:15px 17px}
+.tile h4{margin:0 0 5px;font-size:13.5px;font-family:var(--mono);color:var(--ink)}
+.tile p{margin:0;font-size:13px;color:var(--ink-soft)}
+.tile .role{display:inline-block;font-family:var(--mono);font-size:10px;text-transform:uppercase;
+            letter-spacing:.05em;color:var(--teal);margin-bottom:6px}
+
+.pill{display:inline-flex;align-items:center;font-family:var(--mono);font-size:10.5px;letter-spacing:.04em;
+      text-transform:uppercase;padding:3px 9px;border-radius:99px;font-weight:600}
+.pill.crit{background:var(--red-soft);color:var(--red)}
+.pill.warn{background:var(--amber-soft);color:var(--amber)}
+.pill.ok{background:var(--teal-soft);color:var(--teal-deep)}
+.pill.info{background:var(--violet-soft);color:var(--violet)}
+
+table{width:100%;border-collapse:collapse;font-size:13px;margin:14px 0}
+th{text-align:left;font-family:var(--mono);font-size:10.5px;text-transform:uppercase;letter-spacing:.05em;
+   color:var(--ink-faint);padding:8px 10px;border-bottom:1px solid var(--line);white-space:nowrap}
+td{padding:9px 10px;border-bottom:1px solid var(--line-soft);vertical-align:top;color:var(--ink-soft)}
+td.k{font-family:var(--mono);font-size:11.5px;color:var(--ink);white-space:nowrap}
+td.w{color:var(--ink)}
+td.num{font-family:var(--mono);font-variant-numeric:tabular-nums;text-align:right;white-space:nowrap}
+.scroll{overflow-x:auto;-webkit-overflow-scrolling:touch}
+
+figure{margin:22px 0}
+figcaption{font-size:12.5px;color:var(--ink-faint);margin-top:11px;text-align:center;max-width:74ch;
+           margin-left:auto;margin-right:auto}
+svg{display:block;width:100%;height:auto}
+svg text{fill:currentColor}
+
+pre{background:var(--panel-2);border:1px solid var(--line-soft);border-radius:9px;padding:14px 16px;
+    overflow-x:auto;font-family:var(--mono);font-size:12px;line-height:1.62;color:var(--ink-soft);margin:14px 0}
+pre b{color:var(--ink);font-weight:600}
+blockquote{margin:14px 0;padding:12px 18px;border-left:3px solid var(--line);
+           color:var(--ink-soft);font-size:13.5px;background:var(--panel)}
+
+.note{border-left:3px solid var(--teal);background:var(--teal-soft);border-radius:0 9px 9px 0;
+      padding:13px 17px;font-size:13.5px;color:var(--ink);margin:16px 0}
+.note.warn{border-left-color:var(--amber);background:var(--amber-soft)}
+.note.bad{border-left-color:var(--red);background:var(--red-soft)}
+.note strong{color:var(--ink)}
+
+footer{margin-top:74px;padding-top:20px;border-top:1px solid var(--line);
+       color:var(--ink-faint);font-size:12px;font-family:var(--mono);line-height:1.7}
+</style>
+
+<div class="wrap">
+
+  <div class="masthead">
+    <p class="eyebrow">System canvas · engineering reference</p>
+    <h1>AranMed</h1>
+    <p class="sub">A bilingual (Persian/English) clinical AI workbench: radiology dictation that becomes a signed-ready structured report, a tool-calling agent over patient records and medication schedules, and a retrieval engine grounded in a medical corpus. This is the whole system — architecture, request flows, data model, security posture, scaling behaviour, and the GPU deployment it now runs on.</p>
+    <div class="statline">
+      <div class="stat"><b>7</b><span>Services live</span></div>
+      <div class="stat"><b>17</b><span>Agent tools</span></div>
+      <div class="stat"><b>56</b><span>Report templates</span></div>
+      <div class="stat"><b>21/21</b><span>E2E checks</span></div>
+      <div class="stat"><b>100/100</b><span>Under load</span></div>
+      <div class="stat"><b>16/16</b><span>Security probes</span></div>
+      <div class="stat"><b>1</b><span>Open defect</span></div>
+    </div>
+  </div>
+
+  <nav class="toc">
+    <a href="#overview">01 Overview</a>
+    <a href="#architecture">02 Architecture</a>
+    <a href="#flows">03 Request flows</a>
+    <a href="#agent">04 Agent</a>
+    <a href="#surface">05 API &amp; UI</a>
+    <a href="#data">06 Data model</a>
+    <a href="#deploy">07 Deployment</a>
+    <a href="#verify">08 Verification</a>
+    <a href="#security">09 Security</a>
+    <a href="#scaling">10 Scaling</a>
+    <a href="#config">11 Configuration</a>
+    <a href="#claims">12 Claims vs reality</a>
+    <a href="#fixes">13 Fix history</a>
+    <a href="#limits">14 Known limits</a>
+  </nav>
+
+  <!-- ============================================ -->
+  <h2 id="overview"><span class="n">01</span>Overview</h2>
+  <p class="lead">AranMed runs as seven containers behind one gateway, on a single 11 GB GPU. Two product surfaces share the backend: a <strong>dictation pipeline</strong> that turns speech into a template-structured radiology report, and an <strong>agentic clinical assistant</strong> that builds EHR records, tracks medication schedules, and answers grounded knowledge questions.</p>
+
+  <div class="grid3">
+    <div class="tile"><span class="role">service</span><h4>gateway</h4><p>nginx. Load-balances replicas over Docker DNS, rate-limits the expensive AI endpoints, optionally terminates TLS. Publishes port 8090.</p></div>
+    <div class="tile"><span class="role">service</span><h4>backend</h4><p>FastAPI. Dictation and report routes, the tool-calling agent, model registry, EHR store, auth.</p></div>
+    <div class="tile"><span class="role">service</span><h4>frontend</h4><p>Next.js. Role-scoped views; a custom server proxies <code>/api</code> to the backend.</p></div>
+    <div class="tile"><span class="role">service · gpu</span><h4>vllm</h4><p>Serves the core LLM over an OpenAI-compatible API. Qwen3.5-4B at 4-bit, with tool-call and reasoning parsers enabled.</p></div>
+    <div class="tile"><span class="role">service · gpu</span><h4>triton</h4><p>Whisper large-v3 out of process, on CUDA. The default and only ASR path, so transcription never occupies an API worker.</p></div>
+    <div class="tile"><span class="role">service</span><h4>medrag</h4><p>MedicalRAG engine — ingestion, retrieval, self-critique, grounded answers. Generates through the same vLLM.</p></div>
+    <div class="tile"><span class="role">service</span><h4>qdrant</h4><p>Vector store for the embedded medical corpus.</p></div>
+    <div class="tile"><span class="role">optional</span><h4>postgres</h4><p>Opt-in storage backend when SQLite's single writer becomes the ceiling. Same schema, same SQL, no code change.</p></div>
+  </div>
+
+  <div class="note"><strong>No Ollama in the inference path.</strong> The registry still carries an Ollama slot for deployments that want one, but this deployment is <code>OLLAMA_ENABLED=false</code> throughout: the core LLM, the agent, and MedicalRAG's answer generation all resolve to the same in-network vLLM. Inference is vLLM and Triton, nothing else.</div>
+
+  <!-- ============================================ -->
+  <h2 id="architecture"><span class="n">02</span>Architecture</h2>
+  <p>Every host and port below resolves from an environment variable at runtime. No address in this diagram is hardcoded in application code — an enforced project rule, not an aspiration (§11).</p>
+
+  <figure>
+    <svg viewBox="0 0 940 600" role="img" aria-label="AranMed architecture: a browser reaches an nginx gateway that load-balances frontend and backend replicas; the backend resolves LLM and ASR providers through a dynamic registry to vLLM and Triton, which share one GPU; it calls the MedicalRAG service backed by Qdrant, and persists to SQLite.">
+      <defs>
+        <marker id="ah" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6.5" markerHeight="6.5" orient="auto-start-reverse">
+          <path d="M0,0 L10,5 L0,10 z" fill="currentColor"/>
+        </marker>
+      </defs>
+      <style>
+        .b{fill:none;stroke:currentColor;stroke-width:1.25}
+        .b.hi{stroke:#0f766e;stroke-width:1.9}
+        .t{font-size:12.5px;font-family:-apple-system,system-ui,sans-serif}
+        .s{font-size:10px;opacity:.62;font-family:-apple-system,system-ui,sans-serif}
+        .e{stroke:currentColor;stroke-width:1.05;fill:none;marker-end:url(#ah)}
+        .el{font-size:9.5px;font-family:ui-monospace,monospace;opacity:.78}
+        .zone{fill:none;stroke:currentColor;stroke-width:.8;opacity:.28;stroke-dasharray:4 4}
+      </style>
+
+      <text class="s" x="14" y="16">CLIENT</text>
+      <rect class="b" x="380" y="24" width="180" height="40" rx="7"/>
+      <text class="t" x="470" y="42" text-anchor="middle">Browser</text>
+      <text class="s" x="470" y="56" text-anchor="middle">role-scoped UI</text>
+
+      <line class="e" x1="470" y1="64" x2="470" y2="96"/>
+      <text class="el" x="478" y="83">:8090 · HTTP, TLS opt-in</text>
+
+      <rect class="b hi" x="330" y="98" width="280" height="44" rx="7"/>
+      <text class="t" x="470" y="116" text-anchor="middle">gateway · nginx</text>
+      <text class="s" x="470" y="131" text-anchor="middle">rate limit · least_conn LB · server_tokens off</text>
+
+      <line class="e" x1="410" y1="142" x2="210" y2="186"/>
+      <line class="e" x1="530" y1="142" x2="700" y2="186"/>
+
+      <rect class="b" x="90" y="188" width="240" height="44" rx="7"/>
+      <text class="t" x="210" y="206" text-anchor="middle">frontend ×N</text>
+      <text class="s" x="210" y="220" text-anchor="middle">Next.js · proxies /api</text>
+
+      <rect class="b hi" x="580" y="188" width="240" height="44" rx="7"/>
+      <text class="t" x="700" y="206" text-anchor="middle">backend ×N</text>
+      <text class="s" x="700" y="220" text-anchor="middle">FastAPI · agent · auth</text>
+
+      <rect class="zone" x="60" y="258" width="820" height="116" rx="9"/>
+      <text class="s" x="72" y="275">BACKEND DEPENDENCIES — all discovered by env var</text>
+
+      <line class="e" x1="640" y1="232" x2="230" y2="292"/>
+      <text class="el" x="348" y="266">get_text() / get_asr()</text>
+      <line class="e" x1="700" y1="232" x2="700" y2="292"/>
+      <text class="el" x="708" y="266">SQL</text>
+      <line class="e" x1="762" y1="232" x2="830" y2="292"/>
+      <text class="el" x="772" y="260">ask()</text>
+
+      <rect class="b" x="86" y="294" width="248" height="62" rx="7"/>
+      <text class="t" x="210" y="313" text-anchor="middle">Model Registry</text>
+      <text class="s" x="210" y="329" text-anchor="middle">models.docker.yaml · role to provider</text>
+      <text class="s" x="210" y="343" text-anchor="middle">every slot env-gated</text>
+
+      <rect class="b" x="600" y="294" width="200" height="62" rx="7"/>
+      <text class="t" x="700" y="315" text-anchor="middle">SQLite (WAL)</text>
+      <text class="s" x="700" y="331" text-anchor="middle">users · patients · alerts · audit</text>
+      <text class="s" x="700" y="345" text-anchor="middle">agent_sessions · login_throttle</text>
+
+      <rect class="b" x="806" y="294" width="66" height="62" rx="7"/>
+      <text class="s" x="839" y="319" text-anchor="middle">med</text>
+      <text class="s" x="839" y="332" text-anchor="middle">rag</text>
+
+      <line class="e" x1="839" y1="356" x2="839" y2="390"/>
+      <rect class="b" x="700" y="392" width="172" height="40" rx="7"/>
+      <text class="t" x="786" y="411" text-anchor="middle">Qdrant</text>
+      <text class="s" x="786" y="424" text-anchor="middle">embedded corpus</text>
+
+      <text class="s" x="14" y="470">ONE GPU — 11 264 MiB, two models resident at once</text>
+      <rect class="zone" x="60" y="478" width="820" height="78" rx="9"/>
+
+      <rect class="b hi" x="80" y="494" width="330" height="46" rx="7"/>
+      <text class="t" x="245" y="513" text-anchor="middle">vllm · Qwen3.5-4B (bitsandbytes 4-bit)</text>
+      <text class="s" x="245" y="529" text-anchor="middle">OpenAI-compatible · tool + reasoning parsers · 4 900 MiB</text>
+
+      <rect class="b hi" x="428" y="494" width="300" height="46" rx="7"/>
+      <text class="t" x="578" y="513" text-anchor="middle">triton · Whisper large-v3</text>
+      <text class="s" x="578" y="529" text-anchor="middle">task=transcribe · CUDA · 4 000 MiB</text>
+
+      <rect class="b" x="746" y="494" width="114" height="46" rx="7"/>
+      <text class="s" x="803" y="513" text-anchor="middle">2 360 MiB</text>
+      <text class="s" x="803" y="529" text-anchor="middle">headroom</text>
+
+      <path class="e" d="M170 356 L170 420 L245 420 L245 492"/>
+      <path class="e" d="M290 356 L290 434 L578 434 L578 492"/>
+      <path class="e" d="M872 320 L906 320 L906 462 L380 462 L380 492" opacity=".5"/>
+      <text class="el" x="900" y="452" text-anchor="end">medrag generates through the same vLLM</text>
+    </svg>
+    <figcaption>The browser only ever talks to the gateway. Backend replicas are interchangeable because everything stateful lives outside the process: conversation history and throttle counters in SQLite, vectors in Qdrant, the token-signing secret in the environment. Both GPU models stay resident simultaneously; the headroom figure is a deliberate target, not a rounding artifact — see §07.</figcaption>
+  </figure>
+
+  <!-- ============================================ -->
+  <h2 id="flows"><span class="n">03</span>Request flows</h2>
+  <p>Three paths through the backend. Which one runs is decided by what the request carries and, for text, by what the model decides it needs — not by a mode flag the caller sets.</p>
+
+  <figure>
+    <svg viewBox="0 0 940 350" role="img" aria-label="Three request flows: audio dictation becomes a structured report; text chat enters the agent loop which may call the knowledge tool or an action tool; chat with attachments runs the same agent loop with media tools.">
+      <style>
+        .b2{fill:none;stroke:currentColor;stroke-width:1.2}
+        .b2.hi{stroke:#0f766e;stroke-width:1.7}
+        .t2{font-size:11.5px;font-family:-apple-system,system-ui,sans-serif}
+        .s2{font-size:9.5px;opacity:.62;font-family:-apple-system,system-ui,sans-serif}
+        .e2{stroke:currentColor;stroke-width:1.05;fill:none;marker-end:url(#ah)}
+        .el2{font-size:9px;font-family:ui-monospace,monospace;opacity:.75}
+        .lane{font-size:10px;font-family:ui-monospace,monospace;opacity:.85}
+      </style>
+
+      <text class="lane" x="12" y="34">A · DICTATION</text>
+      <rect class="b2" x="150" y="18" width="104" height="34" rx="6"/>
+      <text class="t2" x="202" y="39" text-anchor="middle">audio upload</text>
+      <line class="e2" x1="254" y1="35" x2="292" y2="35"/>
+      <rect class="b2" x="294" y="18" width="112" height="34" rx="6"/>
+      <text class="t2" x="350" y="33" text-anchor="middle">ASR · triton</text>
+      <text class="s2" x="350" y="46" text-anchor="middle">task=transcribe</text>
+      <line class="e2" x1="406" y1="35" x2="444" y2="35"/>
+      <rect class="b2 hi" x="446" y="18" width="124" height="34" rx="6"/>
+      <text class="t2" x="508" y="33" text-anchor="middle">template select</text>
+      <text class="s2" x="508" y="46" text-anchor="middle">auto · overridable</text>
+      <line class="e2" x1="570" y1="35" x2="608" y2="35"/>
+      <rect class="b2" x="610" y="18" width="116" height="34" rx="6"/>
+      <text class="t2" x="668" y="33" text-anchor="middle">structure</text>
+      <text class="s2" x="668" y="46" text-anchor="middle">+ naming rules</text>
+      <line class="e2" x1="726" y1="35" x2="764" y2="35"/>
+      <rect class="b2" x="766" y="18" width="160" height="34" rx="6"/>
+      <text class="t2" x="846" y="33" text-anchor="middle">report</text>
+      <text class="s2" x="846" y="46" text-anchor="middle">residue strip + safety check</text>
+
+      <line class="b2" x1="12" y1="76" x2="928" y2="76" stroke-dasharray="3 4" opacity=".3"/>
+
+      <text class="lane" x="12" y="132">B · TEXT CHAT</text>
+      <rect class="b2" x="150" y="116" width="104" height="34" rx="6"/>
+      <text class="t2" x="202" y="137" text-anchor="middle">text only</text>
+      <line class="e2" x1="254" y1="133" x2="292" y2="133"/>
+      <rect class="b2 hi" x="294" y="116" width="276" height="34" rx="6"/>
+      <text class="t2" x="432" y="131" text-anchor="middle">Agent.run() — the model chooses</text>
+      <text class="s2" x="432" y="144" text-anchor="middle">knowledge question, or an action on this system's data</text>
+
+      <line class="e2" x1="570" y1="126" x2="628" y2="112"/>
+      <line class="e2" x1="570" y1="140" x2="628" y2="154"/>
+
+      <rect class="b2" x="630" y="94" width="296" height="32" rx="6"/>
+      <text class="t2" x="778" y="108" text-anchor="middle">medical_knowledge → MedicalRAG → Qdrant</text>
+      <text class="s2" x="778" y="120" text-anchor="middle">grounded answer with citations</text>
+
+      <rect class="b2" x="630" y="140" width="296" height="32" rx="6"/>
+      <text class="t2" x="778" y="154" text-anchor="middle">list_ehr · build_ehr · get_template · …</text>
+      <text class="s2" x="778" y="166" text-anchor="middle">scoped to the caller, audited</text>
+
+      <line class="b2" x1="12" y1="188" x2="928" y2="188" stroke-dasharray="3 4" opacity=".3"/>
+
+      <text class="lane" x="12" y="244">C · ATTACHMENTS</text>
+      <rect class="b2" x="150" y="226" width="104" height="34" rx="6"/>
+      <text class="t2" x="202" y="242" text-anchor="middle">text + audio</text>
+      <text class="s2" x="202" y="255" text-anchor="middle">or image</text>
+      <line class="e2" x1="254" y1="243" x2="292" y2="243"/>
+      <rect class="b2 hi" x="294" y="226" width="276" height="34" rx="6"/>
+      <text class="t2" x="432" y="242" text-anchor="middle">same agent loop, media tools added</text>
+      <text class="s2" x="432" y="255" text-anchor="middle">transcribe_audio · describe_image</text>
+      <line class="e2" x1="570" y1="243" x2="628" y2="243"/>
+      <rect class="b2" x="630" y="226" width="296" height="34" rx="6"/>
+      <text class="t2" x="778" y="242" text-anchor="middle">answer + tool_calls audit</text>
+      <text class="s2" x="778" y="255" text-anchor="middle">EHR writes scoped to the caller</text>
+
+      <rect class="b2" x="294" y="286" width="276" height="46" rx="6" stroke-dasharray="3 3" opacity=".75"/>
+      <text class="s2" x="432" y="304" text-anchor="middle">every core.chat() and tool.run() is wrapped in a timeout</text>
+      <text class="s2" x="432" y="318" text-anchor="middle">so one hung call cannot hold a worker slot open</text>
+      <line class="e2" x1="432" y1="286" x2="432" y2="264"/>
+    </svg>
+    <figcaption>Flows B and C are the same loop; attachments only widen the tool set. A fourth path exists alongside these: a DICOM study posted to <code>/api/dicom/ingest</code> yields study context and a windowed image, and its modality tag drives template selection more reliably than dictated words. Flow A never involves the agent. Flows B and C are the only paths that can mutate patient data — and every call inside them is time-bounded.</figcaption>
+  </figure>
+
+  <div class="note bad"><strong>Flow B used to be a hard branch, and that was a defect.</strong> Every text-only turn short-circuited to MedicalRAG and returned, which made all 17 tools unreachable unless the caller attached audio or an image. "List the EHR records" came back as a knowledge non-answer, because no tool could ever run. Retrieval is now a tool like any other and the model routes for itself; the old behaviour survives as <code>CHAT_TEXT_ROUTE=medrag</code> for a knowledge-only install.</div>
+
+  <!-- ============================================ -->
+  <h2 id="agent"><span class="n">04</span>Agent orchestration</h2>
+  <p>A registry pattern, not an if/elif chain: a <code>@tool</code> decorator registers each <code>Tool</code> subclass into one dict, and the agent dispatches generically. Seventeen tools are registered.</p>
+
+  <figure>
+    <svg viewBox="0 0 900 264" role="img" aria-label="The agent loop: memory renders context, the core LLM decides whether to call a tool, the registry dispatches it, the result feeds back, and the session is persisted once per turn.">
+      <style>
+        .b3{fill:none;stroke:currentColor;stroke-width:1.25}
+        .b3.hi{stroke:#0f766e;stroke-width:1.8}
+        .t3{font-size:12px;font-family:-apple-system,system-ui,sans-serif}
+        .s3{font-size:9.5px;opacity:.62;font-family:-apple-system,system-ui,sans-serif}
+        .e3{stroke:currentColor;stroke-width:1.05;fill:none;marker-end:url(#ah)}
+        .el3{font-size:9px;font-family:ui-monospace,monospace;opacity:.78}
+      </style>
+
+      <rect class="b3" x="20" y="70" width="150" height="62" rx="7"/>
+      <text class="t3" x="95" y="94" text-anchor="middle">Memory</text>
+      <text class="s3" x="95" y="109" text-anchor="middle">window + summary</text>
+      <text class="s3" x="95" y="122" text-anchor="middle">rehydrates from SQLite</text>
+
+      <line class="e3" x1="170" y1="101" x2="238" y2="101"/>
+      <text class="el3" x="176" y="94">render()</text>
+
+      <rect class="b3 hi" x="240" y="70" width="150" height="62" rx="7"/>
+      <text class="t3" x="315" y="94" text-anchor="middle">core LLM · vLLM</text>
+      <text class="s3" x="315" y="109" text-anchor="middle">tool_calls?</text>
+      <text class="s3" x="315" y="122" text-anchor="middle">timeout-bounded</text>
+
+      <line class="e3" x1="390" y1="88" x2="500" y2="88"/>
+      <text class="el3" x="404" y="81">dispatch</text>
+      <line class="e3" x1="500" y1="116" x2="390" y2="116"/>
+      <text class="el3" x="404" y="131">ToolResult</text>
+
+      <rect class="b3" x="502" y="56" width="200" height="90" rx="7"/>
+      <text class="t3" x="602" y="76" text-anchor="middle">Tool registry · 17</text>
+      <text class="s3" x="602" y="92" text-anchor="middle">transcribe · structure_report</text>
+      <text class="s3" x="602" y="105" text-anchor="middle">build/get/list_ehr · record_dose</text>
+      <text class="s3" x="602" y="118" text-anchor="middle">check_medications · alerts</text>
+      <text class="s3" x="602" y="131" text-anchor="middle">medical_knowledge · mcq · case</text>
+      <text class="s3" x="602" y="144" text-anchor="middle">exam · explain · describe_image</text>
+
+      <line class="e3" x1="702" y1="101" x2="768" y2="101"/>
+      <rect class="b3" x="770" y="70" width="112" height="62" rx="7"/>
+      <text class="t3" x="826" y="94" text-anchor="middle">answer</text>
+      <text class="s3" x="826" y="109" text-anchor="middle">+ tool_calls</text>
+      <text class="s3" x="826" y="122" text-anchor="middle">+ resolved_from</text>
+
+      <path class="e3" d="M315 132 L315 180 L95 180 L95 134"/>
+      <text class="el3" x="196" y="175" text-anchor="middle">loop until final answer or max_iters</text>
+
+      <rect class="b3" x="240" y="204" width="462" height="42" rx="7" stroke-dasharray="3 3" opacity=".8"/>
+      <text class="s3" x="471" y="222" text-anchor="middle">once per turn: persist_async() → agent_sessions (off the event loop)</text>
+      <text class="s3" x="471" y="236" text-anchor="middle">runs in a finally block, so a timed-out turn still keeps what it appended</text>
+    </svg>
+    <figcaption>Loop invariants — iteration count, both timeouts, generation budgets — all come from <code>runtime.*</code> in models.yaml. A tool name the model invents is fuzzy-matched to a real one, and the remap is reported as <code>resolved_from</code> rather than hidden.</figcaption>
+  </figure>
+
+  <p>Observed routing on the deployed stack, one session, three consecutive turns — the model picks correctly without any router heuristic:</p>
+  <pre>"List the EHR records you have access to."          → <b>list_ehr</b>
+"What report templates exist for thyroid imaging?"  → <b>list_templates</b>
+"Ultrasound features of acute cholecystitis?"        → <b>medical_knowledge</b></pre>
+
+  <div class="grid2">
+    <div class="card">
+      <h3>Memory</h3>
+      <p style="margin:0">Last N turns verbatim; older turns condensed into a summary by the core LLM. A per-conversation <code>asyncio.Lock</code> guards that read-modify-write. The in-process dict is bounded by idle-TTL and max-session eviction, while the durable copy lives in <code>agent_sessions</code> and is purged on a configurable interval.</p>
+    </div>
+    <div class="card">
+      <h3>EHR safety</h3>
+      <p style="margin:0">LLM-authored EHR JSON is validated and type-coerced by a pydantic schema before it is persisted or reaches dosing math. Patient identity resolves by explicit id, then MRN, and only then mints a fresh id with a numeric suffix — never by silently reusing a name-slug.</p>
+    </div>
+  </div>
+
+  <!-- ============================================ -->
+  <h2 id="surface"><span class="n">05</span>API &amp; UI surface</h2>
+
+  <h3>Frontend views</h3>
+  <p>Role-scoped: Radiologist, Doctor, Resident, and Student each land on a different subset after sign-in.</p>
+  <div class="grid3">
+    <div class="tile"><h4>dictate</h4><p>Record or upload, then transcript, auto-selected template, structured report — with live ASR/LLM model readouts.</p></div>
+    <div class="tile"><h4>ehr</h4><p>Build, list, view structured patient records — scoped to the signed-in clinician.</p></div>
+    <div class="tile"><h4>alerts</h4><p>Due-medication computation from dosing schedules; critical-finding banner; doctor notification.</p></div>
+    <div class="tile"><h4>templates</h4><p>Browse the 56 institutional templates backing both manual and automatic selection.</p></div>
+    <div class="tile"><h4>radiology / vision</h4><p>Image-attached chat routed to the vision model.</p></div>
+    <div class="tile"><h4>education</h4><p>MCQs, case studies, mock exams, concept explanations from the same corpus.</p></div>
+    <div class="tile"><h4>reports</h4><p>Locally-saved report history, separate from the EHR store.</p></div>
+    <div class="tile"><h4>asr / llm / models</h4><p>Registry introspection — resolved model per role, VRAM budget, provider health.</p></div>
+    <div class="tile"><h4>settings / login</h4><p>Theme, language, workspace preferences; role picker and authentication.</p></div>
+  </div>
+
+  <h3>API routes</h3>
+  <div class="scroll">
+    <table>
+      <tr><th>Group</th><th>Routes</th></tr>
+      <tr><td class="w">Dictation</td><td class="k">POST /api/transcribe · /api/dictate · /api/report · /api/templates/suggest<br>GET /api/templates · /api/templates/{id}</td></tr>
+      <tr><td class="w">Agent &amp; chat</td><td class="k">POST /api/chat · /api/sessions/{id}/reset · /api/vision</td></tr>
+      <tr><td class="w">EHR</td><td class="k">POST /api/ehr/build · /api/ehr/{id}/dose · /api/ehr/{id}/ask<br>GET /api/ehr · /api/ehr/{id} · DELETE /api/ehr/{id}</td></tr>
+      <tr><td class="w">Alerts</td><td class="k">POST /api/alerts/check · /api/alerts/send · GET /api/alerts</td></tr>
+      <tr><td class="w">Education</td><td class="k">POST /api/education/mcq · /case · /exam · /explain<br>GET /api/education/saved · /saved/{id}</td></tr>
+      <tr><td class="w">Knowledge</td><td class="k">POST /api/knowledge/ask · GET /api/medrag/health · /api/rules</td></tr>
+      <tr><td class="w">Auth</td><td class="k">POST /api/auth/login · /register · /logout<br>POST /api/auth/mfa/enroll · /verify · /disable · GET /api/auth/me</td></tr>
+      <tr><td class="w">Governance</td><td class="k">GET /api/audit (admin)<br>GET /api/fhir/Patient/{id} · /api/fhir/Patient/{id}/$everything</td></tr>
+      <tr><td class="w">Sessions &amp; recovery</td><td class="k">GET /api/auth/sessions · DELETE /api/auth/sessions/{jti}<br>POST /api/auth/sessions/revoke-all · /api/auth/mfa/recovery-codes</td></tr>
+      <tr><td class="w">Interoperability</td><td class="k">POST /api/dicom/ingest<br>POST /api/hl7/parse · /api/hl7/oru</td></tr>
+      <tr><td class="w">Ops</td><td class="k">GET /api/live (liveness) · /api/health (readiness) · /api/models</td></tr>
+    </table>
+  </div>
+  <div class="note"><strong>Two health endpoints on purpose.</strong> <code>/api/live</code> touches no dependency, so probes stay truthful while models are still warming. <code>/api/health</code> fans out to the model providers and MedicalRAG and is TTL-cached with single-flight — N concurrent callers trigger at most one upstream probe. It also reports <code>medrag.llm.ok</code> separately from <code>medrag.ok</code>, which is how a misrouted answer LLM gets caught.</div>
+
+  <!-- ============================================ -->
+  <h2 id="data"><span class="n">06</span>Data model</h2>
+  <div class="scroll">
+    <table>
+      <tr><th>Table</th><th>Holds</th><th>Notes</th></tr>
+      <tr><td class="k">users</td><td class="w">Accounts, scrypt hashes, role</td><td>Roles: doctor · radiologist · resident · student · admin</td></tr>
+      <tr><td class="k">patients</td><td class="w">EHR documents (JSON blob)</td><td>Owned by <code>owner_user_id</code>; every read/write scoped by it</td></tr>
+      <tr><td class="k">alerts</td><td class="w">Notification history</td><td>Cascades from the patient row</td></tr>
+      <tr><td class="k">quizzes</td><td class="w">Saved education content</td><td>Per owner</td></tr>
+      <tr><td class="k">agent_sessions</td><td class="w">Conversation history + summary</td><td>Makes memory survive restart and replica hopping</td></tr>
+      <tr><td class="k">login_throttle</td><td class="w">Failure counts, lockout deadline</td><td>Shared across replicas — the whole point</td></tr>
+      <tr><td class="k">audit_log</td><td class="w">Who did what, to which resource, when, from where</td><td>Append-only; carries identifiers and reasons, never PHI</td></tr>
+      <tr><td class="k">revoked_tokens</td><td class="w">Revoked <code>jti</code>s and their expiry</td><td>Makes logout mean something; purged once tokens expire anyway</td></tr>
+      <tr><td class="k">auth_sessions</td><td class="w">Open sessions: IP, user agent, last seen</td><td>Answers "which devices am I signed in on", which the deny-list cannot</td></tr>
+      <tr><td class="k">mfa_recovery_codes</td><td class="w">Hashed single-use recovery codes</td><td>A lost authenticator stops being an admin-only problem</td></tr>
+    </table>
+  </div>
+  <p>The same schema runs on <strong>SQLite</strong> (default) or <strong>PostgreSQL</strong> (set <code>DATABASE_URL</code>) — no application module knows which. Beyond it: <strong>Qdrant</strong> holds the embedded corpus, a shared volume holds model weights, and report templates, naming rules and report clean-up patterns live as editable files under <code>backend/data/</code>.</p>
+
+  <!-- ============================================ -->
+  <h2 id="deploy"><span class="n">07</span>Deployment</h2>
+  <p class="lead">The stack is deployed and running on a dedicated GPU server. Everything below is measured on that machine, not estimated.</p>
+
+  <div class="grid3">
+    <div class="tile"><span class="role">hardware</span><h4>RTX 2080 Ti</h4><p>11 GB, Turing/sm75. 32 cores, 88 GB RAM, Ubuntu 22.04. No bfloat16, no FlashAttention-2, no CUDA forward compatibility.</p></div>
+    <div class="tile"><span class="role">core llm</span><h4>Qwen3.5-4B</h4><p>4-bit bitsandbytes on vLLM. <code>max_model_len</code> 6144, <code>max_num_seqs</code> 8, thinking disabled for structured output.</p></div>
+    <div class="tile"><span class="role">asr</span><h4>Whisper large-v3</h4><p>Served by Triton on CUDA, <code>task=transcribe</code>. Roughly 7 s for a 45-second dictation.</p></div>
+  </div>
+
+  <h3>GPU budget</h3>
+  <div class="scroll">
+    <table>
+      <tr><th>Process</th><th>VRAM</th><th>Note</th></tr>
+      <tr><td class="w">vLLM engine core</td><td class="num">4 900 MiB</td><td>weights 3.71 GiB · activation 2.12 GiB · CUDA graphs 0.15 GiB</td></tr>
+      <tr><td class="w">Whisper large-v3</td><td class="num">4 000 MiB</td><td>separate container, own GPU reservation</td></tr>
+      <tr><td class="w"><strong>Total in use</strong></td><td class="num"><strong>8 904 MiB</strong></td><td>of 11 264 MiB</td></tr>
+      <tr><td class="w">Headroom</td><td class="num">2 360 MiB</td><td>deliberate — see the warning below</td></tr>
+    </table>
+  </div>
+
+  <div class="note warn"><strong>Do not run the card to its limit.</strong> An earlier configuration at <code>VLLM_GPU_MEM_UTIL=0.68</code> with Whisper also on GPU reached roughly 10.8 of 11.26 GB and <strong>hung the entire host</strong> — no SSH, no ICMP, requiring a power cycle and ultimately a reimage. Leave about 2 GB free.</div>
+
+  <div class="note"><strong><code>VLLM_GPU_MEM_UTIL</code> is a startup free-memory check, not an allocation.</strong> It tells vLLM how much of the card it may assume is available when sizing the KV cache. Raising it reserves nothing; lowering it shrinks no weights. Reasoning about it as a memory cap leads to exactly the wrong conclusion about what fits.</div>
+
+  <h3>Verified configuration</h3>
+  <p>The settings that decide whether this deployment works at all. Full file with commentary in the runbook.</p>
+  <pre><b># core LLM — vLLM only</b>
+OLLAMA_ENABLED=false           VLLM_CORE_ENABLED=true
+VLLM_MODEL=Qwen/Qwen3.5-4B     VLLM_QUANTIZATION=bitsandbytes
+VLLM_DTYPE=float16             VLLM_GPU_MEM_UTIL=0.58
+VLLM_MAX_MODEL_LEN=6144        VLLM_MAX_NUM_SEQS=8
+VLLM_TOOL_CALL_PARSER=qwen3_xml
+VLLM_REASONING_PARSER=qwen3
+VLLM_EXTRA_BODY={"chat_template_kwargs":{"enable_thinking":false}}
+
+<b># ASR — Whisper on the GPU, out of process</b>
+ASR_TRITON_ENABLED=true        ASR_TRITON_DEFAULT=true
+ASR_HF_ENABLED=false           TRITON_WHISPER_DEVICE=cuda
+WHISPER_TASK=transcribe
+
+<b># knowledge service generates through the same vLLM</b>
+DOCKER_MEDRAG_LLM_PROVIDER=vllm
+DOCKER_MEDRAG_LLM_BASE_URL=http://vllm:8000/v1
+DOCKER_MEDRAG_LLM_MODEL=Qwen/Qwen3.5-4B</pre>
+
+  <div class="scroll">
+    <table>
+      <tr><th>Setting</th><th>Why it is not a default</th></tr>
+      <tr><td class="k">VLLM_MAX_NUM_SEQS</td><td>Qwen3.5 is hybrid Mamba/attention and needs one Mamba cache block per decode sequence. vLLM's default of 256 refuses to start: <em>"max_num_seqs (256) exceeds available Mamba cache blocks (46)"</em>.</td></tr>
+      <tr><td class="k">VLLM_MAX_MODEL_LEN</td><td>Must exceed the report prompt (naming rules + template + transcript) plus output. Too small returns <strong>400 on reports while plain chat still works</strong> — which reads like a prompt bug, not a sizing one.</td></tr>
+      <tr><td class="k">VLLM_TOOL_CALL_PARSER</td><td>The agent always sends <code>tools</code>; without <code>--enable-auto-tool-choice</code> and a family-correct parser, vLLM answers 400.</td></tr>
+      <tr><td class="k">VLLM_REASONING_PARSER</td><td>Without it, chain-of-thought lands in <code>content</code> and the report opens "Thinking Process: 1. Analyse the request…".</td></tr>
+      <tr><td class="k">VLLM_EXTRA_BODY</td><td>A reasoning model filling a template spends the whole budget thinking and returns an <strong>empty report with no error</strong>.</td></tr>
+      <tr><td class="k">WHISPER_TASK</td><td>The accuracy-critical one. See below.</td></tr>
+      <tr><td class="k">VLLM_QUANTIZATION</td><td>Qwen3.5-4B is vision-language and its fp16 checkpoint is 9.32 GB — it OOMs even with the whole card. Leave the value <em>empty</em> for unquantized; a literal <code>none</code> is rejected.</td></tr>
+    </table>
+  </div>
+
+  <div class="note bad"><strong><code>WHISPER_TASK=transcribe</code> is not optional for clinical use.</strong> Left unset, the task derives from <code>WHISPER_OUTPUT_ENGLISH=1</code> and becomes <code>translate</code> — a paraphrasing decode. Measured on the same audio file, byte-for-byte:
+  <div class="scroll">
+    <table style="margin-bottom:0">
+      <tr><th>translate (derived default)</th><th>transcribe (set explicitly)</th></tr>
+      <tr><td class="w">"hepato-biliary <strong>surgery on the uterus</strong>"</td><td class="w">"hepatobiliary <strong>ultrasound</strong>"</td></tr>
+      <tr><td class="w">"normal <strong>parasympathetic echo</strong>"</td><td class="w">"normal <strong>echogenicity</strong>"</td></tr>
+      <tr><td class="w">"the <strong>gallus and midi stent</strong>"</td><td class="w">"the <strong>gallbladder</strong>"</td></tr>
+    </table>
+  </div>
+  The damage compounds downstream: the mangled transcript also drove template auto-selection to <code>abdominopelvic_for_male</code> instead of <code>hepatobiliary</code>. <strong>This setting is necessary but not sufficient</strong> — the English is produced by a second, LLM translation stage that fabricates independently of it (§14).</div>
+
+  <h3>Entry points</h3>
+  <p>Three parallel entry points, all idempotent: <code>deploy.sh</code> (Linux/macOS/WSL), <code>deploy.ps1</code> (Windows), and <code>make deploy</code>. Each checks Docker and GPU availability, bootstraps <code>.env</code>, warns on duplicate keys and an empty corpus mount, builds every image, prefetches models, brings the stack up, restarts the gateway so nginx re-resolves upstream IPs, then polls until healthy.</p>
+
+  <div class="note warn"><strong><code>--force-recreate</code> does not rebuild the image.</strong> Backend sources are <code>COPY</code>ed in, not mounted, so editing a file on the server and recreating the container silently reruns the <em>old</em> code — the change appears to have no effect, which sends you hunting a second bug that does not exist. This cost more debugging time than any other single fact about the deployment. After touching anything under <code>backend/</code>: <code>docker compose build backend &amp;&amp; docker compose up -d backend</code>.</div>
+
+  <!-- ============================================ -->
+  <h2 id="verify"><span class="n">08</span>Verification</h2>
+  <p class="lead">Three suites, all env-driven, all run against the deployed stack rather than a local mock.</p>
+
+  <div class="scroll">
+    <table>
+      <tr><th>Suite</th><th>Covers</th><th>Result</th></tr>
+      <tr><td class="k">server_e2e_verify.sh</td><td class="w">Health, templates, auto-selection, ASR, full dictate, report-from-text, rule engine, EHR build/read/list, PHI encryption at rest, medication alerts, dose recording, FHIR <code>$everything</code>, terminology binding, audit trail, sessions, RBAC, HL7 ORU</td><td><span class="pill ok">21 pass · 0 fail · 2 skip</span></td></tr>
+      <tr><td class="k">load_test.py</td><td class="w">Concurrent agent turns through the gateway, latency distribution and error classes</td><td><span class="pill ok">100/100 · 0 errors</span></td></tr>
+      <tr><td class="k">security_probe.py</td><td class="w">SQL injection, token forgery, revocation, authorisation, privilege escalation, password policy, path traversal, oversized bodies, headers, error leakage, brute-force throttling</td><td><span class="pill ok">16 pass · 0 fail</span></td></tr>
+    </table>
+  </div>
+  <p>Both E2E skips are the knowledge corpus being absent on this machine (<code>medrag.chunks: 0</code>), not a defect.</p>
+
+  <h3>Concurrency</h3>
+  <div class="scroll">
+    <table>
+      <tr><th>Run</th><th>Success</th><th>Throughput</th><th>p50</th><th>p95</th><th>max</th></tr>
+      <tr><td class="w">50 requests @ 25</td><td class="w">50/50 (100%)</td><td class="num">0.13 req/s</td><td class="num">134 s</td><td class="num">221 s</td><td class="num">240 s</td></tr>
+      <tr><td class="w">100 requests @ 50</td><td class="w">100/100 (100%)</td><td class="num">0.31 req/s</td><td class="num">91 s</td><td class="num">189 s</td><td class="num">236 s</td></tr>
+    </table>
+  </div>
+  <p>No errors, no dropped connections, no degradation at either level. Note the direction: raising concurrency <strong>improved</strong> throughput, because vLLM batched more work per step. Latency here is queueing, not failure, and <code>VLLM_MAX_NUM_SEQS</code> is the dial — each agent turn is several LLM round-trips, so these are full iterations rather than single completions.</p>
+
+  <h3>Dictation, end to end</h3>
+  <div class="note bad"><strong>Open defect — read before trusting any transcript below.</strong> <code>/api/transcribe</code> is two stages: Whisper produces Persian, then a 4B model translates it to English. <strong>The translation stage fabricates.</strong> On a 41.9&nbsp;s sample it invented the anatomy (a portal vein never mentioned), invented findings ("no thrombus", "no focal lesions"), invented a measurement, and inverted a negation — producing three mutually incompatible readings from identical input. The English below is fluent and plausible; it has <em>not</em> been checked against the raw Persian. See <code>docs/core/ASR_TRANSLATION_CONFABULATION.md</code>.</div>
+  <p>The reference sample, as returned by the endpoint — presented as observed output, not as verified truth:</p>
+  <blockquote>For patient Sary Rahimi, a hepatobiliary ultrasound was performed. The liver is normal in size with normal echogenicity; the gallbladder is normal, and the proximal, middle, and distal portions of the biliary tree are normal. The pancreas is normal. The spleen is normal. No cholelithiasis is noted.</blockquote>
+  <p>The same audio through <code>/api/dictate</code> selects <code>hepatobiliary</code> and returns a filled report with one line per finding — no <code>*</code> alternatives, no unfilled placeholders:</p>
+  <pre>Hepatobiliary Sonography:
+Liver is normal in size and shows normal parenchymal echogenicity and no sign
+of space occupying lesion or bile ducts dilatation is noted.
+Gall bladder is well distended with no stone or wall thickening.
+No pericholecystic fluid is noted.
+Sonographic Murphy sign is negative.
+Spleen is normal in size and shows normal parenchymal echo with no S.O.L.
+Visualized parts of pancreas and para-aortic area are unremarkable.</pre>
+
+  <div class="note"><strong>Templates carry alternatives, and the model has to choose.</strong> Each finding appears as a default line followed by <code>*</code>-prefixed variants — mutually exclusive phrasings, not separate findings. Emitting all of them produces a 1507-character template dump of contradictory statements rather than a report; choosing one per group produces the 484 characters above from the same dictation. The prompt states the rule, and a deterministic pass strips any residue that survives it.</div>
+
+  <!-- ============================================ -->
+  <h2 id="security"><span class="n">09</span>Security</h2>
+
+  <h3>SQL injection — structurally prevented</h3>
+  <p>Every database call uses parameter binding. No query is built by interpolation, formatting, or f-string, so attacker-controlled text is never parsed as SQL. A repo-wide search for interpolated queries returns nothing, and that search is the documented regression check. An escaping helper was deliberately <em>not</em> added — it would imply interpolation is acceptable somewhere, which is the weaker guarantee.</p>
+  <p>The probe confirms this behaviourally rather than by inspection: ten auth-bypass payloads, a time-based blind probe, and a <code>DROP TABLE</code> attempt all fail, and the schema survives. The throttle table is incidental proof — it stores <code>'; drop table users; --</code> as a literal key, inert.</p>
+
+  <div class="scroll">
+    <table>
+      <tr><th>Probe</th><th>Result</th></tr>
+      <tr><td class="w">10 SQLi auth-bypass payloads on login</td><td><span class="pill ok">all rejected</span></td></tr>
+      <tr><td class="w">Time-based blind injection</td><td><span class="pill ok">no delay honoured</span></td></tr>
+      <tr><td class="w">Schema integrity after <code>DROP TABLE</code></td><td><span class="pill ok">intact</span></td></tr>
+      <tr><td class="w">Injection through an authenticated path parameter</td><td><span class="pill ok">no data returned</span></td></tr>
+      <tr><td class="w">Anonymous access to <code>/api/ehr</code>, <code>/api/audit</code>, <code>/api/auth/sessions</code></td><td><span class="pill ok">all refused</span></td></tr>
+      <tr><td class="w">Forged tokens: <code>alg:none</code>, stripped signature, bit-flip, garbage</td><td><span class="pill ok">all 4 rejected</span></td></tr>
+      <tr><td class="w">Token still valid after logout</td><td><span class="pill ok">200 → 401</span></td></tr>
+      <tr><td class="w">Weak passwords (<code>123456</code>, <code>password</code>, <code>abc</code>)</td><td><span class="pill ok">rejected</span></td></tr>
+      <tr><td class="w">Privilege escalation via self-declared <code>role=admin</code></td><td><span class="pill ok">registration closed</span></td></tr>
+      <tr><td class="w">5 MB request body</td><td><span class="pill ok">413 with a stated limit</span></td></tr>
+      <tr><td class="w">Path traversal to <code>/etc/passwd</code></td><td><span class="pill ok">no host files read</span></td></tr>
+      <tr><td class="w">Security headers · server banner · error leakage</td><td><span class="pill ok">set · no version · opaque</span></td></tr>
+      <tr><td class="w">Brute force: 25 bad logins</td><td><span class="pill ok">throttled after 8</span></td></tr>
+    </table>
+  </div>
+
+  <div class="scroll">
+    <table>
+      <tr><th>Control</th><th>Implementation</th><th>State</th></tr>
+      <tr><td class="w">Password storage</td><td>scrypt (n=2¹⁴), per-password salt, constant-time compare</td><td><span class="pill ok">enforced</span></td></tr>
+      <tr><td class="w">Session tokens</td><td>HS256 JWS; signature verified before payload is read; <code>exp</code> enforced</td><td><span class="pill ok">enforced</span></td></tr>
+      <tr><td class="w">User enumeration</td><td>Missing user still runs a full scrypt round against a dummy hash; identical message either way</td><td><span class="pill ok">closed</span></td></tr>
+      <tr><td class="w">Brute force</td><td>8 failures / 300 s per <code>username|IP</code> → 900 s lockout, <code>429</code> + <code>Retry-After</code>. Further attempts during a lockout do not extend it, so an account always recovers</td><td><span class="pill ok">shared</span></td></tr>
+      <tr><td class="w">Default credentials</td><td>No well-known password; random 24-char generated to a <code>0600</code> file unless configured</td><td><span class="pill ok">closed</span></td></tr>
+      <tr><td class="w">Transport</td><td>TLS 1.2/1.3 + HTTP/2 + HSTS at the gateway; fails closed if cert missing</td><td><span class="pill ok">opt-in</span></td></tr>
+      <tr><td class="w">Request limits</td><td>Per-IP rate and connection caps on AI endpoints; upload size cap; separate character cap on the chat text field</td><td><span class="pill ok">enforced</span></td></tr>
+      <tr><td class="w">Data scoping</td><td>EHR reads/writes scoped by owner on both REST and agent paths</td><td><span class="pill ok">enforced</span></td></tr>
+      <tr><td class="w">RBAC</td><td>Data-driven role→permission policy, deny by default, enforced on 18 routes</td><td><span class="pill ok">enforced</span></td></tr>
+      <tr><td class="w">Audit trail</td><td>Auth events, PHI access, and every denial; append-only, PHI-free, itself audited</td><td><span class="pill ok">enforced</span></td></tr>
+      <tr><td class="w">MFA</td><td>TOTP (RFC 6238); two-phase enrolment, replay-blocked, counts toward lockout</td><td><span class="pill ok">available</span></td></tr>
+      <tr><td class="w">Token revocation</td><td><code>jti</code> + <code>/auth/logout</code>; revocation check fails closed</td><td><span class="pill ok">enforced</span></td></tr>
+      <tr><td class="w">Password policy</td><td>NIST-shaped: length-first, class rules opt-in, blocklist matches padded variants</td><td><span class="pill ok">enforced</span></td></tr>
+      <tr><td class="w">Encryption at rest</td><td>AES-256-GCM over the patient record; AAD binds ciphertext to its row; key rotation by key id</td><td><span class="pill ok">enforced</span></td></tr>
+      <tr><td class="w">Internal TLS</td><td>Gateway→backend hop encryptable via an overlay; off by default on a trusted network</td><td><span class="pill ok">available</span></td></tr>
+    </table>
+  </div>
+
+  <div class="grid2">
+    <div class="card">
+      <h3>The audit trail carries no PHI</h3>
+      <p style="margin:0"><code>resource</code> is an identifier like <code>patient:ali-reza</code>; <code>detail</code> holds field names, counts and reasons. Never diagnoses, names, or note text — a trail that leaks PHI widens the breach surface it exists to narrow. Reading it requires <code>audit.read</code> and is itself recorded.</p>
+    </div>
+    <div class="card">
+      <h3>Two checks, not one</h3>
+      <p style="margin:0">RBAC decides <em>whether</em> a caller may touch EHR at all; <code>owner_user_id</code> decides <em>which</em> records they see. They are independent and both must pass, so a role grant can never widen access across owners.</p>
+    </div>
+  </div>
+
+  <div class="note warn"><strong>Two settings decide whether security holds at scale.</strong> <code>ASR_AGENT_SECRET</code> must be set before running more than one backend replica — otherwise each worker signs tokens with its own random key and sessions break across replicas. And the throttle backend must stay shared: per-process counters hand an attacker N× the attempt budget at N replicas, because the gateway spreads their guesses across all of them.</div>
+
+  <!-- ============================================ -->
+  <h2 id="scaling"><span class="n">10</span>Scaling</h2>
+  <p class="lead">The topology was always horizontally scalable — <code>--scale backend=4 --scale medrag=3</code>, nginx balancing over Docker DNS. What changed is what happens to <em>state</em> when you actually do it, and the load runs above show what happens to <em>latency</em>.</p>
+
+  <div class="grid2">
+    <div class="card">
+      <h3>Before</h3>
+      <p style="margin:0">Conversation memory lived in one worker's process dict, so a session's history was wherever nginx happened to route — often nowhere. Login throttle counters were per-process, multiplying the attacker's budget. A hung LLM or tool call held a worker slot with no bound. SQLite's default journal blocked readers for the whole of every write.</p>
+    </div>
+    <div class="card">
+      <h3>After</h3>
+      <p style="margin:0">Memory is durable in shared SQLite and rehydrates on whichever replica gets the next request. Throttle counters are shared, so the lockout is global. Every LLM and tool call is timeout-bounded, so a stuck call frees its worker. WAL lets readers proceed during writes, and <code>busy_timeout</code> makes a concurrent writer wait rather than fail.</p>
+    </div>
+  </div>
+
+  <div class="note"><strong>On this hardware the bottleneck is the GPU, not the API tier.</strong> 100 concurrent agent turns all completed, but p50 was 91 s because eight sequences decode at a time. Adding backend replicas will not move that number — raising <code>VLLM_MAX_NUM_SEQS</code> (with <code>VLLM_GPU_MEM_UTIL</code> to back it) or adding GPUs will. Scale the tier that is actually saturated.</div>
+
+  <h3>Checklist before <code>--scale backend=N</code></h3>
+  <ol>
+    <li><strong>Set <code>ASR_AGENT_SECRET</code></strong> — otherwise tokens do not validate across replicas.</li>
+    <li><strong>Leave the throttle backend shared</strong> (<code>auto</code> or <code>redis</code>), never <code>memory</code>.</li>
+    <li><strong>Keep <code>DB_JOURNAL_MODE=WAL</code></strong> — replicas share one database file. Past the point where a single writer is the bottleneck, set <code>DATABASE_URL</code> and run PostgreSQL instead; no application code changes.</li>
+    <li>Memory needs nothing extra; it is already durable and rehydrates on any replica.</li>
+  </ol>
+
+  <!-- ============================================ -->
+  <h2 id="config"><span class="n">11</span>Configuration &amp; the no-hardcoding rule</h2>
+  <p>Every host, port, path, model id, limit, and timeout resolves from configuration. Three surfaces, chosen by what the value tunes:</p>
+  <div class="grid3">
+    <div class="tile"><h4>.env</h4><p>Service discovery, credentials, TLS material, model topology, database pragmas, throttle policy. Anything an operator changes per deployment or must never commit.</p></div>
+    <div class="tile"><h4>models.yaml → runtime.*</h4><p>Agent loop bounds, per-call timeouts, generation budgets, memory window and eviction, purge interval. These live beside the model registry they tune.</p></div>
+    <div class="tile"><h4>backend/data/</h4><p>Clinical content: report templates, hospital naming rules, RBAC policy, terminology bindings, report clean-up patterns. Editable files with in-code fallbacks.</p></div>
+  </div>
+
+  <h3>Settings added in this pass</h3>
+  <div class="scroll">
+    <table>
+      <tr><th>Key</th><th>Default</th><th>What it decides</th></tr>
+      <tr><td class="k">WHISPER_TASK</td><td class="k">transcribe</td><td class="w">Literal decode versus paraphrasing translation. Now authoritative — it used to be unreachable whenever <code>WHISPER_OUTPUT_ENGLISH</code> was on, which was always.</td></tr>
+      <tr><td class="k">CHAT_TEXT_ROUTE</td><td class="k">agent</td><td class="w">Whether a text turn runs the tool loop or short-circuits to retrieval.</td></tr>
+      <tr><td class="k">CHAT_MAX_TEXT_CHARS</td><td class="k">32000</td><td class="w">Caps the chat text field. The gateway body limit must stay at 256m for audio, so it cannot bound a text field.</td></tr>
+      <tr><td class="k">REPORT_POSTPROCESS</td><td class="k">1</td><td class="w">Strips unfilled template residue from a generated report. Patterns are data.</td></tr>
+      <tr><td class="k">VLLM_EXTRA_BODY</td><td class="k">—</td><td class="w">Arbitrary JSON merged into every vLLM request; how thinking gets disabled for structured output.</td></tr>
+      <tr><td class="k">DOCKER_MEDRAG_LLM_BASE_URL</td><td class="k">—</td><td class="w">Where the knowledge service generates. Unset, it falls back to a loopback address that is nothing inside its container.</td></tr>
+    </table>
+  </div>
+
+  <div class="note"><strong>Deliberately still code:</strong> tool JSON schemas live beside the functions that implement them, the way FastAPI and pydantic do it. They are structural contracts, not deployment knobs; externalising them would add indirection with nothing gained. The report clean-up patterns went the other way — which residue a template can leave behind is a property of the template catalogue, so a site with its own templates edits data, not Python.</div>
+
+  <!-- ============================================ -->
+  <h2 id="claims"><span class="n">12</span>Claims vs reality</h2>
+  <p class="lead">The product one-pager makes specific capability claims. This is where each one actually stands in the code — audited, not assumed.</p>
+  <div class="scroll">
+    <table>
+      <tr><th>Claim</th><th>Status</th><th>Evidence</th></tr>
+      <tr><td class="w">Voice-to-Report, AI structured reports, templates</td><td><span class="pill crit">open defect</span></td><td>Pipeline and 56-template auto-selection work end to end, but the Persian-to-English stage fabricates findings (§14). Not safe for clinical use until that is fixed</td></tr>
+      <tr><td class="w">Evidence-based clinical intelligence</td><td><span class="pill warn">shipped · corpus not attached here</span></td><td>MedicalRAG and Qdrant run and the answer LLM is healthy, but this deployment serves 0 chunks until the corpus is transferred</td></tr>
+      <tr><td class="w">Clinical rules engine</td><td><span class="pill ok">shipped</span></td><td><code>backend/rules/</code> — engine, matcher, repository, banks, tests. 12 rules live</td></tr>
+      <tr><td class="w">Scalable architecture, Cloud / On-Premise</td><td><span class="pill ok">shipped</span></td><td>Compose, replica scaling, shared durable state; 100/100 at concurrency 50</td></tr>
+      <tr><td class="w">Role-Based Access Control</td><td><span class="pill ok">enforced</span></td><td>Data-driven policy on 18 routes, deny by default. Verified live: a student token gets 403 on EHR and audit, 200 on education</td></tr>
+      <tr><td class="w">Audit Trail</td><td><span class="pill ok">enforced</span></td><td>Records auth, PHI access, and every denial</td></tr>
+      <tr><td class="w">Standardized data model (FHIR)</td><td><span class="pill ok">shipped</span></td><td>FHIR R4 export with SNOMED/RxNorm binding plus a terminology-server client. Read-only projection by design</td></tr>
+      <tr><td class="w">Enterprise-level encryption</td><td><span class="pill ok">shipped</span></td><td>AES-256-GCM PHI encryption at rest, verified as ciphertext with no cleartext name. TLS available but <strong>off on this deployment</strong></td></tr>
+      <tr><td class="w">HIPAA / GDPR / ISO 27001</td><td><span class="pill warn">controls met, not certified</span></td><td>Audit trail with retention, RBAC, MFA, TLS and encryption at rest are implemented. Certification is an external audit, not a code state</td></tr>
+      <tr><td class="w">DICOM / PACS integration</td><td><span class="pill ok">shipped</span></td><td>DICOM ingest with windowed rendering and study context; HL7 v2 ADT/ORM/ORU in and out. Network listeners remain separate processes</td></tr>
+      <tr><td class="w">Multi-agent AI orchestration</td><td><span class="pill warn">one agent, 17 tools</span></td><td>A tool-calling agent with a registry — capable, but not multiple coordinating agents. Worth wording accurately in the deck</td></tr>
+    </table>
+  </div>
+  <div class="note warn"><strong>Read this before quoting the one-pager.</strong> Three wordings deserve care: FHIR is a read-only <em>export</em> rather than the internal data model; "multi-agent orchestration" describes one agent with a tool registry; and "evidence-based" depends on a corpus that is not on this machine yet. Certification is an external audit — the controls are in place, the certificate is not.</div>
+
+  <!-- ============================================ -->
+  <h2 id="fixes"><span class="n">13</span>Fix history</h2>
+  <p>Fifty-three defects across two phases. Thirty-three came from six code-review passes; twenty more surfaced only when the system met real hardware — almost all of them invisible locally and fatal on the server.</p>
+
+  <h3>Phase 1 — code review (33)</h3>
+  <p>Summarised by class, since the detail is in the repository history:</p>
+  <div class="scroll">
+    <table>
+      <tr><th>Class</th><th>Count</th><th>Representative</th></tr>
+      <tr><td class="w"><span class="pill crit">security</span></td><td class="num">9</td><td>Roles were stored but enforced on <em>no route</em> — a student token could delete another clinician's patient. Per-process throttle counters gave N× the attempt budget at N replicas. <code>admin</code>/<code>admin</code> seeded by default.</td></tr>
+      <tr><td class="w"><span class="pill crit">compliance</span></td><td class="num">4</td><td>No audit trail existed while HIPAA compliance was claimed. PHI sat in plaintext in the database, its WAL, and every backup — and <code>patients.name</code> held a <em>second</em> plaintext copy outside the encrypted blob.</td></tr>
+      <tr><td class="w"><span class="pill crit">integrity</span></td><td class="num">3</td><td>Name-slug patient identity merged two same-named patients. Unvalidated LLM JSON reached dosing math. Chat-based EHR tools ignored ownership.</td></tr>
+      <tr><td class="w"><span class="pill warn">scale</span></td><td class="num">6</td><td>Memory was process-local, so a replica hop lost history. No per-call timeout — a hung call blocked a worker indefinitely. SQLite's journal blocked readers during writes.</td></tr>
+      <tr><td class="w"><span class="pill info">interop</span></td><td class="num">5</td><td>FHIR, DICOM and HL7 v2 had no implementation behind the claims. DICOM <code>has_pixel_data</code> read a header parsed with <code>stop_before_pixels=True</code>, so it reported "no image" for every image.</td></tr>
+      <tr><td class="w"><span class="pill info">config</span></td><td class="num">6</td><td>Loop caps, summariser magic numbers, and a hospital naming example baked into Python. <code>/api/health</code> reported the registry slot name instead of the loaded model.</td></tr>
+    </table>
+  </div>
+
+  <h3>Phase 2 — server bring-up (20)</h3>
+  <div class="scroll">
+    <table>
+      <tr><th>#</th><th>Class</th><th>Issue → fix</th></tr>
+      <tr><td class="k">34</td><td><span class="pill crit">privacy</span></td><td class="w">The vLLM slot was configured with <code>api_base</code>, but the provider reads <code>base_url</code> — so it fell back to its default and sent <strong>clinical text to the public OpenAI endpoint</strong>. With an API key present this would have succeeded silently. Key name fixed; the fallback now logs a loud warning.</td></tr>
+      <tr><td class="k">35</td><td><span class="pill crit">correctness</span></td><td class="w"><code>tool_choice: "auto"</code> was set whenever <code>extra_body</code> was configured, including on requests with no <code>tools</code>. vLLM rejects that pair, so <strong>every report generation failed with a bare 400</strong> while the agent path kept working.</td></tr>
+      <tr><td class="k">36</td><td><span class="pill crit">clinical</span></td><td class="w"><code>WHISPER_TASK</code> was unreachable whenever <code>WHISPER_OUTPUT_ENGLISH</code> was on, so ASR always ran <code>translate</code> — paraphrasing clinical vocabulary and mis-driving template selection.</td></tr>
+      <tr><td class="k">37</td><td><span class="pill crit">clinical</span></td><td class="w">The structuring prompt never described the template's <code>*</code> alternative convention, so the model emitted every mutually exclusive variant — a 1507-character dump of contradictory findings presented as a report.</td></tr>
+      <tr><td class="k">38</td><td><span class="pill crit">clinical</span></td><td class="w">Residue survived the prompt rule: a report opening "This study is suboptimal due to however:" asserts a degraded study with no reason. A data-driven pass now strips unfilled placeholders and orphaned conditional lines.</td></tr>
+      <tr><td class="k">39</td><td><span class="pill crit">correctness</span></td><td class="w">Every text-only chat turn short-circuited to MedicalRAG, making all 17 agent tools unreachable without an attachment.</td></tr>
+      <tr><td class="k">40</td><td><span class="pill warn">correctness</span></td><td class="w">MedicalRAG's answer LLM fell back to <code>127.0.0.1:8000</code>, which inside its container is nothing. <code>/api/health</code> showed <code>medrag.ok: true</code> while <code>medrag.llm.ok</code> was false — easy to miss.</td></tr>
+      <tr><td class="k">41</td><td><span class="pill warn">correctness</span></td><td class="w">A reasoning model spent its whole budget thinking and returned an <strong>empty report with no error</strong>. Fixed with a reasoning parser plus <code>enable_thinking:false</code>.</td></tr>
+      <tr><td class="k">42</td><td><span class="pill warn">correctness</span></td><td class="w"><code>max_model_len</code> was below the report prompt, so reports 400'd while plain chat succeeded — a failure that points at the prompt rather than the sizing.</td></tr>
+      <tr><td class="k">43</td><td><span class="pill crit">perf</span></td><td class="w">The Triton container had no GPU reservation, so <code>TRITON_WHISPER_DEVICE=cuda</code> silently degraded to CPU while the setting looked honoured.</td></tr>
+      <tr><td class="k">44</td><td><span class="pill warn">infra</span></td><td class="w">CUDA error 804 on Turing: the image's <code>/usr/local/cuda/compat</code> shadowed the host driver. Masked with a tmpfs; <code>torch.cuda.is_available()</code> measured False → True.</td></tr>
+      <tr><td class="k">45</td><td><span class="pill warn">infra</span></td><td class="w">Windows checkouts produced CRLF, which made <code>deploy.sh</code> unrunnable (<code>/usr/bin/env: 'bash\r'</code>) and turned a <code>.env</code> port into <code>invalid hostPort: 8000</code> with the <code>\r</code> invisible. Pinned via <code>.gitattributes</code>.</td></tr>
+      <tr><td class="k">46</td><td><span class="pill warn">config</span></td><td class="w">An interpolated <code>enabled: "false"</code> is a truthy Python string, so disabled registry slots loaded anyway.</td></tr>
+      <tr><td class="k">47–49</td><td><span class="pill warn">infra</span></td><td class="w">vLLM startup: <code>--task embed</code> removed upstream, a literal <code>--quantization none</code> rejected outright, and <code>max_num_seqs</code> exceeding available Mamba cache blocks. All three now assembled by an entrypoint that can omit a flag entirely.</td></tr>
+      <tr><td class="k">50</td><td><span class="pill warn">infra</span></td><td class="w">The CUDA base image's NVIDIA apt repo is geo-blocked (403), failing the build after multi-GB layers had already pulled. The repo is removed before <code>apt-get update</code>.</td></tr>
+      <tr><td class="k">51</td><td><span class="pill warn">security</span></td><td class="w">The gateway advertised <code>nginx/1.27.5</code>, handing over the exact CVE list for the build.</td></tr>
+      <tr><td class="k">52</td><td><span class="pill warn">security</span></td><td class="w">A 5 MB text field reached the model and returned an unhandled 500 — refused by accident rather than by policy.</td></tr>
+      <tr><td class="k">53</td><td><span class="pill info">tooling</span></td><td class="w">The E2E suite reported five cascading failures whenever the security probe's brute-force check had locked the admin account. Both suites now abort with the actual reason.</td></tr>
+    </table>
+  </div>
+
+  <div class="note"><strong>The most expensive lesson was not a code defect.</strong> <code>docker compose up --force-recreate</code> does not rebuild an image, so an edited backend file kept running the old code — and every fix looked like it had failed. Time lost to that single misunderstanding exceeded any individual bug on this page.</div>
+
+  <!-- ============================================ -->
+  <h2 id="limits"><span class="n">14</span>Known limits</h2>
+  <p>One open defect, then the set of things that are genuinely someone else's job, deliberate design decisions, or operational rather than technical:</p>
+  <ul>
+    <li><strong class="mono">OPEN · CLINICAL SAFETY — the English transcript is a confabulation.</strong> Whisper transcribes Persian faithfully; a 4B model then translates it, and that stage invents anatomy, findings and measurements, and inverts negations. Three runs of one input gave three incompatible clinical readings. It is invisible from the outside because the output is fluent and well-formed — it reads like a better transcript than the truth. Full evidence and fix directions in <code>docs/core/ASR_TRANSLATION_CONFABULATION.md</code>; <code>scripts/asr_translate_probe.py</code> is the regression check.</li>
+    <li><strong>The knowledge corpus is not on this server.</strong> MedicalRAG, Qdrant and the answer LLM are all healthy, but the store holds 0 chunks until the ~19 GB corpus is transferred. Knowledge answers currently fall back to the model's own knowledge, which is exactly what a grounded system is supposed to avoid — so knowledge quality is <em>unverified here</em>, not verified-good.</li>
+    <li><strong>This deployment serves plain HTTP.</strong> Credentials and clinical text cross the network in the clear. TLS is implemented and one flag away; it is off, and that is a deployment decision to revisit before real patient data.</li>
+    <li><strong>The template-mismatch detector is over-eager.</strong> It can append a trailing "NOTE: Dictation appears to describe …" even when the selected template does match the dictation. Cosmetic, but it lands in the report body where a clinician will read it.</li>
+    <li><strong>PHI key custody is operational, not automatable.</strong> The system warns at startup, proves every key referenced by stored rows is loaded, and can decrypt-check every record before you trust a restore — but it cannot verify that a backup exists somewhere safe. Losing the key loses the data. That is the property that makes the encryption worth having.</li>
+    <li><strong>No MLLP listener or DICOM C-STORE SCP.</strong> Both are network listeners with their own lifecycle, ports and failure modes; they belong in their own process, not inside the API. The parsing and generation they would carry is done.</li>
+    <li><strong>FHIR is a read-only projection</strong> — deliberately. Becoming a FHIR-native store means FHIR resources as the internal model, which is a different system, not a bigger version of this one.</li>
+    <li><strong>SNOMED CT cannot be vendored.</strong> It is licensed. The bundled file is a curated starter set and a terminology server handles the rest; with none configured, unbound terms stay text-only rather than being guessed at.</li>
+    <li><strong>The gateway does not verify the upstream certificate</strong> under internal TLS. That still defeats passive sniffing; authenticated upstreams need <code>proxy_ssl_verify on</code> and a trusted CA, which is a certificate-management decision, not a code one.</li>
+  </ul>
+
+  <div class="note"><strong>On "no further enhancement needed".</strong> Every gap these reviews found is closed and verified against the running stack. But a clinical system earns its status continuously, not once: models drift, dependencies get CVEs, corpora go stale, and regulation moves. The honest claim is that there is no known outstanding defect and no capability claimed that is not implemented — not that the work is permanently finished.</div>
+
+  <footer>
+    AranMed system canvas · 33 fixes from six code-review passes, 20 more from server bring-up, all verified live.<br>
+    Deployed on RTX 2080 Ti / Ubuntu 22.04: vLLM + Qwen3.5-4B (4-bit) and Whisper large-v3 on Triton, 8 904 of 11 264 MiB.<br>
+    E2E 21/21 · load 100/100 at concurrency 50 · security 16/16.<br>
+    Reference docs: docs/core/{SERVER_DEPLOYMENT_RUNBOOK, SECURITY, CONFIGURATION, DEPLOYMENT, CORE_ARCHITECTURE_v1}.md
+  </footer>
+
+</div>
