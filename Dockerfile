@@ -24,6 +24,14 @@ ENV DEBIAN_FRONTEND=noninteractive \
 # does not discard that work.
 RUN printf 'Acquire::Retries "10";\nAcquire::http::Timeout "60";\nAcquire::https::Timeout "60";\n' \
         > /etc/apt/apt.conf.d/99retries \
+    # The CUDA base image ships an NVIDIA apt repo, and `apt-get update` fails
+    # the whole build if it is unreachable -- which it is from networks NVIDIA
+    # geo-blocks (observed: "403 Forbidden ... repository is not signed" from
+    # an Iranian host). Nothing installed below comes from that repo; the CUDA
+    # runtime is already baked into the image. Disabling it makes the build
+    # depend only on Ubuntu mirrors.
+    && rm -f /etc/apt/sources.list.d/cuda*.list \
+             /etc/apt/sources.list.d/nvidia*.list 2>/dev/null || true \
     && for i in 1 2 3 4 5; do \
          apt-get update && break || { echo "apt-get update retry $i"; sleep 15; }; \
        done \
@@ -121,6 +129,14 @@ ENV DEBIAN_FRONTEND=noninteractive \
 # build-essential would add ~400 MB for nothing.
 RUN printf 'Acquire::Retries "10";\nAcquire::http::Timeout "60";\nAcquire::https::Timeout "60";\n' \
         > /etc/apt/apt.conf.d/99retries \
+    # The CUDA base image ships an NVIDIA apt repo, and `apt-get update` fails
+    # the whole build if it is unreachable -- which it is from networks NVIDIA
+    # geo-blocks (observed: "403 Forbidden ... repository is not signed" from
+    # an Iranian host). Nothing installed below comes from that repo; the CUDA
+    # runtime is already baked into the image. Disabling it makes the build
+    # depend only on Ubuntu mirrors.
+    && rm -f /etc/apt/sources.list.d/cuda*.list \
+             /etc/apt/sources.list.d/nvidia*.list 2>/dev/null || true \
     && for i in 1 2 3 4 5; do \
          apt-get update && break || { echo "apt-get update retry $i"; sleep 15; }; \
        done \
