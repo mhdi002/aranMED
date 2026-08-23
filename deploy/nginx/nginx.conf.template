@@ -35,6 +35,11 @@ upstream aranmed_frontend {
 limit_req_zone $binary_remote_addr zone=aranmed_ai:${LB_RATE_ZONE_SIZE} rate=${LB_AI_RATE};
 limit_conn_zone $binary_remote_addr zone=aranmed_conn:${LB_RATE_ZONE_SIZE};
 
+# Suppress the version in the Server header and on error pages. Announcing
+# "nginx/1.27.5" hands an attacker the exact CVE list for this build and buys
+# nothing operationally.
+server_tokens off;
+
 server {
     listen ${GATEWAY_PORT};
     server_name _;

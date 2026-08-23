@@ -247,10 +247,61 @@ ASR_HF_DEFAULT=false
 ASR_TRITON_ENABLED=true
 ASR_TRITON_DEFAULT=true
 TRITON_WHISPER_DEVICE=cuda      # or cpu, to leave the GPU to the LLM
+WHISPER_TASK=transcribe         # see below — the accuracy-critical one
 ```
 
 This keeps Whisper out of the API process so ASR and report generation can
 scale apart.
+
+> **`WHISPER_TASK=transcribe` is not optional for clinical use.** When it is
+> unset the task is derived from `WHISPER_OUTPUT_ENGLISH=1`, which yields
+> `translate` — a *paraphrasing* decode. Measured on the same audio file:
+>
+> | `translate` (derived default) | `transcribe` (set explicitly) |
+> | --- | --- |
+> | "hepato-biliary **surgery on the uterus**" | "hepatobiliary **ultrasound**" |
+> | "normal **parasympathetic echo**" | "normal **echogenicity**" |
+> | "the **gallus and midi stent**" | "the **gallbladder**" |
+>
+> The damage compounds: the mangled transcript also drove template
+> auto-selection to `abdominopelvic_for_male` instead of `hepatobiliary`.
+
+### Report generation: turn thinking off
+
+```bash
+VLLM_REASONING_PARSER=qwen3
+VLLM_EXTRA_BODY={"chat_template_kwargs":{"enable_thinking":false}}
+```
+
+A reasoning model asked to fill a template spends the whole token budget
+inside its thinking block and returns an **empty report with no error**. The
+parser keeps any remaining reasoning out of `content`; `extra_body` stops it
+being generated for a task that wants structured output rather than
+deliberation.
+
+### MedicalRAG's answer LLM
+
+```bash
+DOCKER_MEDRAG_LLM_PROVIDER=vllm
+DOCKER_MEDRAG_LLM_BASE_URL=http://vllm:8000/v1
+DOCKER_MEDRAG_LLM_MODEL=Qwen/Qwen3.5-4B
+```
+
+Without the base URL the service falls back to `http://127.0.0.1:8000/v1`,
+which inside the medrag container is nothing at all. The symptom is subtle:
+`/api/health` reports `medrag.ok: true` while `medrag.llm.ok` is false.
+
+### Chat routing
+
+```bash
+CHAT_TEXT_ROUTE=agent           # default
+```
+
+`agent` runs the tool-calling loop for text turns, reaching MedicalRAG
+through the `medical_knowledge` tool — so one endpoint serves both "what
+causes X" and "list the EHR records". The legacy `medrag` value short-circuits
+every text turn to retrieval and returns, which makes all 17 agent tools
+unreachable unless audio or an image is attached.
 
 ---
 
@@ -325,6 +376,22 @@ docker compose --profile vllm up -d --force-recreate vllm backend
 docker compose restart gateway     # nginx caches upstream IPs at start
 ```
 
+### `--force-recreate` does not rebuild the image
+
+This costs more debugging time than anything else on this page. Backend
+sources are `COPY`ed into the image, not mounted, so editing a file on the
+server and recreating the container silently reruns the **old** code — the
+change appears to have no effect, which sends you looking for a second bug
+that does not exist. After editing anything under `backend/`:
+
+```bash
+docker compose build backend && docker compose up -d backend
+```
+
+Env-var changes are the exception: those are read at container start, so
+recreate alone is enough. Templates under `deploy/` are bind-mounted and need
+only a restart of the service that reads them.
+
 ---
 
 ## 9. Verify
@@ -348,9 +415,86 @@ curl -s -X POST http://SERVER_IP:8090/api/transcribe -F "file=@/root/sample.m4a"
 curl -s -X POST http://SERVER_IP:8090/api/dictate -F "file=@/root/sample.m4a"
 ```
 
+### Full dictate, end to end
+
+```bash
+curl -s -X POST http://SERVER_IP:8090/api/dictate -F "file=@/root/sample.m4a"
+```
+
+`/api/dictate` returns the **report**, not the transcript — transcript comes
+from `/api/transcribe`. A healthy run selects a template, reports
+`model: vllm-core`, and returns a report with **no `*`-prefixed lines**. Those
+asterisks mark mutually exclusive alternative phrasings in the template; if
+they survive into the output the model dumped the template instead of filling
+it (observed: 1507 characters of contradictory findings, versus 484 correct
+ones from the same dictation).
+
 ---
 
-## 10. Access from another machine
+## 10. Load and security testing
+
+Both scripts are env-driven and run from inside the backend container, which
+already has `httpx`. `scripts/` is baked into the image rather than mounted,
+so pipe the current copy in over stdin:
+
+```bash
+cd /opt/aranmed
+docker compose cp .env backend:/tmp/.env
+```
+
+### Concurrency
+
+```bash
+docker compose exec -T \
+  -e LOAD_N=100 -e LOAD_CONCURRENCY=50 \
+  -e LOAD_BASE=http://gateway:8080 -e LOAD_ENV_FILE=/tmp/.env \
+  backend python - < scripts/load_test.py
+```
+
+Measured on one RTX 2080 Ti with `VLLM_MAX_NUM_SEQS=8`:
+
+| Run | Success | Throughput | p50 | p95 | max |
+| --- | --- | --- | --- | --- | --- |
+| 50 req @ 25 | 50/50 (100%) | 0.13 req/s | 134 s | 221 s | 240 s |
+| 100 req @ 50 | 100/100 (100%) | 0.31 req/s | 91 s | 189 s | 236 s |
+
+**No errors, no dropped connections, no degradation at either level.** Latency
+is queueing, not failure: raising concurrency *improved* throughput because
+vLLM batched more per step. Latency is the thing to scale — raise
+`VLLM_MAX_NUM_SEQS` (and `VLLM_GPU_MEM_UTIL` to back it), or add GPUs. Note
+each agent turn is several LLM round-trips, so these are full agent
+iterations, not single completions.
+
+### Security
+
+```bash
+docker compose exec -T \
+  -e SEC_BASE=http://gateway:8080 -e SEC_ENV_FILE=/tmp/.env \
+  backend python - < scripts/security_probe.py
+```
+
+16 adversarial checks; the exit code is the number of failures. Covers SQL
+injection (10 auth-bypass payloads plus a time-based blind probe and a
+`DROP TABLE` integrity check), token forgery (`alg:none`, stripped signature,
+bit-flip, garbage), revocation, anonymous access to protected paths,
+privilege escalation via a self-declared role, weak passwords, path
+traversal, oversized bodies, security headers, error leakage, and login
+brute-force throttling.
+
+> **Run it last.** Check 16 deliberately trips the login limiter, which locks
+> the admin account for `LOGIN_LOCKOUT_SEC` (default 900 s). Re-running inside
+> that window aborts with exit code 2 rather than reporting phantom failures.
+
+Two findings from the first run, both since fixed:
+
+| Finding | Fix |
+| --- | --- |
+| `Server: nginx/1.27.5` disclosed the exact build | `server_tokens off` in the gateway template |
+| A 5 MB `text` field returned **500** (unhandled) instead of a stated limit | `CHAT_MAX_TEXT_CHARS` (default 32000) → clean `413`. The gateway's `client_max_body_size` must stay large for audio, so it cannot bound a text field. |
+
+---
+
+## 11. Access from another machine
 
 The gateway publishes `GATEWAY_PUBLISH_PORT` (default 8090):
 
@@ -365,11 +509,11 @@ ufw allow 8090/tcp || iptables -I INPUT -p tcp --dport 8090 -j ACCEPT
 ```
 
 > **Plain HTTP sends credentials and clinical text in the clear.** For any
-> deployment reachable beyond a trusted network, enable TLS (§11).
+> deployment reachable beyond a trusted network, enable TLS (§12).
 
 ---
 
-## 11. Optional extras
+## 12. Optional extras
 
 ### TLS at the gateway
 
@@ -401,7 +545,7 @@ docker compose up -d --force-recreate qdrant medrag
 
 ---
 
-## 12. Operations
+## 13. Operations
 
 ```bash
 docker compose ps                                   # status
@@ -436,7 +580,7 @@ EOF
 
 ---
 
-## 13. Post-deployment checklist
+## 14. Post-deployment checklist
 
 - [ ] **Back up `PHI_ENCRYPTION_KEYS`** somewhere other than the server.
 - [ ] Record the admin password, then change it after first sign-in.
@@ -445,3 +589,10 @@ EOF
 - [ ] Attach the knowledge corpus, or accept that knowledge Q&A is unavailable.
 - [ ] Confirm `nvidia-smi` shows ~2 GB headroom under load.
 - [ ] Run `server_e2e_verify.sh` and keep the output as a baseline.
+- [ ] Run `load_test.py` at your expected peak concurrency; confirm 100%
+      success and decide whether p95 latency is acceptable.
+- [ ] Run `security_probe.py` **last** (it locks the admin account for
+      `LOGIN_LOCKOUT_SEC`); require 0 failures.
+- [ ] Confirm `/api/dictate` returns a report with **no `*` lines** and that
+      `/api/transcribe` output is literal, not paraphrased.
+- [ ] Confirm `/api/health` shows `medrag.llm.ok: true`, not just `medrag.ok`.

@@ -86,9 +86,18 @@ with httpx.Client(timeout=60, follow_redirects=False) as c:
     TOK = (r.json() or {}).get("access_token", "") if r.status_code == 200 else ""
     if TOK:
         ok("auth.login", "valid credentials accepted")
+    elif r.status_code == 429:
+        # A previous run's brute-force check (16) leaves the limiter armed.
+        # That is the control working, but it makes every authenticated check
+        # below meaningless, so say so instead of reporting phantom failures.
+        print("ABORT: login is rate-limited from an earlier run (HTTP 429).")
+        print("       Wait for the throttle window to expire and re-run.")
+        sys.exit(2)
     else:
         bad("auth.login", f"could not authenticate ({r.status_code})")
-    AUTH = {"Authorization": f"Bearer {TOK}"}
+    # An empty bearer value is not a legal header, so httpx refuses to send it
+    # at all -- which crashes the probe instead of reporting the failure.
+    AUTH = {"Authorization": f"Bearer {TOK}"} if TOK else {}
 
     # --- 4. Schema survived the DROP TABLE attempt --------------------------
     r = c.get(f"{BASE}/api/ehr", headers=AUTH)

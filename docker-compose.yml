@@ -298,6 +298,13 @@ services:
       # fallback model. See docs/core/CONFIGURATION.md.
       MEDRAG_LLM_PROVIDER: "${DOCKER_MEDRAG_LLM_PROVIDER:-ollama}"
       MEDRAG_LLM_MODEL: "${DOCKER_MEDRAG_LLM_MODEL:-${MEDRAG_LLM_FALLBACK_MODEL:-}}"
+      # Without this the service falls back to config.yaml's default of
+      # http://127.0.0.1:8000/v1, which inside this container is nothing at
+      # all -- /api/health then reports medrag.llm ok=false with a connection
+      # error while retrieval itself looks fine. Point it at the in-network
+      # vLLM when DOCKER_MEDRAG_LLM_PROVIDER=vllm.
+      MEDRAG_LLM_BASE_URL: "${DOCKER_MEDRAG_LLM_BASE_URL:-}"
+      MEDRAG_LLM_API_KEY: "${MEDRAG_LLM_API_KEY:-EMPTY}"
     volumes:
       - hf-cache:${DOCKER_HF_HOME:-/models}
       # The knowledge corpus root: holds catalog.db plus data/ (chunks, OCR

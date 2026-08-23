@@ -40,8 +40,23 @@ ADMIN_USER="${ADMIN_USER:-admin}"
 
 TOK=$(curl -s -X POST "$BASE/api/auth/login" \
       -d "username=${ADMIN_USER}&password=${ADMIN_PW}" | jqp "print(d.get('access_token',''))")
-if [ -n "$TOK" ]; then ok "auth.login" "token issued for $ADMIN_USER"
-else bad "auth.login" "no token — every authenticated check below will fail"; fi
+if [ -n "$TOK" ]; then
+  ok "auth.login" "token issued for $ADMIN_USER"
+else
+  # Distinguish a locked account from a wrong password. Running the security
+  # probe trips the login limiter on purpose, and for the next
+  # LOGIN_LOCKOUT_SEC (default 900) this suite reports five cascading
+  # failures that all have one cause -- which reads like a broken deployment.
+  LOGIN_CODE=$(curl -s -o /dev/null -w '%{http_code}' -X POST "$BASE/api/auth/login" \
+               -d "username=${ADMIN_USER}&password=${ADMIN_PW}")
+  if [ "$LOGIN_CODE" = "429" ]; then
+    echo "ABORT: '$ADMIN_USER' is locked out (HTTP 429), most likely from a"
+    echo "       previous security_probe.py run. Wait for LOGIN_LOCKOUT_SEC"
+    echo "       to expire and re-run; nothing below would be meaningful."
+    exit 2
+  fi
+  bad "auth.login" "no token (HTTP $LOGIN_CODE) — authenticated checks will fail"
+fi
 AUTH=(-H "Authorization: Bearer $TOK")
 
 code() { curl -s -o /dev/null -w '%{http_code}' "$@"; }

@@ -562,6 +562,18 @@ async def chat(
     if not text and not attachments:
         raise HTTPException(400, "either text or audio/image attachments required")
 
+    # The gateway's client_max_body_size has to stay large for multi-MB audio,
+    # so it cannot cap a text field. Without a cap here a multi-megabyte prompt
+    # reached the model and came back as an unhandled 500 -- refused, but by
+    # accident and with a server error rather than a stated limit. Reject it as
+    # the client error it is.
+    _max_chars = int(os.environ.get("CHAT_MAX_TEXT_CHARS", "32000"))
+    if _max_chars > 0 and len(text) > _max_chars:
+        raise HTTPException(
+            413, f"text exceeds the {_max_chars}-character limit "
+                 f"({len(text)} submitted)"
+        )
+
     # Text-only routing. "agent" (default) runs the tool-calling loop, which
     # reaches MedicalRAG through the medical_knowledge tool -- so a text turn
     # can either answer from the corpus OR act on this system's data. The
