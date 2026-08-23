@@ -47,10 +47,13 @@ _output_english = os.environ.get("WHISPER_OUTPUT_ENGLISH", "1").strip().lower() 
     "yes",
     "on",
 )
-_task = (
-    "translate"
-    if _output_english
-    else os.environ.get("WHISPER_TASK", "transcribe")
+# WHISPER_TASK, when set, always wins. It used to be read only in the
+# else-branch, so it was unreachable whenever WHISPER_OUTPUT_ENGLISH was on
+# (the default) -- there was no way to ask this server for a literal
+# transcript. That matters clinically: `translate` is a paraphrasing decode
+# and drifts on domain vocabulary, so dictated terms come back reworded.
+_task = os.environ.get("WHISPER_TASK", "").strip().lower() or (
+    "translate" if _output_english else "transcribe"
 )
 _max_shortform_s = float(os.environ.get("WHISPER_MAX_SHORTFORM_S", "30"))
 _chunk_length_s = float(os.environ.get("WHISPER_CHUNK_LENGTH_S", "30"))

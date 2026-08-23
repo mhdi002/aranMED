@@ -83,3 +83,6 @@ Desktop.ini
 # committing them alongside a stale app.db would corrupt the pair.
 *.db-wal
 *.db-shm
+
+# Deployment bundle produced by the transfer step in the server runbook.
+aranmed-deploy.tar.gz

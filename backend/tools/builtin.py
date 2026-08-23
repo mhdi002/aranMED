@@ -148,7 +148,22 @@ Your job:
   5. If the spoken/dictated exam name or content style clearly mismatches the selected
      template, still fill the SELECTED template, and add a short trailing note:
      "NOTE: Dictation appears to describe <X> while template <Y> was selected."
-  6. Output plain text, no markdown fences.
+  6. TEMPLATE ALTERNATIVES. Within a section the template offers a default line
+     followed by variant lines each prefixed with "*". These are mutually
+     exclusive phrasings of the SAME finding, not separate findings. Choose
+     EXACTLY ONE line per group -- the variant matching the dictation, or the
+     unstarred default when the dictation reports that finding as normal or is
+     silent -- and output it WITHOUT the leading "*". Never emit more than one
+     line from a group, and never emit the "*" character itself. A report that
+     lists every variant is a template dump, not a report.
+  7. PLACEHOLDERS. Templates carry fill-ins such as XX, ****, "(grade )" and
+     "(Lt=XX, Rt=XX mm)". Replace each with the dictated value. If the
+     dictation does not supply it, drop that entire line rather than emitting a
+     visible blank -- an unfilled measurement reads as a real absent value.
+  8. CONDITIONAL LINES. Lines describing study limitations (e.g. "This study is
+     suboptimal due to ...") apply only when the dictation says so. Omit them
+     entirely otherwise; never leave the reason blank.
+  9. Output plain text, no markdown fences.
 """
 
 try:
@@ -261,4 +276,58 @@ class StructureReportTool(Tool):
                 "template_id": template_id,
                 **safety,
             },
+        )
+
+# ---------------------------------------------------------------------------
+# Medical knowledge (MedicalRAG)
+# ---------------------------------------------------------------------------
+@tool
+class MedicalKnowledgeTool(Tool):
+    """Retrieval-backed answers, exposed as a tool rather than a routing branch.
+
+    /api/chat used to send every text-only turn straight to MedicalRAG and
+    return, which made the whole tool set unreachable from text: asking the
+    agent to list or build an EHR record produced a "no evidence" knowledge
+    answer instead of a tool call. Making retrieval a tool lets the model pick
+    between answering from the corpus and taking an action, which is the same
+    decision it already makes for every other capability.
+    """
+
+    name = "medical_knowledge"
+    description = (
+        "Answer a clinical or medical knowledge question from the indexed "
+        "literature corpus, with citations. Use for questions about diseases, "
+        "imaging findings, guidelines or physiology -- NOT for acting on this "
+        "system's own data (patients, records, templates), which have their "
+        "own tools."
+    )
+    parameters = {
+        "type": "object",
+        "properties": {
+            "question": {"type": "string", "description": "The clinical question."},
+            "specialty": {"type": "string",
+                          "description": "Optional specialty hint, e.g. radiology."},
+        },
+        "required": ["question"],
+    }
+
+    async def run(self, ctx: ToolContext, question: str,
+                  specialty: str = "radiology") -> ToolResult:
+        from integrations.medrag_client import (
+            MedragClient, MedragError, get_medrag_client,
+        )
+        try:
+            payload = await get_medrag_client().ask(question, specialty=specialty)
+        except MedragError as e:
+            # A retrieval outage must not abort the agent loop -- the model can
+            # still answer from its own knowledge, or use another tool.
+            log.warning("medical_knowledge: MedicalRAG unavailable: %s", e)
+            return ToolResult(
+                content=f"Knowledge retrieval is unavailable ({e}).",
+                data={"error": str(e), "sources": []},
+            )
+        return ToolResult(
+            content=MedragClient.format_answer(payload),
+            data={"sources": payload.get("sources") or [],
+                  "rule_alerts": payload.get("rule_alerts") or []},
         )

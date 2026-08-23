@@ -118,6 +118,11 @@ class OpenAIProvider(TextProvider):
             body["stop"] = stop
         if tools:
             body["tools"] = [{"type": "function", "function": t} for t in tools]
+            # Only meaningful alongside `tools`. Sending it on a request with no
+            # tool list is a 400 on vLLM ("tool_choice ... but no tools were
+            # provided"), which is how the report endpoint -- which never sends
+            # tools -- broke while the agent path kept working.
+            body["tool_choice"] = "auto"
         # Extra request fields, e.g. chat_template_kwargs for reasoning models.
         # A reasoning model asked to fill a template will otherwise spend the
         # whole max_tokens budget inside its thinking block and return an
@@ -126,13 +131,23 @@ class OpenAIProvider(TextProvider):
         # off for a task that wants structured output, not deliberation.
         if self.extra_body:
             body.update(self.extra_body)
-            body["tool_choice"] = "auto"
 
         async with httpx.AsyncClient(timeout=self.timeout) as c:
             r = await c.post(f"{self.base_url}/chat/completions",
                              headers={"Authorization": f"Bearer {self.api_key}"},
                              json=body)
-            r.raise_for_status()
+            if r.status_code >= 400:
+                # raise_for_status() reports only the status line, so an
+                # OpenAI-style {"message": ...} explaining exactly which field
+                # was rejected is lost -- leaving a bare "400 Bad Request" in
+                # the logs and no way to tell a malformed field from an
+                # over-long prompt. Carry the body into the exception.
+                log.error("%s %s from %s: %s", r.status_code, r.reason_phrase,
+                          self.base_url, r.text[:1000])
+                raise httpx.HTTPStatusError(
+                    f"{r.status_code} from {self.base_url}: {r.text[:1000]}",
+                    request=r.request, response=r,
+                )
             data = r.json()
 
         choice = (data.get("choices") or [{}])[0]

@@ -562,9 +562,16 @@ async def chat(
     if not text and not attachments:
         raise HTTPException(400, "either text or audio/image attachments required")
 
-    # Text-only medical knowledge → MedicalRAG microservice (no local LLM rewrite).
-    # Structured report / tool-calling agent still handles audio + template flows.
-    if text and not audio and not images:
+    # Text-only routing. "agent" (default) runs the tool-calling loop, which
+    # reaches MedicalRAG through the medical_knowledge tool -- so a text turn
+    # can either answer from the corpus OR act on this system's data. The
+    # legacy "medrag" mode short-circuits every text turn to retrieval and
+    # returns, which makes all 17 agent tools unreachable without an audio or
+    # image attachment: "list the EHR records" came back as a knowledge
+    # non-answer because no tool could ever run. Kept behind the env var so a
+    # knowledge-only deployment can still opt into it.
+    _text_route = os.environ.get("CHAT_TEXT_ROUTE", "agent").strip().lower()
+    if text and not audio and not images and _text_route == "medrag":
         from integrations.medrag_client import MedragClient, MedragError, get_medrag_client
 
         try:

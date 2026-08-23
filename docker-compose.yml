@@ -241,6 +241,10 @@ services:
       WHISPER_WARMUP: "${TRITON_WHISPER_WARMUP:-0}"
       WHISPER_TARGET_SR: "16000"
       WHISPER_OUTPUT_ENGLISH: "${WHISPER_OUTPUT_ENGLISH:-1}"
+      # Overrides the task implied by WHISPER_OUTPUT_ENGLISH. Set to
+      # "transcribe" for a literal decode: `translate` paraphrases, which
+      # rewords dictated clinical terms. Empty = derive from the flag above.
+      WHISPER_TASK: "${WHISPER_TASK:-}"
       WHISPER_MAX_SHORTFORM_S: "${WHISPER_MAX_SHORTFORM_S:-30}"
       WHISPER_CHUNK_LENGTH_S: "${WHISPER_CHUNK_LENGTH_S:-30}"
     command: ["python", "/app/deploy/triton/compat_http_server.py"]
