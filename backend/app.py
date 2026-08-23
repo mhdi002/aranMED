@@ -493,14 +493,23 @@ async def report(req: ReportIn) -> ReportOut:
         temperature=0.2,
         max_tokens=1400,
     )
+    # Strip any template residue the model left behind (unfilled XX / ****
+    # placeholders, an empty "(grade )", a limitation line with no dictated
+    # reason, a surviving "*" alternative) before anything downstream reads
+    # the text as findings. Patterns are data, not code -- see
+    # data/report_postprocess.json.
+    import report_postprocess
+
+    report_text, _dropped = report_postprocess.clean(out.content)
+
     safety = await enrich_report_payload(
         transcript=req.transcript,
-        report_text=out.content,
+        report_text=report_text,
         template_id=template_id,
         patient_id=req.patient_id,
     )
     return ReportOut(
-        report=out.content,
+        report=report_text,
         template_id=template_id,
         model=core.name,
         critical_alerts=safety.get("critical_alerts") or [],

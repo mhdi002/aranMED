@@ -1,0 +1,43 @@
+{
+  "_comment": [
+    "Deterministic clean-up applied to a generated report before it is returned.",
+    "",
+    "Templates carry fill-in markers (XX, ****, '(grade )') and conditional lines",
+    "whose reason has to be dictated ('This study is suboptimal due to ...').",
+    "_STRUCTURE_SYS instructs the model to fill or drop these, and it usually",
+    "does -- but 'usually' is the wrong reliability for a line that asserts a",
+    "study was suboptimal without saying why, or reports a measurement as a",
+    "literal 'XX'. Both read as findings to a clinician skimming the report.",
+    "",
+    "Each pattern is a Python regular expression matched case-insensitively",
+    "against a single stripped line. A matching line is REMOVED. Patterns must",
+    "therefore describe residue only -- text that cannot occur once the line has",
+    "been properly filled in. Adding a pattern here is a clinical-safety change:",
+    "an over-broad one silently deletes real findings.",
+    "",
+    "Set REPORT_POSTPROCESS=0 to disable this pass entirely."
+  ],
+
+  "drop_line_patterns": [
+    {
+      "why": "Unfilled measurement placeholders: 'XX' / 'XXX' as a standalone token, e.g. '(Lt=XX, Rt=XX mm)'. Real reports carry digits here.",
+      "pattern": "(?:^|[^A-Za-z0-9])X{2,}(?:[^A-Za-z0-9]|$)"
+    },
+    {
+      "why": "Redaction runs the template uses where a referral target belongs, e.g. 'correlation with ******* is recommended'.",
+      "pattern": "\\*{3,}"
+    },
+    {
+      "why": "A severity/grade parenthesis left empty, e.g. 'fatty liver (grade )'.",
+      "pattern": "\\(\\s*grade\\s*\\)"
+    },
+    {
+      "why": "A conditional limitation line whose reason was never dictated, so it runs straight from 'due to' into the clause that should have followed the reason -- 'This study is suboptimal due to; however:' or '... due to however:'.",
+      "pattern": "due\\s+to\\s*[;,]?\\s*(?:however)?\\s*[:.]?\\s*$"
+    },
+    {
+      "why": "Any surviving alternative marker. The model is told to pick exactly one line per group and drop the leading '*'; a line still starting with one is a template dump, not a finding.",
+      "pattern": "^\\*"
+    }
+  ]
+}
