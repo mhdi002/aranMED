@@ -180,8 +180,22 @@ CMD ["sh", "-c", "python -m uvicorn medrag.interfaces.api:app --host ${MEDRAG_HO
 FROM node:20-alpine AS frontend-build
 
 WORKDIR /app
+
+# The npm registry is a build-time knob because registry.npmjs.org is not
+# reachable from every network this deploys onto -- observed: repeated
+# `npm error network ETIMEDOUT` from a host whose international routing is
+# filtered, which fails the whole image build ~20 minutes in. Point this at
+# any npm-compatible mirror; the default keeps upstream behaviour.
+ARG NPM_REGISTRY=https://registry.npmjs.org
+ARG NPM_FETCH_RETRIES=5
+ARG NPM_FETCH_TIMEOUT=300000
+
 COPY frontend/package.json frontend/package-lock.json* ./
-RUN npm ci 2>/dev/null || npm install
+RUN npm config set registry "$NPM_REGISTRY" \
+    && npm config set fetch-retries "$NPM_FETCH_RETRIES" \
+    && npm config set fetch-timeout "$NPM_FETCH_TIMEOUT" \
+    && echo "npm registry: $(npm config get registry)" \
+    && (npm ci 2>/dev/null || npm install)
 COPY frontend .
 RUN npm run build
 

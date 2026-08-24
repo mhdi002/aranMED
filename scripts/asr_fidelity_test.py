@@ -85,9 +85,36 @@ for audio in FILES:
         print("  VERDICT         : FAIL - numbers altered and NOT flagged")
         failures += 1
     elif missing or invented:
-        print("  VERDICT         : SAFE - altered, but flagged and degraded to source")
+        print("  VERDICT         : SAFE - altered, but flagged to the caller")
     else:
         print("  VERDICT         : PASS - every dictated number survived")
+
+    # The transcript is only half the question. A measurement that survives ASR
+    # and then vanishes from the generated report is still lost to the
+    # clinician, so follow it all the way through /api/dictate.
+    print()
+    print("--- STAGE 3: generated report ---")
+    d2 = post("/api/dictate", audio)
+    report = d2.get("report") or ""
+    if not report:
+        print("  (no report returned:", json.dumps(d2)[:200], ")")
+    else:
+        print(f"  template: {d2.get('template_id')}   model: {d2.get('model')}")
+        print(f"  language: {'PERSIAN (unusable downstream)' if any('؀' <= c <= 'ۿ' for c in report) else 'English'}")
+        print()
+        print(report)
+        rep_nums = numerals(report)
+        lost = [n for n in src if n not in rep_nums]
+        print()
+        print(f"  numbers in raw ASR : {src or '(none dictated)'}")
+        print(f"  numbers in report  : {rep_nums or '(none)'}")
+        if src and lost:
+            print(f"  MISSING FROM REPORT: {lost}")
+            failures += 1
+        elif src:
+            print("  REPORT VERDICT     : PASS - dictated measurements reached the report")
+        else:
+            print("  REPORT VERDICT     : n/a - nothing measured in this dictation")
     print()
 
 print(f"files checked: {len(FILES)}   unflagged failures: {failures}")

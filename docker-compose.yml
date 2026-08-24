@@ -374,6 +374,10 @@ services:
     build:
       context: .
       target: frontend
+      args:
+        NPM_REGISTRY: ${NPM_REGISTRY:-https://registry.npmjs.org}
+        NPM_FETCH_RETRIES: ${NPM_FETCH_RETRIES:-5}
+        NPM_FETCH_TIMEOUT: ${NPM_FETCH_TIMEOUT:-300000}
     environment:
       HOST: "0.0.0.0"
       PORT: "${FRONTEND_PORT:-3000}"
