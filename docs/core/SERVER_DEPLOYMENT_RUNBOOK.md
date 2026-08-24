@@ -70,6 +70,84 @@ command -v docker || echo "docker: NOT INSTALLED"
 EOF
 ```
 
+### The vLLM image outran the host driver
+
+`vllm/vllm-openai:latest` is a moving target: since this project was first
+deployed it drifted from a CUDA 12.x build to torch compiled for `cu130`.
+vLLM logs the failure as if the driver needs updating, and for once that
+reading is correct rather than the forward-compatibility false positive
+described below:
+
+```
+RuntimeError: The NVIDIA driver on your system is too old (found version 12080).
+```
+
+`12080` is CUDA 12.8 -- what the driver actually supports. Confirm with
+`docker exec <vllm> python3 -c "import torch;print(torch.version.cuda)"`
+against `nvidia-smi`'s own `CUDA Version` line. If the image wants a newer
+CUDA than the driver provides, upgrade the driver -- masking
+`/usr/local/cuda/compat` (below) does not help here, because forward
+compatibility is a datacenter-GPU feature and does not work on a GeForce
+card regardless of which libraries are exposed.
+
+Ubuntu's own archive usually already carries a new enough driver, so this
+needs no third-party repo and no reboot:
+
+```bash
+docker compose stop vllm triton   # release the GPU first
+apt-cache policy nvidia-driver-580   # confirm a candidate exists
+apt-get install -y nvidia-driver-580-open
+
+# apt installs the new driver ALONGSIDE the old one rather than replacing
+# it -- purge the old generation explicitly, or nvidia-container-toolkit
+# resolves libraries ambiguously between the two:
+apt-get purge -y nvidia-driver-570-open nvidia-kernel-common-570
+apt-get autoremove -y
+
+# reload the kernel module without a reboot -- fails if something still
+# holds it open; a `systemctl restart docker` first releases stale refs
+# from stopped containers
+systemctl restart docker && sleep 5
+modprobe -r nvidia_drm nvidia_modeset nvidia_uvm nvidia_peermem nvidia
+nvidia-smi   # reloads the module; confirm the new Driver Version
+```
+
+> **Two CDI spec files exist, and only one obvious command regenerates
+> one of them.** `nvidia-ctk cdi generate` writes to whatever `--output`
+> you give it. The toolkit reads from `/etc/cdi/` **and** `/var/run/cdi/`
+> (see `spec-dirs` in `/etc/nvidia-container-runtime/config.toml`), and
+> `/var/run/cdi/nvidia.yaml` is written automatically at initial toolkit
+> setup with whatever driver was present *then*. After any driver change,
+> `nvidia-container-cli list` can report the new version correctly while
+> `docker run --gpus all` still fails on a stale library path from that
+> second file -- because it is, invisibly, still there. Regenerate both:
+>
+> ```bash
+> nvidia-ctk cdi generate --output=/etc/cdi/nvidia.yaml
+> nvidia-ctk cdi generate --output=/var/run/cdi/nvidia.yaml
+> systemctl restart docker
+> docker run --rm --gpus all nvidia/cuda:12.4.1-base-ubuntu22.04 nvidia-smi
+> ```
+
+>
+> The `find / -iname "*570.172.08*"` style search that finds this is
+> slow and mostly noise (containerd snapshot debris from earlier failed
+> `docker run` attempts); go straight to `/var/run/cdi/*.yaml` instead.
+
+> **`systemctl restart docker` stops every container, not just the GPU
+> ones.** After the module reload above, bring the WHOLE stack back --
+> `docker compose up -d` with no service names -- not just `vllm triton`.
+> A targeted restart leaves `backend` and anything depending on it dead,
+> and `gateway` then crash-loops on `host not found in upstream
+> "backend:8010"` because nginx resolves upstream hostnames at startup and
+> there is nothing there to resolve.
+
+```bash
+docker compose up -d
+```
+
+---
+
 ### If `nvidia-smi` reports a driver/library mismatch
 
 ```
