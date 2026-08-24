@@ -469,6 +469,11 @@ services:
       VLLM_EXTRA_ARGS: "${VLLM_EXTRA_ARGS:-}"
     volumes:
       - hf-cache:/root/.cache/huggingface
+      # Locally-staged weights. VLLM_MODEL accepts a path as readily as a hub
+      # id, which is the escape hatch when the Hugging Face file CDN is
+      # unreachable -- see scripts/fetch_models_modelscope.sh. Mirrors the
+      # mount triton already has, so both services resolve models the same way.
+      - ${LOCAL_MODELS_DIR:-./models}:/app/models:ro
       - ./deploy/vllm/entrypoint.sh:/usr/local/bin/aranmed-vllm-entrypoint.sh:ro
     entrypoint: ["/bin/sh", "/usr/local/bin/aranmed-vllm-entrypoint.sh"]
     # The vLLM image ships CUDA forward-compatibility libraries (a newer
