@@ -224,6 +224,12 @@ services:
     environment:
       PYTHONPATH: "/app/backend"
       HF_HOME: "${DOCKER_HF_HOME:-/models}"
+      # Hugging Face's Xet storage backend times out on some networks --
+      # observed: "TimeoutError: Request error: error decoding response body,
+      # domain: no-url" inside xet_get(), which aborts the weight download
+      # and leaves a few MB of metadata behind that looks like a cache hit.
+      # Setting this falls back to the plain CDN, which works there.
+      HF_HUB_DISABLE_XET: "${HF_HUB_DISABLE_XET:-}"
       TRITON_COMPAT_HOST: "0.0.0.0"
       TRITON_COMPAT_PORT: "${TRITON_COMPAT_PORT:-8002}"
       # Local snapshot mounted above (see backend's LOCAL_MODELS_DIR comment);
@@ -443,6 +449,8 @@ services:
     image: vllm/vllm-openai:${VLLM_VERSION:-latest}
     environment:
       HUGGING_FACE_HUB_TOKEN: "${HF_TOKEN:-}"
+      # See the triton service for why this exists.
+      HF_HUB_DISABLE_XET: "${HF_HUB_DISABLE_XET:-}"
       # The entrypoint below assembles `vllm serve` from these, omitting any
       # flag left empty. Compose's static command list cannot do that, and
       # several of these flags are invalid rather than inert when passed a
@@ -489,6 +497,8 @@ services:
     image: vllm/vllm-openai:${VLLM_VERSION:-latest}
     environment:
       HUGGING_FACE_HUB_TOKEN: "${HF_TOKEN:-}"
+      # See the triton service for why this exists.
+      HF_HUB_DISABLE_XET: "${HF_HUB_DISABLE_XET:-}"
     volumes:
       - hf-cache:/root/.cache/huggingface
     command:
