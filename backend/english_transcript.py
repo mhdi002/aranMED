@@ -247,7 +247,8 @@ async def translate_verified(text: str, *, registry) -> tuple[str, dict]:
     """
     raw = (text or "").strip()
     report: dict = {"ok": True, "degraded": False, "reason": "", "fragments": 0,
-                    "repaired": 0, "source_numerals": [], "output_numerals": [],
+                    "repaired": 0, "untranslated_fragments": 0,
+                    "source_numerals": [], "output_numerals": [],
                     "missing": [], "invented": []}
     if not raw:
         return "", report
@@ -268,13 +269,20 @@ async def translate_verified(text: str, *, registry) -> tuple[str, dict]:
     parts: list[str] = []
     all_missing: list[str] = []
     all_invented: list[str] = []
+    untranslated = 0
 
     for frag in fragments:
         try:
             english = await _translate_fragment(core, frag, temperature=0.1)
         except Exception as e:  # noqa: BLE001
+            # Keeping the source keeps the numbers, but the fragment is now
+            # Persian in an otherwise-English transcript. Count it: reporting
+            # ok=True here would tell the caller "verified English" about text
+            # that was never translated -- which is how a provider outage
+            # looks identical to a clean run.
             log.warning("fragment translation failed (%s); keeping source", e)
             parts.append(frag)
+            untranslated += 1
             continue
 
         if verify:
@@ -302,6 +310,18 @@ async def translate_verified(text: str, *, registry) -> tuple[str, dict]:
     report["output_numerals"] = numerals(result)
     report["missing"] = all_missing
     report["invented"] = all_invented
+
+    if untranslated:
+        report["ok"] = False
+        report["degraded"] = True
+        report["untranslated_fragments"] = untranslated
+        report["reason"] = (
+            f"{untranslated} of {len(fragments)} fragment(s) could not be "
+            f"translated (provider unreachable?); those remain in the source "
+            f"language"
+        )
+        log.error("ASR translation INCOMPLETE: %s", report["reason"])
+        return result, report
 
     if not verify or (not all_missing and not all_invented):
         log.info(

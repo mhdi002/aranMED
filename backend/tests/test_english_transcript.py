@@ -250,6 +250,11 @@ def test_fragment_failure_keeps_source_for_that_fragment():
     # result is the source text rather than an exception.
     assert "50" in out
     assert rep["missing"] == []
+    # ...but the caller must NOT be told this is verified English. A provider
+    # outage returning untranslated Persian looked identical to a clean run.
+    assert rep["degraded"] is True
+    assert rep["untranslated_fragments"] == rep["fragments"]
+    assert "translated" in rep["reason"]
 
 
 if __name__ == "__main__":
