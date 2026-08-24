@@ -127,6 +127,11 @@ class TranscribeOut(BaseModel):
     asr_model: str
     raw_transcript: Optional[str] = None
     language_timeline: Optional[list[dict]] = None
+    # Set when the Persian->English stage could not be verified and `text`
+    # therefore holds the untranslated source. A client that renders `text`
+    # as a finished English transcript regardless is reintroducing the bug.
+    translation_degraded: bool = False
+    translation_note: Optional[str] = None
 
 
 class ReportIn(BaseModel):
@@ -417,11 +422,14 @@ async def transcribe(
     except Exception as e:  # noqa: BLE001
         log.exception("ASR failed")
         raise HTTPException(500, f"ASR failed: {e}") from e
+    treport = getattr(asr, "last_translation_report", None) or {}
     return TranscribeOut(
         text=text,
         asr_model=asr.name,
         raw_transcript=raw_transcript,
         language_timeline=language_timeline,
+        translation_degraded=bool(treport.get("degraded")),
+        translation_note=treport.get("reason") or None,
     )
 
 

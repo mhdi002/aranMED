@@ -62,6 +62,11 @@ class TritonASRProvider(ASRProvider):
         # Server should use WHISPER_OUTPUT_ENGLISH=1 / task=translate; this flag
         # adds an LLM post-step if Persian script still appears.
         self.output_english = bool(config.get("output_english", True))
+        # The pre-translation text, always. Stage two can fabricate, so the
+        # faithful source has to remain visible to the caller rather than
+        # being discarded the moment it is translated.
+        self.last_raw_transcript = ""
+        self.last_translation_report: dict = {}
         self._client = None
 
     async def _load(self) -> None:
@@ -155,6 +160,8 @@ class TritonASRProvider(ASRProvider):
             text = await self._infer_raw_http(audio, language=language)
         else:
             text = await self._infer_tritonclient(client, kind, audio, language=language)
+        self.last_raw_transcript = text or ""
+        self.last_translation_report = {}
         if self.output_english and text:
             text = await self._ensure_english(text)
         log.info("Triton ASR done: %d chars (audio was %.1fs)", len(text or ""), duration_s)
@@ -165,10 +172,21 @@ class TritonASRProvider(ASRProvider):
         if not any("\u0600" <= ch <= "\u06FF" for ch in text):
             return text
         try:
-            from english_transcript import to_english_clinical
+            from english_transcript import translate_verified
             from registry import Registry
 
-            english = await to_english_clinical(text, registry=Registry.get())
+            english, report = await translate_verified(
+                text, registry=Registry.get()
+            )
+            self.last_translation_report = report
+            if report.get("degraded"):
+                # Verification rejected the translation, so `english` is the
+                # Persian source. Say so loudly: a caller that silently
+                # renders this as an English transcript is the original bug.
+                log.error(
+                    "ASR translation rejected, returning source text: %s",
+                    report.get("reason"),
+                )
             return english or text
         except Exception as e:  # noqa: BLE001
             log.warning("english_transcript fallback failed: %s", e)
