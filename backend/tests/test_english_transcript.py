@@ -83,6 +83,48 @@ def test_numerals_finds_the_real_sample_measurements():
 
 
 # --------------------------------------------------------------------------
+# number words -- the false-positive that would reject every correct
+# translation of a spoken number
+# --------------------------------------------------------------------------
+def test_word_numerals_persian():
+    # "سی" is thirty. Without this, a correct rendering as "30" looks invented.
+    assert et.word_numerals("سی در 51") == ["30"]
+    assert et.word_numerals("بیست") == ["20"]
+    assert et.word_numerals("پنجاه") == ["50"]
+
+
+def test_word_numerals_english():
+    assert et.word_numerals("two hypoechoic structures") == ["2"]
+    assert et.word_numerals("thirty by fifty") == ["30", "50"]
+
+
+def test_negation_word_is_not_read_as_nine():
+    # "نه با سکولاریتی" is "NO vascularity", not "nine vascularity".
+    # Admitting it would let a fabricated 9 through unnoticed.
+    assert et.word_numerals("نه با سکولاریتی") == []
+
+
+def test_source_numerals_combines_digits_and_words():
+    # The real sample: 50/50/50/51 as digits, thirty as a word.
+    assert sorted(et.source_numerals(PERSIAN)) == sorted(
+        ["50", "50", "50", "51", "30"]
+    )
+
+
+def test_correct_word_rendering_is_not_flagged_as_invented():
+    # THE regression: "سی در 51" correctly translated to "30 x 51".
+    missing, invented = et.compare("سی در 51", "30 x 51")
+    assert invented == [], f"correct translation wrongly rejected: {invented}"
+    assert missing == []
+
+
+def test_misread_number_is_still_caught():
+    # The real observed failure: the model wrote 31 where the source said 30.
+    missing, invented = et.compare("سی در 51", "31 x 51")
+    assert "31" in invented
+
+
+# --------------------------------------------------------------------------
 # segment()
 # --------------------------------------------------------------------------
 def test_segment_splits_on_persian_and_english_boundaries():
@@ -132,15 +174,29 @@ def test_faithful_translation_is_accepted():
     assert et.numerals(out) == ["50", "50", "50", "51"]
 
 
-def test_dropped_measurement_is_rejected_and_degrades_to_source():
+def test_dropped_measurement_is_flagged():
     # The model returns fluent English that silently omits the numbers.
     core = FakeCore(["The liver appears unremarkable."])
     out, rep = run(et.translate_verified(PERSIAN, registry=FakeRegistry(core)))
     assert rep["ok"] is False
     assert rep["degraded"] is True
     assert "50" in "".join(rep["missing"])
-    # Crucially: the caller gets the TRUE source, not the readable falsehood.
-    assert out == PERSIAN
+    # Output stays English so the report pipeline still works; the caller is
+    # told it is unverified rather than being handed unreadable Persian.
+    assert out != PERSIAN
+    assert not et._has_persian(out)
+
+
+def test_source_fallback_returns_persian_when_asked():
+    import os
+    os.environ["ASR_TRANSLATE_FALLBACK"] = "source"
+    try:
+        core = FakeCore(["The liver appears unremarkable."])
+        out, rep = run(et.translate_verified(PERSIAN, registry=FakeRegistry(core)))
+        assert rep["degraded"] is True
+        assert out == PERSIAN
+    finally:
+        os.environ.pop("ASR_TRANSLATE_FALLBACK", None)
 
 
 def test_invented_measurement_is_rejected():
@@ -150,18 +206,22 @@ def test_invented_measurement_is_rejected():
     out, rep = run(et.translate_verified(PERSIAN, registry=FakeRegistry(core)))
     assert rep["ok"] is False
     assert "53" in rep["invented"]
-    assert out == PERSIAN
+    assert rep["degraded"] is True
 
 
-def test_retry_happens_before_giving_up():
-    # First pass invents; second pass is faithful. The good one must win.
+def test_repair_pass_fixes_a_bad_number():
+    # First pass invents 999; the repair pass returns the source's own numbers.
     def faithful(user_msg):
-        nums = et.numerals(user_msg)
+        # The repair prompt embeds the source fragment, the bad translation AND
+        # the problem list, so echo only the SOURCE section — otherwise the
+        # fake "repairs" by copying the very number it was asked to remove.
+        src = user_msg.split("Source fragment:")[-1].split("Current translation:")[0]
+        nums = et.numerals(src)
         return " x ".join(nums) if nums else "text"
 
     core = FakeCore(["invented 999 mm", faithful])
     out, rep = run(et.translate_verified(PERSIAN, registry=FakeRegistry(core)))
-    assert rep["attempts"] >= 2
+    assert rep["repaired"] >= 1
     assert rep["degraded"] is False
     assert "999" not in out
 
