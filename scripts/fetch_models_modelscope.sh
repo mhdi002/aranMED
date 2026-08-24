@@ -50,6 +50,16 @@ fetch_file() {
     local url="${MS_API}/${repo}/repo?Revision=master&FilePath=${name}"
     mkdir -p "$(dirname "$dest")"
     for attempt in 1 2 3 4 5; do
+        # Resume only a file this loop itself started. `curl -C -` against a
+        # leftover from an aborted earlier run appends rather than repairs,
+        # producing a file that is LARGER than expected and silently corrupt
+        # -- observed: whisper model.safetensors at 3.56 GB against 3.09 GB
+        # advertised, which passed every size check and failed only on
+        # "Error while deserializing header: incomplete metadata".
+        if [ "$attempt" = "1" ] && [ ! -f "$dest.part" ]; then
+            rm -f "$dest"
+        fi
+        : > "$dest.part"
         curl -sL --connect-timeout 30 --max-time 7200 -C - -o "$dest" "$url" && :
         local got
         got=$(stat -c%s "$dest" 2>/dev/null || echo 0)
@@ -58,6 +68,25 @@ fetch_file() {
         # want=493869), which would retry a perfectly complete file forever.
         # Truncation is the failure that matters, and that is got < want.
         if [ "$want" = "0" ] || [ "$got" -ge "$want" ] 2>/dev/null; then
+            # A size check cannot tell a complete file from a corrupt one, so
+            # actually parse the container before declaring success.
+            case "$dest" in
+                *.safetensors)
+                    if ! python3 - "$dest" <<'PYEOF' 2>/dev/null
+import sys
+from safetensors import safe_open
+with safe_open(sys.argv[1], framework="numpy") as f:
+    next(iter(f.keys()), None)
+PYEOF
+                    then
+                        log "    corrupt $name; re-fetching from scratch"
+                        rm -f "$dest" "$dest.part"
+                        sleep 3
+                        continue
+                    fi
+                    ;;
+            esac
+            rm -f "$dest.part"
             log "    ok   $name ($got bytes)"
             return 0
         fi
