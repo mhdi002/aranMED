@@ -173,6 +173,44 @@ def segment(text: str, max_chars: int) -> list[str]:
     return out or ([text.strip()] if text.strip() else [])
 
 
+# Clinical opposites that a translation must not flip. A number the model
+# invents is caught by the numeral check; a polarity it inverts is not, and
+# reads as a completely normal finding. Observed on real dictation: source
+# "هایپوکوک" (HYPOechoic) rendered as "HYPERechoic" -- one syllable, opposite
+# meaning, and nothing downstream can tell.
+_POLARITY_PAIRS: tuple[tuple[str, str], ...] = (
+    ("hypoechoic", "hyperechoic"),
+    ("hypodense", "hyperdense"),
+    ("hypointense", "hyperintense"),
+    ("hypoplastic", "hyperplastic"),
+    ("hypotrophy", "hypertrophy"),
+)
+
+
+def polarity_conflicts(source: str, english: str) -> list[str]:
+    """Terms the translation states as the opposite of the source.
+
+    Only fires when the source clearly carries one pole and the output carries
+    only the other, so a fragment mentioning both is left alone rather than
+    guessed at.
+    """
+    src = (source or "").lower()
+    out = (english or "").lower()
+    # The Persian transliterations these arrive as, so the source side is
+    # detectable before translation has happened.
+    src_lo_hint = "هایپو" in src or "hypo" in src
+    src_hi_hint = "هایپر" in src or "hyper" in src
+    issues: list[str] = []
+    for lo, hi in _POLARITY_PAIRS:
+        if (src_lo_hint and not src_hi_hint) and hi in out and lo not in out:
+            issues.append(f"source says hypo-, translation says {hi}")
+            break
+        if (src_hi_hint and not src_lo_hint) and lo in out and hi not in out:
+            issues.append(f"source says hyper-, translation says {lo}")
+            break
+    return issues
+
+
 def compare(source: str, english: str) -> tuple[list[str], list[str]]:
     """Return ``(missing, invented)`` numbers for one source/translation pair."""
     src = source_numerals(source)
@@ -269,6 +307,7 @@ async def translate_verified(text: str, *, registry) -> tuple[str, dict]:
     parts: list[str] = []
     all_missing: list[str] = []
     all_invented: list[str] = []
+    all_polarity: list[str] = []
     untranslated = 0
 
     for frag in fragments:
@@ -303,6 +342,7 @@ async def translate_verified(text: str, *, registry) -> tuple[str, dict]:
                     log.info("numeral repair succeeded on attempt %d", attempt)
             all_missing.extend(missing)
             all_invented.extend(invented)
+            all_polarity.extend(polarity_conflicts(frag, english))
 
         parts.append(english)
 
@@ -323,7 +363,9 @@ async def translate_verified(text: str, *, registry) -> tuple[str, dict]:
         log.error("ASR translation INCOMPLETE: %s", report["reason"])
         return result, report
 
-    if not verify or (not all_missing and not all_invented):
+    report["polarity"] = all_polarity
+
+    if not verify or (not all_missing and not all_invented and not all_polarity):
         log.info(
             "translated dictation: %d -> %d chars, %d fragment(s), %d repaired, "
             "numerals %s verified",
@@ -335,8 +377,8 @@ async def translate_verified(text: str, *, registry) -> tuple[str, dict]:
     report["ok"] = False
     report["degraded"] = True
     report["reason"] = (
-        f"numeral verification failed after {repairs} repair attempt(s): "
-        f"missing={all_missing} invented={all_invented}"
+        f"verification failed after {repairs} repair attempt(s): "
+        f"missing={all_missing} invented={all_invented} polarity={all_polarity}"
     )
     log.error("ASR translation UNVERIFIED: %s", report["reason"])
 

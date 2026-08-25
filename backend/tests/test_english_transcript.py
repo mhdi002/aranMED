@@ -125,6 +125,35 @@ def test_misread_number_is_still_caught():
 
 
 # --------------------------------------------------------------------------
+# polarity -- a flipped hypo/hyper reads as a normal finding
+# --------------------------------------------------------------------------
+def test_polarity_inversion_is_caught():
+    # Observed on real dictation: source "هایپوکوک" (hypoechoic) came back as
+    # "hyperechoic". One syllable, opposite meaning, invisible downstream.
+    issues = et.polarity_conflicts(
+        "اویدنس آف تو هایپوکوک استرکتر", "evidence of two hyperechoic structures"
+    )
+    assert issues, "hypo -> hyper inversion not detected"
+
+
+def test_polarity_correct_translation_passes():
+    assert et.polarity_conflicts(
+        "اویدنس آف تو هایپوکوک استرکتر", "evidence of two hypoechoic structures"
+    ) == []
+
+
+def test_polarity_ignores_fragments_carrying_both_poles():
+    # A fragment genuinely discussing both must not be guessed at.
+    assert et.polarity_conflicts(
+        "هایپو and هایپر", "hypoechoic and hyperechoic areas"
+    ) == []
+
+
+def test_polarity_silent_when_source_has_no_hint():
+    assert et.polarity_conflicts("liver is normal", "liver is normal") == []
+
+
+# --------------------------------------------------------------------------
 # segment()
 # --------------------------------------------------------------------------
 def test_segment_splits_on_persian_and_english_boundaries():

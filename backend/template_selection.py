@@ -121,6 +121,23 @@ def _keyword_overlap_ranking(transcript: str, *, top_k: int) -> list[TemplateSug
         return []
     scored.sort(key=lambda x: x[0], reverse=True)
     max_score = scored[0][0] or 1.0
+    # score/max_score is 1.0 for the winner BY CONSTRUCTION, so scaling by it
+    # alone gave every top candidate exactly 0.75 no matter how weak the match
+    # -- which made TEMPLATE_SELECT_MIN_CONFIDENCE unable to reject anything and
+    # turned auto-selection into "always pick the top keyword hit". Observed: a
+    # garbled abdominal-trauma dictation confidently routed to OB Sonography at
+    # 0.75, one keyword ahead of five abdominal templates at 0.60.
+    #
+    # Weight by how far clear of the runner-up the winner is. A template that
+    # barely edges out several others has not identified the study; it has won a
+    # coin toss, and the caller should be told that so it can ask for a manual
+    # pick instead of filling the wrong form.
+    runner_up = scored[1][0] if len(scored) > 1 else 0.0
+    margin = (max_score - runner_up) / max_score if max_score else 0.0
+    # A sole candidate has no runner-up to beat, so it keeps most of its score;
+    # the floor stops distinctiveness from zeroing out an otherwise fine match.
+    margin_floor = float(os.getenv("TEMPLATE_SELECT_MARGIN_FLOOR", "0.4"))
+    distinctiveness = margin_floor + (1.0 - margin_floor) * margin
     out = []
     for score, c in scored[:top_k]:
         out.append(
@@ -129,7 +146,9 @@ def _keyword_overlap_ranking(transcript: str, *, top_k: int) -> list[TemplateSug
                 title=c["official_title"] or c["name"],
                 # Capped below the explicit-phrase tier so a strong spoken
                 # match always outranks a content-similarity guess.
-                confidence=round(min(1.0, score / max_score) * 0.75, 3),
+                confidence=round(
+                    min(1.0, score / max_score) * 0.75 * distinctiveness, 3
+                ),
                 matched_on="keyword_overlap",
             )
         )

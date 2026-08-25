@@ -21,9 +21,36 @@ FILES = [f for f in os.environ.get("FID_FILES", "").split(",") if f.strip()]
 
 _DIGITS = str.maketrans("۰۱۲۳۴۵۶۷۸۹٠١٢٣٤٥٦٧٨٩", "01234567890123456789")
 
+# Numbers are dictated as digits AND as words, and a faithful translation
+# renders both as digits. Comparing digits alone marks a correct rendering of
+# "سی" as "30" an invented number -- the same false positive the backend
+# guard already resolves, which this check has to mirror or it contradicts it.
+_NUM_WORDS = {
+    "یک": 1, "دو": 2, "سه": 3, "چهار": 4, "پنج": 5, "شش": 6, "هفت": 7,
+    "هشت": 8, "ده": 10, "بیست": 20, "سی": 30, "چهل": 40, "پنجاه": 50,
+    "شصت": 60, "هفتاد": 70, "هشتاد": 80, "نود": 90, "صد": 100,
+    "one": 1, "two": 2, "three": 3, "four": 4, "five": 5, "six": 6,
+    "seven": 7, "eight": 8, "nine": 9, "ten": 10, "twenty": 20,
+    "thirty": 30, "forty": 40, "fifty": 50, "sixty": 60, "seventy": 70,
+    "eighty": 80, "ninety": 90, "hundred": 100,
+}
+
 
 def numerals(text):
     return re.findall(r"\d+", (text or "").translate(_DIGITS))
+
+
+def word_numerals(text):
+    out = []
+    for tok in re.findall(r"[^\W\d_]+", text or "", flags=re.UNICODE):
+        v = _NUM_WORDS.get(tok.lower())
+        if v is not None:
+            out.append(str(v))
+    return out
+
+
+def source_numerals(text):
+    return numerals(text) + word_numerals(text)
 
 
 def post(path, audio):
@@ -68,9 +95,11 @@ for audio in FILES:
     print("\n--- STAGE 2: English returned by the API ---")
     print(eng)
 
-    src, out = numerals(raw), numerals(eng)
+    src = numerals(raw)                 # digits the source states literally
+    allowed = source_numerals(raw)      # ...plus the ones it states as words
+    out = numerals(eng) + word_numerals(eng)
     missing = [n for n in src if out.count(n) < src.count(n)]
-    invented = [n for n in out if n not in src]
+    invented = [n for n in out if n not in allowed]
 
     print("\n--- MEASUREMENT FIDELITY ---")
     print(f"  in raw ASR      : {src or '(none dictated)'}")

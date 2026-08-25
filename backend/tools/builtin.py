@@ -142,7 +142,18 @@ Your job:
   2. Obey the SELECTED TEMPLATE's exact title, section order, and headings. Prefer that
      structure over any other exam style mentioned in the dictation.
   3. Use ONLY information present in the dictation. Where the dictation is silent on a
-     section, write "Not dictated." — do NOT invent findings.
+     section, write "Not dictated." -- do NOT invent findings.
+     THE TEMPLATE'S OWN WORDING IS NOT A FINDING. A template line is a form to fill,
+     not a fact: emitting "Single alive embryo with active heart beat is detected"
+     because the template offers it, when the dictation never mentions an embryo,
+     states a clinical finding that does not exist. If the dictation does not
+     support a template line, write "Not dictated." for it or omit it. This applies
+     to normal/reassuring lines exactly as much as to abnormal ones.
+  3b. If the dictation describes findings the template has no place for -- a
+     measurement, a mass, free fluid -- report them anyway, at the top of the
+     relevant section or as a trailing line. Never drop dictated content because
+     the template lacks a slot for it; a measurement the clinician spoke is the
+     one thing that cannot be re-derived.
   4. Exam titles must match the official catalogue / template title EXACTLY
      (e.g. full «neck soft tissue ct» — never a shortened «neck ct»).
   5. If the spoken/dictated exam name or content style clearly mismatches the selected
