@@ -118,17 +118,15 @@ fetch_repo() {
             *fp32*|*flax*|*.msgpack|pytorch_model*|*.bin|*consolidated*)
                 log "    skip $name (duplicate format)"; continue ;;
         esac
-        # ModelScope publishes shards as "model.safetensors-00001-of-00002.safetensors";
-        # transformers/vLLM expect the name the index actually references, so
-        # normalise to "model-00001-of-00002.safetensors".
+        # Write every file under its published name. ModelScope shards are
+        # called "model.safetensors-00001-of-00002.safetensors" rather than
+        # the more familiar "model-00001-of-00002.safetensors", and renaming
+        # them to look conventional breaks the load: the repo ships its own
+        # model.safetensors.index.json, whose weight_map references the
+        # published names. The repo is internally consistent -- vLLM fails
+        # with "Weight files referenced in index but missing" only if you
+        # rename one side of that pair. Leave both alone.
         local target="$name"
-        case "$name" in
-            model.safetensors-*-of-*.safetensors)
-                target="model-${name#model.safetensors-}"
-                target="${target%.safetensors}"
-                target="${target}.safetensors"
-                ;;
-        esac
         fetch_file "$repo" "$name" "$size" "$out/$target" || rc=1
     done <<< "$listing"
     return $rc
