@@ -53,16 +53,24 @@ this must be measured per host rather than assumed:
 | --- | --- | --- |
 | huggingface.co | blocked | blocked (`HEAD` 200, `GET` 0B) |
 | hf-mirror.com | blocked | blocked |
-| modelscope.cn | **6.5 MB/s** | blocked |
+| modelscope.cn | **6.5 MB/s** | **~1 MB/s** |
 | Docker Hub | blocked (needed a mirror) | **~47 MB/s** |
 | PyPI | ok | **9.2 MB/s** |
 | NVIDIA repo | blocked | ok |
 | GitHub releases | — | blocked |
 | ghcr.io / quay.io | — | blocked |
 
-Host A needed a Docker registry mirror and got its weights from ModelScope.
-Host B pulls Docker images at 47 MB/s and cannot reach ModelScope at all.
-**Nothing carries over between hosts except the method.**
+Host A needed a Docker registry mirror; Host B pulls Docker images at 47 MB/s
+without one. Both reach ModelScope, at very different speeds.
+
+> **A truncated or transient test result will send you down the wrong path.**
+> ModelScope was initially recorded as blocked on Host B on the strength of
+> one test whose output scrolled off, plus a `got=0` line in a fetch log. A
+> clean re-test returned `206`, 20 MB at ~1 MB/s. Before concluding a source
+> is unreachable, run the ranged GET on its own and read the whole result --
+> wrongly writing off a working mirror costs far more than re-testing, and in
+> this case sent the deploy down a relay path measured at 0.01 MB/s that could
+> never have finished.
 
 ## Sources worth testing beyond the obvious two
 
@@ -72,7 +80,8 @@ where huggingface.co delivered zero bytes:
 
 | Source | Result | Carries |
 | --- | --- | --- |
-| `openaipublic.azureedge.net` | **5.2 MB/s** | Whisper, in OpenAI `.pt` format |
+| `modelscope.cn` | ~1 MB/s | both models, HF layout — **the path this project uses** |
+| `openaipublic.azureedge.net` | 5.2 MB/s | Whisper only, OpenAI `.pt` format |
 | Docker Hub | ~47 MB/s | anything you can bake into an image |
 | PyPI | 9.2 MB/s | anything packaged as a wheel |
 
