@@ -55,6 +55,11 @@ _output_english = os.environ.get("WHISPER_OUTPUT_ENGLISH", "1").strip().lower() 
 _task = os.environ.get("WHISPER_TASK", "").strip().lower() or (
     "translate" if _output_english else "transcribe"
 )
+def _as_bool(value, default: bool = True) -> bool:
+    if value is None or value == "":
+        return default
+    return str(value).strip().lower() in ("1", "true", "yes", "on")
+
 _max_shortform_s = float(os.environ.get("WHISPER_MAX_SHORTFORM_S", "30"))
 _chunk_length_s = float(os.environ.get("WHISPER_CHUNK_LENGTH_S", "30"))
 _stride_length_s = float(os.environ.get("WHISPER_STRIDE_LENGTH_S", "0"))
@@ -169,6 +174,27 @@ def model_meta(model_name: str):
     }
 
 
+def _is_degenerate(text: str) -> bool:
+    """True when a decode has collapsed into repeating the same phrase.
+
+    Whisper long-form decoding can lock onto a phrase and emit it for the rest
+    of the window, swallowing the real content around it. Observed on a 57s
+    code-switched Persian/English dictation: "از اینجا،" sixty times, which
+    buried the actual findings. condition_on_prev_tokens=False does not stop
+    it, and the long-form controls that might are rejected by the pipeline
+    API, so it is detected after the fact instead.
+
+    Detection is on distinct-token ratio rather than an exact-repeat search, so
+    it catches near-repeats too while leaving legitimately repetitive clinical
+    prose ("is normal ... is normal") alone -- that still carries many distinct
+    words.
+    """
+    words = (text or "").split()
+    if len(words) < int(os.environ.get("WHISPER_DEGEN_MIN_WORDS", "40")):
+        return False
+    ratio = len(set(words)) / len(words)
+    return ratio < float(os.environ.get("WHISPER_DEGEN_RATIO", "0.25"))
+
 def _transcribe_full(
     pipe,
     wav: np.ndarray,
@@ -183,7 +209,30 @@ def _transcribe_full(
     run short-form inference on consecutive windows and join the texts.
     Overlap (stride) is configurable via WHISPER_STRIDE_LENGTH_S.
     """
+    # Whisper long-form decoding loops: it conditions each window on the text
+    # it just produced, so one bad window can lock it into repeating a phrase
+    # for the rest of the file. Observed on a 57s Persian dictation --
+    # "از اینجا" sixty times, swallowing the real findings around it.
+    #
+    # Switching the task to `translate` hides the loop, but at a cost that is
+    # far worse: it paraphrases, and measurements do not survive paraphrase.
+    # Measured on the same file, "50 در 50 در 50 و سی در 51" became "measured
+    # about 50 and C" -- four numbers reduced to one, and the loss happens
+    # inside the model where no downstream check can see it.
+    #
+    # So the loop is suppressed directly instead. These are the standard
+    # long-form controls: stop conditioning on previous text, let the sampler
+    # escape a degenerate beam by stepping through temperatures, and use the
+    # compression/logprob thresholds to detect a window that has gone wrong.
     gen_kwargs: dict = {"task": _task}
+    if _as_bool(os.environ.get("WHISPER_ANTI_REPEAT"), True):
+        # Only condition_on_prev_tokens is safe here. The other long-form
+        # controls (temperature fallback tuple, compression_ratio_threshold,
+        # logprob_threshold) push the ASR pipeline down a text-generation path
+        # and fail with "WhisperForConditionalGeneration.forward() got an
+        # unexpected keyword argument 'input_ids'" -- they belong to
+        # model.generate(), not to the pipeline call used here.
+        gen_kwargs["condition_on_prev_tokens"] = False
     if language:
         gen_kwargs["language"] = language
 
@@ -218,6 +267,29 @@ def _transcribe_full(
         )
         piece_text = (result.get("text") if isinstance(result, dict) else str(result)) or ""
         piece_text = piece_text.strip()
+        # A window that degenerated is worth re-decoding with the other task.
+        # `translate` does not loop on this material, and re-running only the
+        # damaged window keeps the faithful `transcribe` output -- and its
+        # measurements -- everywhere else. Switching the whole file to
+        # translate would cost the numbers: measured on real audio,
+        # "50 در 50 در 50 و سی در 51" became "measured about 50 and C".
+        if _is_degenerate(piece_text):
+            alt = "translate" if _task != "translate" else "transcribe"
+            log.warning(
+                "window at %.0fs degenerated (%d words, %.2f distinct); "
+                "re-decoding with task=%s",
+                start / _target_sr, len(piece_text.split()),
+                len(set(piece_text.split())) / max(1, len(piece_text.split())), alt,
+            )
+            retry_kwargs = dict(gen_kwargs, task=alt)
+            try:
+                r2 = pipe({"array": piece, "sampling_rate": _target_sr},
+                          generate_kwargs=retry_kwargs, return_timestamps=True)
+                t2 = ((r2.get("text") if isinstance(r2, dict) else str(r2)) or "").strip()
+                if t2 and not _is_degenerate(t2):
+                    piece_text = t2
+            except Exception as e:  # noqa: BLE001
+                log.warning("degenerate-window retry failed: %s", e)
         if piece_text:
             parts.append(piece_text)
         if end >= total:
