@@ -95,6 +95,42 @@ none.
 
 It carries no LLM, so it does not help the core model.
 
+## Docker Hub carries the models, and is rarely filtered
+
+The single most useful finding across four deployments. Every source tried
+first -- HF, ModelScope, their mirrors -- is a *model host*, and the networks
+that block one tend to block all of them. Docker Hub is not a model host, is
+needed for the deploy anyway, and was pulling at ~47 MB/s on a host where
+every model CDN returned nothing.
+
+Docker publishes an official model catalog under the `ai/` namespace, and it
+includes safetensors builds -- not just GGUF:
+
+```bash
+# list available formats and sizes
+curl -s 'https://hub.docker.com/v2/repositories/ai/qwen3.5/tags?page_size=25' \
+  | tr ',' '
+' | grep -oE '"name":"[^"]*"|"full_size":[0-9]+' | paste - -
+
+docker pull ai/qwen3.5:4b-safetensors    # 9.34 GB, the same weights HF serves
+```
+
+Tags follow `<size>-<format>`: `4b-safetensors`, `4b-q8_0`, `9b-bf16` and so
+on. Take the safetensors tag -- vLLM loads it directly, whereas the GGUF and
+MLX tags are for other runtimes.
+
+These are OCI **artifacts**, not runnable images, so `docker export` yields
+nothing useful: the layers are the model files themselves. Use `docker save`
+and untar, then verify each shard parses before serving it.
+
+> **Widen the kind of host, not the list of mirrors.** Hours went into
+> re-probing HF and ModelScope variants -- different regions, CDN siblings,
+> plain HTTP, TLS 1.2, forcing IPv4, the official `hf_hub_download` -- when
+> all of them terminate at the same class of filtered CDN. The thing that
+> worked was a completely different sort of host that happened to carry the
+> same bytes. Ask what else ships this artifact, not which mirror of the same
+> service might be open.
+
 ## Options, in order of preference
 
 1. **Ask the provider to unblock `huggingface.co` bulk transfer.** By far the
