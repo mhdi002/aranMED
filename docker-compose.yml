@@ -230,6 +230,13 @@ services:
       # and leaves a few MB of metadata behind that looks like a cache hit.
       # Setting this falls back to the plain CDN, which works there.
       HF_HUB_DISABLE_XET: "${HF_HUB_DISABLE_XET:-}"
+      # Alternative Hugging Face endpoint. Some networks answer HF metadata
+      # normally and then serve zero bytes for the weights themselves --
+      # `HEAD` returns 200 with a correct content-length while `GET` delivers
+      # nothing, so the failure looks like a hang rather than a block. Setting
+      # this to a reachable mirror redirects every hub call without touching
+      # code. Leave empty for hub default.
+      HF_ENDPOINT: "${HF_ENDPOINT:-}"
       TRITON_COMPAT_HOST: "0.0.0.0"
       TRITON_COMPAT_PORT: "${TRITON_COMPAT_PORT:-8002}"
       # Local snapshot mounted above (see backend's LOCAL_MODELS_DIR comment);
@@ -451,6 +458,13 @@ services:
       HUGGING_FACE_HUB_TOKEN: "${HF_TOKEN:-}"
       # See the triton service for why this exists.
       HF_HUB_DISABLE_XET: "${HF_HUB_DISABLE_XET:-}"
+      # Alternative Hugging Face endpoint. Some networks answer HF metadata
+      # normally and then serve zero bytes for the weights themselves --
+      # `HEAD` returns 200 with a correct content-length while `GET` delivers
+      # nothing, so the failure looks like a hang rather than a block. Setting
+      # this to a reachable mirror redirects every hub call without touching
+      # code. Leave empty for hub default.
+      HF_ENDPOINT: "${HF_ENDPOINT:-}"
       # The entrypoint below assembles `vllm serve` from these, omitting any
       # flag left empty. Compose's static command list cannot do that, and
       # several of these flags are invalid rather than inert when passed a
@@ -504,6 +518,13 @@ services:
       HUGGING_FACE_HUB_TOKEN: "${HF_TOKEN:-}"
       # See the triton service for why this exists.
       HF_HUB_DISABLE_XET: "${HF_HUB_DISABLE_XET:-}"
+      # Alternative Hugging Face endpoint. Some networks answer HF metadata
+      # normally and then serve zero bytes for the weights themselves --
+      # `HEAD` returns 200 with a correct content-length while `GET` delivers
+      # nothing, so the failure looks like a hang rather than a block. Setting
+      # this to a reachable mirror redirects every hub call without touching
+      # code. Leave empty for hub default.
+      HF_ENDPOINT: "${HF_ENDPOINT:-}"
     volumes:
       - hf-cache:/root/.cache/huggingface
     command:

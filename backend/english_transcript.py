@@ -46,9 +46,11 @@ See docs/core/ASR_TRANSLATION_CONFABULATION.md for the full evidence.
 """
 from __future__ import annotations
 
+import json
 import logging
 import os
 import re
+from pathlib import Path
 
 from providers.base import ChatMessage
 
@@ -84,30 +86,44 @@ RULES:
 # Persian/Arabic-Indic digits, so a number written in either script compares.
 _DIGIT_MAP = str.maketrans("۰۱۲۳۴۵۶۷۸۹٠١٢٣٤٥٦٧٨٩", "01234567890123456789")
 
-# Number WORDS a faithful translation renders as digits. Without these, a
-# correct rendering of "سی" as "30" looks like a fabricated number.
-#
-# "نه" (nine) is deliberately ABSENT: it is far more commonly the negation
-# "no" in clinical dictation ("نه با سکولاریتی" = "no vascularity"), and
-# admitting it here would let a genuinely invented 9 pass unnoticed. Ambiguous
-# words are safer excluded — the cost is a false rejection, which the repair
-# pass then resolves, rather than a fabrication served as fact.
-_NUM_WORDS: dict[str, int] = {
-    # Persian
-    "یک": 1, "دو": 2, "سه": 3, "چهار": 4, "پنج": 5,
-    "شش": 6, "هفت": 7, "هشت": 8, "ده": 10,
-    "یازده": 11, "دوازده": 12, "سیزده": 13, "چهارده": 14, "پانزده": 15,
-    "شانزده": 16, "هفده": 17, "هجده": 18, "نوزده": 19,
-    "بیست": 20, "سی": 30, "چهل": 40, "پنجاه": 50,
-    "شصت": 60, "هفتاد": 70, "هشتاد": 80, "نود": 90, "صد": 100,
-    # English, for the code-switched half of the dictation
-    "one": 1, "two": 2, "three": 3, "four": 4, "five": 5,
-    "six": 6, "seven": 7, "eight": 8, "nine": 9, "ten": 10,
-    "eleven": 11, "twelve": 12, "thirteen": 13, "fourteen": 14, "fifteen": 15,
-    "sixteen": 16, "seventeen": 17, "eighteen": 18, "nineteen": 19,
-    "twenty": 20, "thirty": 30, "forty": 40, "fifty": 50,
-    "sixty": 60, "seventy": 70, "eighty": 80, "ninety": 90, "hundred": 100,
-}
+# Vocabulary lives in data/asr_translation_vocab.json, not here: which number
+# words a dictation uses and which clinical opposites matter are properties of
+# the language and specialty being dictated, not of the verification algorithm.
+# The in-code fallbacks keep the guard working if that file is missing -- a
+# vocabulary problem must never silently disable verification altogether.
+_VOCAB_PATH = Path(__file__).with_name("data") / "asr_translation_vocab.json"
+
+_FALLBACK_NUM_WORDS: dict[str, int] = {"سی": 30, "بیست": 20, "پنجاه": 50,
+                                       "thirty": 30, "twenty": 20, "fifty": 50}
+_FALLBACK_PAIRS: tuple = (("hypoechoic", "hyperechoic"),)
+_FALLBACK_LOW = ("hypo", "هایپو")
+_FALLBACK_HIGH = ("hyper", "هایپر")
+
+
+def _load_vocab() -> tuple:
+    """Read the vocabulary tables, falling back to a minimal built-in set."""
+    try:
+        raw = json.loads(_VOCAB_PATH.read_text(encoding="utf-8"))
+    except (OSError, ValueError) as e:  # noqa: BLE001
+        log.warning("asr vocab unreadable (%s); using built-in fallback", e)
+        return (dict(_FALLBACK_NUM_WORDS), _FALLBACK_PAIRS,
+                _FALLBACK_LOW, _FALLBACK_HIGH)
+    nw: dict[str, int] = {}
+    for lang, table in (raw.get("number_words") or {}).items():
+        if lang.startswith("_") or not isinstance(table, dict):
+            continue
+        for word, value in table.items():
+            if not str(word).startswith("_"):
+                nw[str(word).lower()] = int(value)
+    pol = raw.get("polarity_pairs") or {}
+    pairs = tuple((str(a).lower(), str(b).lower())
+                  for a, b in (pol.get("pairs") or []) if a and b)
+    low = tuple(str(h).lower() for h in (pol.get("low_hints") or _FALLBACK_LOW))
+    high = tuple(str(h).lower() for h in (pol.get("high_hints") or _FALLBACK_HIGH))
+    return (nw or dict(_FALLBACK_NUM_WORDS), pairs or _FALLBACK_PAIRS, low, high)
+
+
+_NUM_WORDS, _POLARITY_PAIRS, _LOW_HINTS, _HIGH_HINTS = _load_vocab()
 
 # Split on sentence/clause boundaries in either script.
 _BOUNDARY = re.compile(r"(?<=[.!?؟۔؛،;،])\s+|\n+")
@@ -173,18 +189,6 @@ def segment(text: str, max_chars: int) -> list[str]:
     return out or ([text.strip()] if text.strip() else [])
 
 
-# Clinical opposites that a translation must not flip. A number the model
-# invents is caught by the numeral check; a polarity it inverts is not, and
-# reads as a completely normal finding. Observed on real dictation: source
-# "هایپوکوک" (HYPOechoic) rendered as "HYPERechoic" -- one syllable, opposite
-# meaning, and nothing downstream can tell.
-_POLARITY_PAIRS: tuple[tuple[str, str], ...] = (
-    ("hypoechoic", "hyperechoic"),
-    ("hypodense", "hyperdense"),
-    ("hypointense", "hyperintense"),
-    ("hypoplastic", "hyperplastic"),
-    ("hypotrophy", "hypertrophy"),
-)
 
 
 def polarity_conflicts(source: str, english: str) -> list[str]:
@@ -198,8 +202,8 @@ def polarity_conflicts(source: str, english: str) -> list[str]:
     out = (english or "").lower()
     # The Persian transliterations these arrive as, so the source side is
     # detectable before translation has happened.
-    src_lo_hint = "هایپو" in src or "hypo" in src
-    src_hi_hint = "هایپر" in src or "hyper" in src
+    src_lo_hint = any(h in src for h in _LOW_HINTS)
+    src_hi_hint = any(h in src for h in _HIGH_HINTS)
     issues: list[str] = []
     for lo, hi in _POLARITY_PAIRS:
         if (src_lo_hint and not src_hi_hint) and hi in out and lo not in out:

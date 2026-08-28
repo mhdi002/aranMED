@@ -21,19 +21,26 @@ FILES = [f for f in os.environ.get("FID_FILES", "").split(",") if f.strip()]
 
 _DIGITS = str.maketrans("۰۱۲۳۴۵۶۷۸۹٠١٢٣٤٥٦٧٨٩", "01234567890123456789")
 
-# Numbers are dictated as digits AND as words, and a faithful translation
-# renders both as digits. Comparing digits alone marks a correct rendering of
-# "سی" as "30" an invented number -- the same false positive the backend
-# guard already resolves, which this check has to mirror or it contradicts it.
-_NUM_WORDS = {
-    "یک": 1, "دو": 2, "سه": 3, "چهار": 4, "پنج": 5, "شش": 6, "هفت": 7,
-    "هشت": 8, "ده": 10, "بیست": 20, "سی": 30, "چهل": 40, "پنجاه": 50,
-    "شصت": 60, "هفتاد": 70, "هشتاد": 80, "نود": 90, "صد": 100,
-    "one": 1, "two": 2, "three": 3, "four": 4, "five": 5, "six": 6,
-    "seven": 7, "eight": 8, "nine": 9, "ten": 10, "twenty": 20,
-    "thirty": 30, "forty": 40, "fifty": 50, "sixty": 60, "seventy": 70,
-    "eighty": 80, "ninety": 90, "hundred": 100,
-}
+# Number words come from the same data file the backend guard uses, so this
+# check can never drift from the behaviour it is verifying. A private copy
+# here would silently start contradicting the server -- which it already did
+# once, reporting a correct "30" as an invented number.
+_VOCAB = os.environ.get(
+    "ASR_VOCAB_PATH",
+    os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
+                 "backend", "data", "asr_translation_vocab.json"),
+)
+_NUM_WORDS = {}
+try:
+    with open(_VOCAB, encoding="utf-8") as fh:
+        for _lang, _tbl in (json.load(fh).get("number_words") or {}).items():
+            if _lang.startswith("_") or not isinstance(_tbl, dict):
+                continue
+            for _w, _v in _tbl.items():
+                if not str(_w).startswith("_"):
+                    _NUM_WORDS[str(_w).lower()] = int(_v)
+except (OSError, ValueError) as _e:
+    print(f"warning: vocab unreadable ({_e}); word-numbers not resolved")
 
 
 def numerals(text):

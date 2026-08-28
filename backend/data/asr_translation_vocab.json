@@ -1,0 +1,75 @@
+{
+  "_comment": [
+    "Vocabulary for the ASR translation guard (backend/english_transcript.py).",
+    "",
+    "This is data, not code, for the same reason the report clean-up patterns",
+    "are: which number words a dictation uses, and which clinical opposites",
+    "matter, are properties of the language and specialty being dictated -- not",
+    "of the verification algorithm. A site dictating in a different language, or",
+    "a modality with its own polarity pairs, edits this file and changes nothing",
+    "else.",
+    "",
+    "Both tables are safety-relevant. Read the notes before editing either."
+  ],
+
+  "number_words": {
+    "_why": [
+      "A faithful translation renders a spoken number as a digit, so comparing",
+      "digits alone marks a CORRECT rendering of 'سی' as '30' an invented",
+      "number and rejects it. Every word here is a value the output may",
+      "legitimately contain.",
+      "",
+      "OMISSIONS ARE DELIBERATE. 'نه' (nine) is absent because in clinical",
+      "dictation it is overwhelmingly the negation 'no' ('نه با سکولاریتی' =",
+      "'no vascularity'). Admitting it would let a genuinely fabricated 9 pass",
+      "unnoticed. Prefer excluding an ambiguous word: the cost is a false",
+      "rejection that the repair pass resolves, versus a fabrication served as",
+      "fact."
+    ],
+    "fa": {
+      "یک": 1, "دو": 2, "سه": 3, "چهار": 4, "پنج": 5,
+      "شش": 6, "هفت": 7, "هشت": 8, "ده": 10,
+      "یازده": 11, "دوازده": 12, "سیزده": 13, "چهارده": 14, "پانزده": 15,
+      "شانزده": 16, "هفده": 17, "هجده": 18, "نوزده": 19,
+      "بیست": 20, "سی": 30, "چهل": 40, "پنجاه": 50,
+      "شصت": 60, "هفتاد": 70, "هشتاد": 80, "نود": 90, "صد": 100
+    },
+    "en": {
+      "one": 1, "two": 2, "three": 3, "four": 4, "five": 5,
+      "six": 6, "seven": 7, "eight": 8, "nine": 9, "ten": 10,
+      "eleven": 11, "twelve": 12, "thirteen": 13, "fourteen": 14, "fifteen": 15,
+      "sixteen": 16, "seventeen": 17, "eighteen": 18, "nineteen": 19,
+      "twenty": 20, "thirty": 30, "forty": 40, "fifty": 50,
+      "sixty": 60, "seventy": 70, "eighty": 80, "ninety": 90, "hundred": 100
+    }
+  },
+
+  "polarity_pairs": {
+    "_why": [
+      "Clinical opposites a translation must not flip. The numeral check cannot",
+      "see an inverted term, and an inverted one reads as a perfectly normal",
+      "finding. Observed on real dictation: source 'هایپوکوک' (HYPOechoic)",
+      "returned as 'hyperechoic' -- one syllable, opposite meaning, and nothing",
+      "downstream can tell.",
+      "",
+      "Each entry is [low_pole_term, high_pole_term]. A conflict is only raised",
+      "when the source carries one pole unambiguously and the output carries",
+      "only the other, so a fragment discussing both is left alone."
+    ],
+    "pairs": [
+      ["hypoechoic", "hyperechoic"],
+      ["hypodense", "hyperdense"],
+      ["hypointense", "hyperintense"],
+      ["hypoplastic", "hyperplastic"],
+      ["hypotrophy", "hypertrophy"],
+      ["hypovascular", "hypervascular"],
+      ["hypoperfusion", "hyperperfusion"]
+    ],
+    "_source_hints": [
+      "Substrings that reveal which pole the SOURCE carries, before translation",
+      "has happened. Includes the Persian transliterations these arrive as."
+    ],
+    "low_hints": ["hypo", "هایپو"],
+    "high_hints": ["hyper", "هایپر"]
+  }
+}
