@@ -64,6 +64,28 @@ Host A needed a Docker registry mirror and got its weights from ModelScope.
 Host B pulls Docker images at 47 MB/s and cannot reach ModelScope at all.
 **Nothing carries over between hosts except the method.**
 
+## Sources worth testing beyond the obvious two
+
+HF and ModelScope are not the only places these weights live, and on a host
+where both are blocked another CDN may be wide open. Measured on Host B,
+where huggingface.co delivered zero bytes:
+
+| Source | Result | Carries |
+| --- | --- | --- |
+| `openaipublic.azureedge.net` | **5.2 MB/s** | Whisper, in OpenAI `.pt` format |
+| Docker Hub | ~47 MB/s | anything you can bake into an image |
+| PyPI | 9.2 MB/s | anything packaged as a wheel |
+
+The Azure one is worth knowing about because it is the upstream OpenAI
+publishes Whisper to, and it is unrelated to the HF CDN that gets blocked.
+The catch is format: it serves `large-v3.pt`, while the Triton compat server
+loads HF `safetensors` through transformers. Using it means a conversion step
+or a loader change, so it is a fallback rather than a drop-in -- but on a host
+with no other route to Whisper it is the difference between working ASR and
+none.
+
+It carries no LLM, so it does not help the core model.
+
 ## Options, in order of preference
 
 1. **Ask the provider to unblock `huggingface.co` bulk transfer.** By far the
