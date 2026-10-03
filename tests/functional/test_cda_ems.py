@@ -129,6 +129,7 @@ def test_ems_prearrival_board_and_handover(client, users, monkeypatch):
     n = board[0]
     assert n["status"] == "inbound" and n["unit"] == "MEDIC-7" and n["triage"] == "critical"
     assert n["chief_complaint"] == "Chest pain"
+    assert n["data"]["latest_vitals"]["sbp"] == 88 and n["data"]["latest_vitals"]["hr"] == 118
     assert "BP 88/54" in n["summary"] and "HR 118" in n["summary"] and "Aspirin 300 mg" in n["summary"]
     assert n["patient"]["name"] == "Kamran Navabi"
     pid = out["person_id"]

@@ -123,3 +123,20 @@ key is listed with its default in `.env.example`.
 | Gateway TLS | `GATEWAY_TLS_*`, `GATEWAY_HSTS_MAX_AGE` | Applied by the `docker-compose.tls.yml` overlay (`./deploy.sh --tls`), which also publishes the HTTPS port. |
 | Agent/memory runtime | `runtime.agent_*`, `runtime.memory_*` in `backend/models.yaml` | Loop iteration cap, per-call timeouts, generation budgets, memory window/eviction/purge interval. Not env vars — they live with the model registry they tune. |
 | Prompts | `PROMPTS_DIR` | System prompts are editable data files under `backend/data/prompts/`, with in-code fallbacks. |
+
+
+## 8. Clinical modules (PACS, EHR, interoperability)
+
+The clinical packages read their settings through `backend/clinicaldb/settings.py` and `backend/pacs/config.py`, which wrap `os.environ` lookups with documented defaults. The keys are grouped in `.env.example` under:
+
+| Group | Keys (prefix) | Doc |
+|---|---|---|
+| Facility identity + MPI | `FACILITY_*`, `PUBLIC_BASE_URL`, `FACILITY_PEERS_FILE`, `NATIONAL_ID_SYSTEM`, `MPI_*` | [`CLINICAL_DB_SCHEMA_v1.md`](CLINICAL_DB_SCHEMA_v1.md) |
+| PACS | `PACS_*`, `DICOMWEB_PREFIX`, `DICOM_UID_ROOT`, `PROCEDURE_CODING_SCHEME` | [`PACS_v1.md`](PACS_v1.md) |
+| Peer authentication | `PEER_TOKEN_TTL_SEC`, `PEER_TOKEN_SINGLE_USE`, `PEER_POLICY_FILE` (default `backend/data/peer_policy.json`) | [`EHR_INTEROP_v1.md`](EHR_INTEROP_v1.md) |
+| EHR access | `CONSENT_SHARING_DEFAULT`, `BREAKGLASS_MINUTES` | [`EHR_INTEROP_v1.md`](EHR_INTEROP_v1.md) |
+| Interop | `FHIR_PREFIX`, `HL7_*`, `FEDERATION_TIMEOUT_SEC`, `TRANSFER_*`, `EMS_*` | [`EHR_INTEROP_v1.md`](EHR_INTEROP_v1.md) |
+| Storage location | `DB_PATH` (SQLite file), `CLINICAL_DATA_DIR`, `DATABASE_URL` (Postgres) | — |
+| Model registry file | `ASR_AGENT_MODELS_YAML` (alternative to `backend/models.yaml`) | — |
+
+Peer shared secrets are referenced by **environment-variable name** in the facility registry (`secret_env`), so they live in the deployment's secret store and never in the database.

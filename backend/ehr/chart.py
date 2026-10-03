@@ -97,6 +97,7 @@ def build(person_id: str, *, principal: Optional[dict] = None, include_remote: b
             chart["facilities"] += [f for f in res.get("facilities") or []
                                     if f not in chart["facilities"]]
     chart["summary"] = summarize(chart)
+    chart["facility_names"] = {oid: _fac_name(oid, names) for oid in chart["facilities"]}
     return chart
 
 
@@ -115,7 +116,8 @@ def summarize(chart: dict) -> dict[str, Any]:
     s = chart["sections"]
     obs = s.get("observation", [])
     vitals = _latest([o for o in obs if o.get("category") == "vital-signs"], "effective")
-    labs = [o for o in obs if o.get("category") == "laboratory"]
+    # Latest result per test; a test is abnormal if its latest value is.
+    labs = list(_latest([o for o in obs if o.get("category") == "laboratory"], "effective").values())
     abnormal = [o for o in labs if (o.get("interpretation") or "N") not in ("N", "", None)]
     return {
         "active_problems": [c for c in s.get("condition", [])

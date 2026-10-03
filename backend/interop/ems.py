@@ -232,7 +232,7 @@ def ingest(raw: bytes | str | dict, *, content_type: str = "application/json",
             c.execute("UPDATE ems_notifications SET person_id=?, encounter_id=?, unit=?, eta=?, triage=?, "
                       "chief_complaint=?, summary=?, data=?, updated_at=? WHERE id=?",
                       (pid, enc["id"], payload.get("unit"), payload.get("eta"), payload.get("acuity"),
-                       payload.get("chief_complaint"), summary, jdump({"vitals": latest, **payload}),
+                       payload.get("chief_complaint"), summary, jdump({**payload, "latest_vitals": latest}),
                        now, nid))
         else:
             nid = new_id()
@@ -241,7 +241,7 @@ def ingest(raw: bytes | str | dict, *, content_type: str = "application/json",
                       "created_at, updated_at) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
                       (nid, pid, enc["id"], src, str(incident), payload.get("unit"), payload.get("eta"),
                        "inbound", payload.get("acuity"), payload.get("chief_complaint"), summary,
-                       jdump({"vitals": latest, **payload}), now, now))
+                       jdump({**payload, "latest_vitals": latest}), now, now))
     alerts = _alert_ed(payload, summary, mrn)
     messages.log(direction="in", protocol="ems", message_type="ePCR", peer=src, status="ok",
                  person_id=pid, control_id=str(incident), payload=raw_text[:20000])

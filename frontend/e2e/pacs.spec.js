@@ -19,14 +19,17 @@ test("UI sign-in lands a doctor in the app with Imaging in the nav", async ({ pa
 });
 
 test("study browser: stats, filters, details panel", async ({ page, request }) => {
-  await loginAs(page, request, "e2e_doctor", state().user_password);
+  const token = await loginAs(page, request, "e2e_doctor", state().user_password);
+  // Counts come from the live API: other specs (e.g. on-demand retrieval in
+  // the clinical journey) legitimately add studies to the same stack.
+  const api = await (await request.get(`${state().backend}/api/pacs/stats`,
+    { headers: { Authorization: `Bearer ${token}` } })).json();
   await page.goto("/pacs");
   const stats = page.getByTestId("pacs-stats");
-  // Two studies are seeded (CT + MR); the third arrives in the import test.
-  await expect(stats.locator(".stat").first()).toContainText("Studies2");
-  await expect(stats.locator(".stat").nth(1)).toContainText("Images32");
+  await expect(stats.locator(".stat").first()).toContainText(`Studies${api.studies}`);
+  await expect(stats.locator(".stat").nth(1)).toContainText(`Images${api.instances}`);
   const table = page.getByTestId("study-table");
-  await expect(table.locator("tbody tr")).toHaveCount(2);
+  await expect(table.locator("tbody tr")).toHaveCount(api.studies);
 
   await page.locator("input[name=q]").fill("karimi");
   await page.getByRole("button", { name: "Search" }).click();

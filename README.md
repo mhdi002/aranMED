@@ -7,6 +7,7 @@ There is **no** top-level `asr/` or `medicalrag/` wrapper. Everything lives unde
 ```
 aranmed/
   backend/              # FastAPI ASR, report, EHR, alerts, education
+                        #   + clinicaldb/ (MPI), pacs/, ehr/, interop/ (FHIR, HL7, CDA, EMS, transfers)
   frontend/             # Next.js UI
   src/medrag/           # MedicalRAG Python package
   scripts/              # ASR helpers + scripts/medrag/
@@ -24,6 +25,23 @@ aranmed/
 ```
 
 ---
+
+## Clinical platform: PACS · EHR · interoperability
+
+Beside the radiology AI stack, AranMed is a complete clinical platform that hospitals connect to each other:
+
+- **PACS** — DICOM archive with DIMSE (modalities, other PACS), DICOMweb, worklist/MPPS, a Cornerstone3D viewer and AI draft reads. See [`docs/core/PACS_v1.md`](docs/core/PACS_v1.md).
+- **EHR + interop** — Master Patient Index, relational FHIR-aligned EHR linked to the PACS, FHIR R4 server, HL7 v2 (MLLP), C-CDA, EMS (NEMSIS), cross-hospital chart, transfers, consent and break-the-glass. See [`docs/core/EHR_INTEROP_v1.md`](docs/core/EHR_INTEROP_v1.md) and [`docs/core/CLINICAL_DB_SCHEMA_v1.md`](docs/core/CLINICAL_DB_SCHEMA_v1.md).
+
+Tests:
+
+```bash
+pip install -r requirements-dev.txt
+pytest                                   # unit + functional (real DICOM, HTTP, MLLP, two hospital processes)
+DATABASE_URL=postgresql://… pytest       # same suite on Postgres
+HOSPITAL_PG_DSN_BASE=postgresql://user@host:port pytest tests/functional/test_interhospital.py   # hospitals on Postgres
+cd frontend && npm run build && npm run test:e2e   # browser E2E against a seeded two-hospital stack
+```
 
 ## Architecture
 

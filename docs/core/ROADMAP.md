@@ -11,6 +11,9 @@ This document exists so that everything the source stakeholder feedback envision
 - Knowledge Artifact classification pilot pipeline, sized for ~1000 chunks — [`KNOWLEDGE_ARTIFACT_SCHEMA_v1.md`](KNOWLEDGE_ARTIFACT_SCHEMA_v1.md). Pipeline code + 27 tests complete; the actual run against the live Qdrant corpus is still pending a reachable deployment (see that doc's Status note).
 - Spatial/minimalist frontend redesign — `frontend/styles/tokens.css` (spacing/type/color scale), `frontend/components/ui/` (Button/Card/Field/Modal/PageHeader/Badge/Toolbar/EmptyState/Spinner), real per-view routes (`frontend/components/AppShell.js`), `BackgroundFx` (glassmorphic photo/SVG backdrop) removed entirely, `window.confirm()` replaced by an accessible `Modal` in EHR/Reports/Settings. Verified against a live backend in both languages and both themes.
 
+- PACS — [`PACS_v1.md`](PACS_v1.md): DICOM storage + index on the MPI, DIMSE SCP/SCU (C-ECHO/STORE/FIND/MOVE/GET, MWL, MPPS, Storage Commitment), DICOMweb (QIDO/WADO/STOW, WADO-URI), DICOMweb/Orthanc/DIMSE adapters, federation, retrieve/send jobs, Cornerstone3D viewer, agent imaging tools.
+- Relational EHR + interoperability — [`EHR_INTEROP_v1.md`](EHR_INTEROP_v1.md), [`CLINICAL_DB_SCHEMA_v1.md`](CLINICAL_DB_SCHEMA_v1.md): Master Patient Index, FHIR-aligned EHR linked to the PACS, FHIR R4 server (incl. PDQm/PIXm/MHD), HL7 v2 over MLLP, C-CDA, EMS (NEMSIS), cross-hospital record discovery and live chart, inter-hospital transfers, consent / break-the-glass, agent clinical tools. This also delivers the "Lab / Imaging integration into the Clinical Data Fabric" item below (now via the relational EHR rather than the JSON fabric).
+
 ## Roadmap — not built this pass
 
 ### AranMed Runtime / Model Router
@@ -43,7 +46,9 @@ Emergency, Cardiology, Neurology, Surgery, Oncology, ICU, etc. Each would be a n
 
 Going from the ~1000-chunk pilot to 10k → 100k → the full 446,576 chunks is explicitly gated on the pilot's precision/recall results in `reports/artifact_pilot_eval.md` (see [`KNOWLEDGE_ARTIFACT_SCHEMA_v1.md`](KNOWLEDGE_ARTIFACT_SCHEMA_v1.md) §6). No scale-up work is scheduled by this document.
 
-### Interoperability adapters (CQL / FHIR Clinical Reasoning / HL7 / IHE Radiology)
+### Interoperability adapters (CQL / FHIR Clinical Reasoning)
+
+*Update:* HL7 v2, FHIR R4 data exchange and the IHE Radiology Scheduled Workflow (order → MWL → MPPS → images → report) are now built (see `EHR_INTEROP_v1.md` / `PACS_v1.md`). What remains here is expressing the *rule engine* in CQL / FHIR Clinical Reasoning.
 
 The Rule Engine's `condition`/`action` shapes ([`RULE_MODEL_SCHEMA_v1.md`](RULE_MODEL_SCHEMA_v1.md) §4) are AranMed-internal. CQL/ELM export, FHIR Clinical Reasoning resource representation, and IHE Radiology profile support (Scheduled Workflow, Reporting Workflow, Evidence Documents) are treated as optional future *adapters* translating AranMed's internal rule/knowledge representation to/from those standards — not a requirement that AranMed's internal engine be built directly on top of them. No adapter work is scheduled.
 
