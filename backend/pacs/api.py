@@ -211,6 +211,58 @@ def save_report(study_uid: str, body: ReportIn, request: Request, p: dict = WRIT
     return rep
 
 
+# ---------------------------------------------------------------- AI
+class AnalyzeIn(BaseModel):
+    question: Optional[str] = None
+    series_uid: Optional[str] = None
+    max_images: int = 3
+    template_id: Optional[str] = None
+
+
+async def _run_tool(name: str, user: dict, **kwargs) -> dict:
+    from registry import Registry
+    from tools.base import ToolContext, registry as tool_registry
+    import templates as templates_mod
+    ctx = ToolContext(registry=Registry.get(), attachments={}, templates=templates_mod,
+                      owner_user_id=user.get("id"))
+    res = await tool_registry.get(name).run(ctx, **kwargs)
+    if res.error:
+        raise HTTPException(422, res.error)
+    return {"content": res.content, "data": res.data}
+
+
+@router.post("/studies/{study_uid}/analyze")
+async def analyze_study(study_uid: str, body: AnalyzeIn,
+                        p: dict = Depends(pr.require("pacs.read"))) -> dict:
+    """AI draft read of a study (vision findings -> templated DRAFT report)."""
+    if p.get("kind") != "user":
+        raise HTTPException(403, "AI analysis is available to signed-in users only")
+    return await _run_tool("pacs_analyze_study", p, study_uid=study_uid,
+                           question=body.question, series_uid=body.series_uid,
+                           max_images=body.max_images, template_id=body.template_id)
+
+
+class AskIn(BaseModel):
+    question: str = Field(min_length=1, max_length=4000)
+
+
+@router.post("/studies/{study_uid}/ask")
+async def ask_about_study(study_uid: str, body: AskIn,
+                          p: dict = Depends(pr.require("pacs.read"))) -> dict:
+    """Chat with the agent about one study (it can call any pacs_* tool)."""
+    if p.get("kind") != "user":
+        raise HTTPException(403, "available to signed-in users only")
+    if not index.get_study(study_uid):
+        raise HTTPException(404, "study not found")
+    import app as app_mod
+    text = (f"[Context: the user is viewing imaging study {study_uid} in the PACS viewer.]\n"
+            f"{body.question}")
+    res = await app_mod.agent.run(session_id=f"pacs:{p['id']}:{study_uid}", user_text=text,
+                                  attachments={}, owner_user_id=p["id"])
+    return {"answer": res.answer, "tool_calls": res.tool_calls, "model": res.model,
+            "critical_alerts": (res.state or {}).get("critical_alerts") or []}
+
+
 # ---------------------------------------------------------------- nodes
 class NodeIn(BaseModel):
     name: str

@@ -5,3 +5,4 @@ from . import codeswitch_tools  # noqa: F401  - bilingual ASR repair
 from . import ehr  # noqa: F401  - registers EHR tools
 from . import alerts  # noqa: F401  - registers alerting tools
 from . import education  # noqa: F401  - registers education tools
+from . import pacs  # noqa: F401  - registers PACS / imaging tools

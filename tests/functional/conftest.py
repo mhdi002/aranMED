@@ -33,9 +33,14 @@ def clinical_env(monkeypatch, tmp_path):
 
 
 @pytest.fixture
-def client(clinical_env) -> Iterator:
+def client(clinical_env, fresh_registry) -> Iterator:
     from fastapi.testclient import TestClient
     import app as app_mod
+    from agent import Agent
+    # app binds the registry/agent at import; point them at this test's
+    # registry (fake core/vision providers) so agent paths are deterministic.
+    app_mod.registry = fresh_registry
+    app_mod.agent = Agent(registry=fresh_registry, memory=app_mod.memory)
     with TestClient(app_mod.app) as c:
         yield c
 
