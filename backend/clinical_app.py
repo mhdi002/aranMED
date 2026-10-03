@@ -29,6 +29,23 @@ def mount(app: FastAPI) -> None:
     app.include_router(ehr_api.router)
     ehr_bridge.install()
     ehr_links.install()
+
+    from interop import api as interop_api, federation, fhir_server
+    app.include_router(interop_api.router)
+    app.include_router(fhir_server.make_router())
+    federation.install()
+    clinicaldb_api.announce("fhir", version="4.0.1", base=fhir_server.prefix(),
+                            operations=["$everything", "$summary", "$match", "$ihe-pix"],
+                            interactions=["read", "vread", "search", "create", "update", "delete",
+                                          "history", "transaction", "batch"])
+    clinicaldb_api.announce("hl7v2", transport=["MLLP", "HTTP"],
+                            messages=["ADT^A01-A40", "ORM^O01", "OMI^O23", "ORU^R01", "MDM^T02",
+                                      "VXU^V04", "QBP^Q22", "QBP^Q23"])
+    clinicaldb_api.announce("cda", documents=["C-CDA R2.1 CCD"], directions=["export", "import"])
+    clinicaldb_api.announce("ems", formats=["NEMSIS v3.5 XML", "NEMSIS JSON", "FHIR Bundle"])
+    clinicaldb_api.announce("transfer", version="1",
+                            endpoints=["/api/transfers/inbound", "/api/transfers/inbound/{id}/status",
+                                       "/api/transfers/inbound/{id}/package"])
     app.include_router(dicomweb.make_router())
     clinicaldb_api.announce("dicomweb", base=pacs_config.dicomweb_prefix(),
                             services=["QIDO-RS", "WADO-RS", "STOW-RS", "WADO-URI"])
@@ -66,8 +83,11 @@ def mount(app: FastAPI) -> None:
 
 def start_listeners() -> list:
     """Start the enabled network listeners; return their stop callables."""
+    from interop import mllp
     from pacs import dimse
     stops = []
     if dimse.start_from_config():
         stops.append(dimse.stop)
+    if mllp.start_from_config():
+        stops.append(mllp.stop)
     return stops

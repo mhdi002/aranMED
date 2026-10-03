@@ -46,9 +46,9 @@ def _on_report(rep: dict) -> None:
 
 def _on_resource(rtype: str, item: dict, action: str) -> None:
     if rtype == "service_request" and action == "create":
+        from pacs import worklist
         if (item.get("category") or "").lower() == "imaging" and item.get("status") == "active" \
-                and not item.get("accession"):
-            from pacs import worklist
+                and not (item.get("accession") and worklist.get(item["accession"])):
             from clinicaldb import mpi
             person = mpi.get(item["person_id"]) or {}
             demo = person.get("demographics") or {}
@@ -67,8 +67,11 @@ def _on_resource(rtype: str, item: dict, action: str) -> None:
                     "priority": (item.get("priority") or "").upper() or None,
                     "reason": item.get("reason"), "referring_physician": item.get("requester"),
                     "scheduled_start": item.get("occurrence"), "station_ae": data.get("station_ae"),
-                    "order_id": item["id"], "source": "ehr"})
-                store.update("service_request", item["id"], {"accession": wl["accession"]})
+                    "order_id": item["id"], "source": "ehr",
+                    # An accession assigned upstream (HL7 filler number) is kept.
+                    **({"accession": item["accession"]} if item.get("accession") else {})})
+                if wl["accession"] != item.get("accession"):
+                    store.update("service_request", item["id"], {"accession": wl["accession"]})
             except Exception:  # noqa: BLE001
                 log.exception("could not place order %s on the worklist", item["id"])
     if rtype == "observation" and action == "create" and not item.get("interpretation"):

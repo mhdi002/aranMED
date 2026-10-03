@@ -55,6 +55,19 @@ class Hospital:
             "PASSWORD_MIN_LENGTH": "6",
             "OLLAMA_ENABLED": "false",
         })
+        # HOSPITAL_PG_DSN_BASE=postgresql://user@host:port puts every hospital
+        # on its own Postgres database (created fresh) instead of SQLite;
+        # HOSPITAL_PG_OIDS limits that to some hospitals, so a mixed network
+        # (one hospital on Postgres, another on SQLite) can be exercised.
+        pg_base = os.environ.get("HOSPITAL_PG_DSN_BASE", "").rstrip("/")
+        only = {o.strip() for o in os.environ.get("HOSPITAL_PG_OIDS", "").split(",") if o.strip()}
+        if pg_base and (not only or oid in only):
+            import psycopg
+            dbname = "h_" + oid.replace(".", "_")
+            with psycopg.connect(f"{pg_base}/postgres", autocommit=True) as c:
+                c.execute(f'DROP DATABASE IF EXISTS "{dbname}"')
+                c.execute(f'CREATE DATABASE "{dbname}"')
+            self.env["DATABASE_URL"] = f"{pg_base}/{dbname}"
         if extra_env:
             self.env.update(extra_env)
         self.proc: Optional[subprocess.Popen] = None

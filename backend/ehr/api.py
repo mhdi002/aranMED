@@ -93,10 +93,14 @@ def register_patient(body: PatientIn, request: Request, p: dict = WRITE) -> dict
 
 @router.get("/patients/{person_id}/chart")
 def get_chart(person_id: str, request: Request, include_remote: bool = False,
-              p: dict = READ) -> dict:
+              purpose: str = "TREAT", p: dict = READ) -> dict:
     person = _person_or_404(person_id)
     why = guard(person["id"], p, request, "clinical.chart.read")
-    c = chart_mod.build(person["id"], principal=p,
+    if purpose not in ("TREAT", "ETREAT"):
+        raise HTTPException(400, "purpose must be TREAT or ETREAT")
+    if purpose == "ETREAT" and not pr.allows(p, "clinical.breakglass"):
+        raise HTTPException(403, "emergency access requires clinical.breakglass")
+    c = chart_mod.build(person["id"], principal={**p, "chart_purpose": purpose},
                         include_remote=include_remote and p.get("kind") == "user")
     c["access"] = {"basis": why, "restricted": access.is_restricted(person["id"]),
                    "consents": access.consents(person["id"])}

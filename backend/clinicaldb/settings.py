@@ -79,6 +79,11 @@ def mpi_review_score() -> float:
     return env_float("MPI_REVIEW_SCORE", 0.75)
 
 
+def mpi_probable_score() -> float:
+    """PDQm match grade 'probable' (reported to a querier, not auto-linked)."""
+    return env_float("MPI_PROBABLE_SCORE", 0.85)
+
+
 # --- Storage -----------------------------------------------------------------
 def data_dir() -> Path:
     p = env("CLINICAL_DATA_DIR", "")
