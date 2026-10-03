@@ -7,12 +7,18 @@
     "dev": "node server.js",
     "build": "next build",
     "start": "NODE_ENV=production node server.js",
-    "lint": "next lint"
+    "lint": "next lint",
+    "test:e2e": "playwright test"
   },
   "dependencies": {
+    "@cornerstonejs/core": "^5.11.4",
+    "@cornerstonejs/tools": "^5.11.4",
     "http-proxy-middleware": "^4.0.0",
     "next": "^14.2.5",
     "react": "18.3.1",
     "react-dom": "18.3.1"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.56.1"
   }
 }

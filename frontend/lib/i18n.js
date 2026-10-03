@@ -7,9 +7,11 @@
 // Persian is RTL — when language === "fa" we set <html dir="rtl"> and the
 // shell flips automatically (CSS uses logical properties).
 import { createContext, useCallback, useContext, useEffect, useState } from "react";
+import { CLINICAL_STRINGS } from "./i18n_clinical";
 
 export const STRINGS = {
   en: {
+    ...CLINICAL_STRINGS.en,
     "nav.workspace":   "Workspace",
     "nav.models":      "Models",
     "nav.education":   "Education",
@@ -101,6 +103,7 @@ export const STRINGS = {
     "common.close":    "Close",
   },
   fa: {
+    ...CLINICAL_STRINGS.fa,
     "nav.workspace":   "میز کار",
     "nav.models":      "مدل‌ها",
     "nav.education":   "آموزش",

@@ -128,7 +128,10 @@ class Registry:
     @classmethod
     def get(cls, yaml_path: Optional[Path] = None) -> "Registry":
         if cls._instance is None:
-            path = yaml_path or Path(__file__).parent / "models.yaml"
+            # ASR_AGENT_MODELS_YAML selects an alternative registry file (as
+            # documented in models.yaml); default is backend/models.yaml.
+            env_path = os.environ.get("ASR_AGENT_MODELS_YAML", "").strip()
+            path = yaml_path or (Path(env_path) if env_path else Path(__file__).parent / "models.yaml")
             cls._instance = Registry(path)
         return cls._instance
 

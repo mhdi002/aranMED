@@ -9,6 +9,11 @@ export const VIEW_TITLES = {
   ehr: "Electronic Health Record",
   alerts: "Medication Alerts",
   education: "Education Tutor",
+  pacs: "Imaging Archive (PACS)",
+  "pacs/viewer": "Image Viewer",
+  "pacs/worklist": "Modality Worklist",
+  "pacs/upload": "Import Studies",
+  "pacs/nodes": "DICOM Nodes & Federation",
   // Role-generic titles. The concrete model name is resolved at runtime from
   // the backend registry (GET /api/models) — never hardcoded. See ModelsView.
   asr: "Speech Recognition Model",

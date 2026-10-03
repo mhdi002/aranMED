@@ -86,3 +86,6 @@ Desktop.ini
 
 # Deployment bundle produced by the transfer step in the server runbook.
 aranmed-deploy.tar.gz
+frontend/e2e/.state.json
+frontend/test-results/
+frontend/playwright-report/

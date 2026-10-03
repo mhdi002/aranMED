@@ -1,11 +1,14 @@
 // Role-based view access — radiologists get a focused ASR + chat workspace.
 export const ROLE_VIEWS = {
-  radiologist: ["dictate", "radiology"],
-  doctor: ["dictate", "radiology", "reports", "templates", "ehr", "alerts", "settings"],
-  resident: ["dictate", "radiology", "reports", "templates", "ehr", "education", "settings"],
+  radiologist: ["dictate", "radiology", "pacs", "pacs/viewer", "pacs/worklist", "pacs/upload"],
+  doctor: ["dictate", "radiology", "reports", "templates", "ehr", "alerts",
+           "pacs", "pacs/viewer", "pacs/worklist", "pacs/upload", "settings"],
+  resident: ["dictate", "radiology", "reports", "templates", "ehr",
+             "pacs", "pacs/viewer", "pacs/worklist", "education", "settings"],
   student: ["education", "settings"],
   admin: [
     "dictate", "radiology", "reports", "templates", "ehr", "alerts",
+    "pacs", "pacs/viewer", "pacs/worklist", "pacs/upload", "pacs/nodes",
     "education", "asr", "llm", "vision", "settings",
   ],
 };

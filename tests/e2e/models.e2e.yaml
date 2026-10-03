@@ -1,0 +1,24 @@
+# Registry for browser E2E runs: core + vision served by tests/e2e/fake_llm.py.
+models:
+  - role: core
+    name: e2e-core
+    provider: openai
+    enabled: true
+    default: true
+    config:
+      base_url: ${E2E_LLM_URL:-http://127.0.0.1:8120/v1}
+      model: e2e-model
+      timeout: 30
+  - role: vision
+    name: e2e-vision
+    provider: openai
+    enabled: true
+    default: true
+    config:
+      base_url: ${E2E_LLM_URL:-http://127.0.0.1:8120/v1}
+      model: e2e-model
+      vision: true
+      timeout: 30
+runtime:
+  max_warm_models: 2
+  vram_budget_gb: 0

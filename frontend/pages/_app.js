@@ -1,5 +1,6 @@
 import "../styles/tokens.css";
 import "../styles/globals.css";
+import "../styles/clinical.css";
 import { useRouter } from "next/router";
 import { useEffect } from "react";
 import { AuthProvider, useAuth } from "../lib/auth";
