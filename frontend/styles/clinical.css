@@ -24,7 +24,9 @@
 /* filters / forms */
 .filter-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(170px, 1fr)); gap: var(--space-3); align-items: end; }
 .filter-actions { display: flex; gap: var(--space-2); align-items: end; }
-.form-grid { display: grid; grid-template-columns: 1fr 1fr; gap: var(--space-3); min-width: min(560px, 80vw); }
+.form-grid { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: var(--space-3); }
+/* Two-column forms need a wider dialog than the 440px confirm modal. */
+.modal:has(.form-grid) { max-width: 640px; }
 .form-grid .span-2 { grid-column: span 2; }
 .checks { display: flex; flex-wrap: wrap; gap: var(--space-3); font-size: var(--text-sm); }
 .checks label { display: inline-flex; gap: var(--space-1); align-items: center; }
@@ -48,6 +50,8 @@
 .pacs-layout > .card { margin: 0; }
 .pacs-layout { display: grid; grid-template-columns: minmax(0, 1fr); gap: var(--space-4); }
 .pacs-layout.with-panel { grid-template-columns: minmax(0, 1fr) minmax(320px, 400px); }
+/* The side panel already shows the location and has its own actions. */
+.pacs-layout.with-panel .col-opt { display: none; }
 @media (max-width: 1100px) { .pacs-layout.with-panel { grid-template-columns: 1fr; } }
 .study-panel { align-self: start; position: sticky; top: var(--space-4); max-height: calc(100vh - 120px); overflow: auto; }
 
@@ -146,3 +150,5 @@ pre.raw { white-space: pre-wrap; word-break: break-all; font-family: var(--font-
 .list-row { display: flex; justify-content: space-between; align-items: center; gap: var(--space-3); }
 .pill { align-self: center; line-height: 1.4; white-space: nowrap; }
 .card-head .pill { margin-inline-start: auto; }
+/* Badges inside flex rows keep their own height instead of stretching. */
+.pill { align-self: center; }

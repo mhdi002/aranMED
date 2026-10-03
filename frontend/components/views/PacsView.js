@@ -142,8 +142,8 @@ export default function PacsView() {
                   <th>{t("pacs.col.study")}</th>
                   <th>{t("pacs.col.images")}</th>
                   <th>{t("pacs.col.status")}</th>
-                  <th>{t("pacs.col.location")}</th>
-                  <th />
+                  <th className="col-opt">{t("pacs.col.location")}</th>
+                  <th className="col-opt" />
                 </tr></thead>
                 <tbody>
                   {data.studies.map((s) => {
@@ -170,8 +170,8 @@ export default function PacsView() {
                           {ext.status && <Badge tone={STATUS_TONE[ext.status] || "muted"}>{ext.status}</Badge>}
                           {ext.priority && <Badge tone="err">{ext.priority}</Badge>}
                         </td>
-                        <td className="small">{locs.map((l) => l.name).join(", ")}</td>
-                        <td className="nowrap" onClick={(e) => e.stopPropagation()}>
+                        <td className="small col-opt">{locs.map((l) => l.name).join(", ")}</td>
+                        <td className="nowrap col-opt" onClick={(e) => e.stopPropagation()}>
                           {isLocal ? (
                             <Button variant="ghost" onClick={() => openViewer(s.StudyInstanceUID)} data-testid="open-viewer">
                               {t("pacs.open")}

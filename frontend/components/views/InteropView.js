@@ -108,7 +108,7 @@ export default function InteropView() {
         </Card>
         <Card><CardHead title={t("io.hl7")} />
           <TextArea value={hl7} onChange={(e) => setHl7(e.target.value)} className="mono" style={{ minHeight: 110 }} data-testid="hl7-input" />
-          <div className="toolbar"><Button onClick={sendHl7} data-testid="hl7-send">{t("pacs.send")}</Button></div>
+          <div className="toolbar"><Button onClick={sendHl7} data-testid="hl7-send">{t("io.sendHl7")}</Button></div>
           {hl7Ack && <pre className="raw" data-testid="hl7-ack">{hl7Ack}</pre>}
         </Card>
         <Card><CardHead title={t("io.cda")} />
@@ -119,7 +119,7 @@ export default function InteropView() {
 
       <Card>
         <CardHead title={t("io.messages")} right={
-          <Select value={proto} onChange={(e) => setProto(e.target.value)} aria-label="protocol">
+          <Select value={proto} onChange={(e) => setProto(e.target.value)} aria-label="protocol" style={{ width: "auto", marginInlineStart: "auto" }}>
             <option value="">all</option>{["hl7v2", "fhir", "dicom", "dicomweb", "transfer", "ems", "orthanc"].map((p) => <option key={p}>{p}</option>)}
           </Select>} />
         <div className="table-scroll"><table className="data-table" data-testid="messages-table">

@@ -154,7 +154,7 @@ def timeline(chart: dict) -> list[dict]:
         d = s.get("StudyDate") or ""
         events.append({"date": f"{d[:4]}-{d[4:6]}-{d[6:8]}" if len(d) == 8 else d,
                        "kind": "imaging",
-                       "label": f"{','.join(s.get('ModalitiesInStudy') or [])} {s.get('StudyDescription') or ''}".strip(),
+                       "label": s.get("StudyDescription") or ",".join(s.get("ModalitiesInStudy") or []),
                        "id": s.get("StudyInstanceUID"), "source": s.get("source")})
     events.sort(key=lambda e: e["date"] or "", reverse=True)
     return events

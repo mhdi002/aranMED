@@ -322,7 +322,7 @@ export default function ChartView() {
       {tab === "timeline" && (
         <Card><CardHead title={t("ch.tab.timeline")} />
           <ul className="timeline">{(chart.timeline || buildTimeline(chart)).map((e, i) => (
-            <li key={i} className={e.source?.remote ? "remote" : ""}><span className="muted small">{e.date || "?"}</span> <Badge>{e.kind}</Badge> <span dir="auto">{e.label}</span> <Src s={e.source} t={t} /></li>))}</ul>
+            <li key={i} className={e.source?.remote ? "remote" : ""}><span className="muted small">{e.date || "—"}</span> <Badge>{e.kind}</Badge> <span dir="auto">{e.label}</span> <Src s={e.source} t={t} /></li>))}</ul>
         </Card>
       )}
 
@@ -335,7 +335,7 @@ export default function ChartView() {
           </Card>
           <Card><CardHead title={t("nav.transfers")} />
             <ul className="mini-list" data-testid="chart-transfers">{(chart.transfers || []).map((tr) => (
-              <li key={tr.id}><Badge tone="info">{tr.direction}</Badge> {tr.from_facility} → {tr.to_facility}
+              <li key={tr.id}><Badge tone="info">{tr.direction}</Badge> {tr.from_facility_name || tr.from_facility} → {tr.to_facility_name || tr.to_facility}
                 <div className="status-steps">{TRANSFER_STEPS.map((st) => <span key={st} className={`step-item ${tr.status === st ? "current" : TRANSFER_STEPS.indexOf(st) < TRANSFER_STEPS.indexOf(tr.status) ? "done" : ""}`}>{st}</span>)}</div></li>))}</ul>
           </Card>
         </div>
@@ -365,10 +365,11 @@ function buildTimeline(chart) {
   const ev = [];
   Object.entries(chart.sections || {}).forEach(([sec, items]) => {
     if (sec === "consent") return;
-    items.forEach((it) => ev.push({ date: String(it.effective || it.start_at || it.onset || it.performed || it.occurrence || "").slice(0, 10),
+    items.forEach((it) => ev.push({ date: String(it.effective || it.start_at || it.onset || it.performed || it.occurrence ||
+        (it.created_at ? new Date(it.created_at * 1000).toISOString() : "")).slice(0, 10),
       kind: sec, label: it.display || it.text || it.title || it.reason || sec, source: it.source }));
   });
   (chart.imaging || []).forEach((s) => ev.push({ date: fmtDicomDate(s.StudyDate), kind: "imaging",
-    label: `${(s.ModalitiesInStudy || []).join(",")} ${s.StudyDescription || ""}`, source: s.source }));
+    label: s.StudyDescription || (s.ModalitiesInStudy || []).join(","), source: s.source }));
   return ev.sort((a, b) => (b.date || "").localeCompare(a.date || ""));
 }
