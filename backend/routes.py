@@ -6,6 +6,7 @@ JWT-style bearer token issued by ``POST /api/auth/login``.
 from __future__ import annotations
 
 import logging
+import os
 from typing import Any, Optional
 
 from fastapi import (APIRouter, Depends, File, HTTPException, Request, status,
@@ -40,7 +41,9 @@ class RegisterIn(BaseModel):
     # specific policy message rather than a generic 422.
     password: str = Field(min_length=1, max_length=1024)
     email: Optional[str] = None
-    role: str = "doctor"
+    # Omitted -> the first self-registrable role. Anything outside
+    # SELF_REGISTER_ROLES needs an authenticated caller with users.manage.
+    role: Optional[str] = None
 
 
 class TokenOut(BaseModel):
@@ -49,21 +52,52 @@ class TokenOut(BaseModel):
     user: dict
 
 
+def self_register_roles() -> list[str]:
+    """Roles an anonymous visitor may give themselves (``SELF_REGISTER_ROLES``,
+    comma-separated, default ``student``). Empty disables self-registration."""
+    raw = os.environ.get("SELF_REGISTER_ROLES", "student")
+    return [r.strip().lower() for r in raw.split(",") if r.strip()]
+
+
+@router.get("/auth/register-policy")
+async def register_policy() -> dict:
+    return {"self_register_roles": self_register_roles()}
+
+
 @router.post("/auth/register", response_model=TokenOut)
-async def register(request: Request, body: RegisterIn) -> TokenOut:
+async def register(request: Request, body: RegisterIn,
+                   caller: Optional[dict] = Depends(auth.current_user_optional)) -> TokenOut:
+    allowed = self_register_roles()
+    role = (body.role or (allowed[0] if allowed else "")).strip().lower()
+    is_manager = bool(caller) and rbac.allows((caller.get("role") or "").strip().lower(),
+                                              "users.manage")
+    if role not in allowed and not is_manager:
+        audit.record("auth.register", actor=caller, actor_name=None if caller else body.username,
+                     outcome="deny", client_ip=_ip(request),
+                     detail={"reason": "role_not_self_registrable", "role": role})
+        raise HTTPException(
+            status.HTTP_403_FORBIDDEN,
+            f"accounts with role '{role}' are created by an administrator"
+            if role else "self-registration is disabled — ask an administrator")
     try:
         user = auth.create_user(username=body.username, password=body.password,
-                                email=body.email, role=body.role)
+                                email=body.email, role=role)
     except ValueError as e:
         audit.record("auth.register", actor_name=body.username, outcome="deny",
                      client_ip=_ip(request), detail={"reason": str(e)})
         raise HTTPException(status.HTTP_400_BAD_REQUEST, str(e)) from e
-    audit.record("auth.register", actor=user, client_ip=_ip(request),
-                 detail={"role": user["role"]})
+    audit.record("auth.register", actor=caller or user, client_ip=_ip(request),
+                 detail={"role": user["role"], "user": user["username"],
+                         "created_by_admin": is_manager and caller is not None})
     token = auth.create_token({"sub": str(user["id"]),
                                "role": user["role"],
                                "username": user["username"]})
     return TokenOut(access_token=token, user=user)
+
+
+@router.get("/auth/users")
+async def list_users(user: dict = Depends(rbac.require("users.manage"))) -> dict:
+    return {"users": auth.list_users(), "self_register_roles": self_register_roles()}
 
 
 @router.post("/auth/login", response_model=TokenOut)

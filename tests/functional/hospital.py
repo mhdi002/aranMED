@@ -116,7 +116,8 @@ class Hospital:
                            data={"username": "admin", "password": ADMIN_PASSWORD}, timeout=10)
         else:
             user = f"{role}_{self.ae_title.lower()}"
-            r = httpx.post(f"{self.base}/api/auth/register",
+            # Privileged roles are created by the admin, not self-registered.
+            r = httpx.post(f"{self.base}/api/auth/register", headers=self.h("admin"),
                            json={"username": user, "password": "role-pass-2026", "role": role},
                            timeout=10)
             if r.status_code == 400:

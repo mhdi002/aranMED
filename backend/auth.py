@@ -525,6 +525,12 @@ def _consume_admin_credentials_file(username: str) -> None:
         log.warning("auth: could not remove bootstrap credentials file %s: %s", path, e)
 
 
+def list_users() -> list[dict]:
+    with db.connect() as c:
+        rows = c.execute("SELECT * FROM users ORDER BY username").fetchall()
+    return [_user_to_dict(r) for r in rows]
+
+
 def get_user(user_id: int) -> dict | None:
     with db.connect() as c:
         row = c.execute("SELECT * FROM users WHERE id=?", (user_id,)).fetchone()

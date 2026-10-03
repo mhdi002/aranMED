@@ -1,7 +1,10 @@
 import { useEffect, useState } from "react";
 import { ConfirmModal } from "../ui";
+import { useAuth } from "../../lib/auth";
+import UsersAdmin from "../settings/UsersAdmin";
 
 export default function SettingsView() {
+  const { user } = useAuth();
   const [theme, setTheme] = useState("light");
   const [lang, setLang] = useState("");
   const [savedAt, setSavedAt] = useState(0);
@@ -37,6 +40,7 @@ export default function SettingsView() {
   }
 
   return (
+    <>
     <div className="card" style={{ width: "100%" }}>
       <div className="card-head">
         <span className="step">⚙</span>
@@ -88,5 +92,7 @@ export default function SettingsView() {
         This clears saved reports, theme, and language preferences stored locally in this browser.
       </ConfirmModal>
     </div>
+    {user && user.role === "admin" && <UsersAdmin />}
+    </>
   );
 }

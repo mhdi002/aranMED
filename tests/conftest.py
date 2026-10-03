@@ -250,9 +250,14 @@ def http_client():
 
 @pytest.fixture
 def auth_headers(http_client):
-    """Register a new user and return Authorization headers."""
-    r = http_client.post("/api/auth/register",
-                         json={"username": "tester", "password": "testpass",
-                               "role": "doctor"})
+    """Create a doctor and return Authorization headers.
+
+    Privileged roles cannot self-register (SELF_REGISTER_ROLES), so the
+    account is created the way an administrator would and then logs in.
+    """
+    import auth
+    auth.create_user(username="tester", password="testpass", role="doctor")
+    r = http_client.post("/api/auth/login",
+                         data={"username": "tester", "password": "testpass"})
     assert r.status_code == 200, r.text
     return {"Authorization": f"Bearer {r.json()['access_token']}"}

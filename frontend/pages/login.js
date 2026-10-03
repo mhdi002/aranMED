@@ -2,6 +2,8 @@ import Head from "next/head";
 import { useRouter } from "next/router";
 import { useEffect, useState } from "react";
 import { useAuth } from "../lib/auth";
+import { fetchWithTimeout } from "../lib/api";
+import { apiUrl } from "../lib/config";
 import { useT } from "../lib/i18n";
 import { XRay, Stethoscope, GradCap, Brain, User } from "../components/icons";
 
@@ -24,6 +26,15 @@ export default function LoginPage() {
   const [role, setRole] = useState("");
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState("");
+  // Roles a visitor may register as themselves; others are created by an admin.
+  const [selfRoles, setSelfRoles] = useState(["student"]);
+
+  useEffect(() => {
+    fetchWithTimeout(apiUrl("/api/auth/register-policy"), {}, 8000)
+      .then((r) => (r.ok ? r.json() : null))
+      .then((j) => { if (j && Array.isArray(j.self_register_roles)) setSelfRoles(j.self_register_roles); })
+      .catch(() => {});
+  }, []);
 
   useEffect(() => {
     if (ready && user) router.replace("/");
@@ -47,7 +58,7 @@ export default function LoginPage() {
     setErr(""); setBusy(true);
     try {
       if (mode === "login") await login(username, password);
-      else await register({ username, password, email: email || null, role: role || "doctor" });
+      else await register({ username, password, email: email || null, role: role || selfRoles[0] });
       router.replace("/");
     } catch (e) {
       setErr(e.message || t("auth.error"));
@@ -55,6 +66,7 @@ export default function LoginPage() {
   }
 
   const activeRole = ROLE_OPTIONS.find((r) => r.id === role);
+  const canSelfRegister = !role ? selfRoles.length > 0 : selfRoles.includes(role);
 
   return (
     <>
@@ -140,10 +152,14 @@ export default function LoginPage() {
                 </button>
               </form>
 
-              <button className="btn-link"
-                      onClick={() => setMode(mode === "login" ? "register" : "login")}>
-                {mode === "login" ? t("auth.toRegister") : t("auth.toLogin")}
-              </button>
+              {canSelfRegister || mode === "register" ? (
+                <button className="btn-link"
+                        onClick={() => setMode(mode === "login" ? "register" : "login")}>
+                  {mode === "login" ? t("auth.toRegister") : t("auth.toLogin")}
+                </button>
+              ) : (
+                <p className="muted role-hint" data-testid="admin-creates">{t("auth.adminCreates")}</p>
+              )}
             </>
           )}
         </div>

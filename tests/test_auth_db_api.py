@@ -11,14 +11,21 @@ import time
 # ---------------------------------------------------------------------------
 # Auth
 # ---------------------------------------------------------------------------
+def _login(http_client, username, password):
+    r = http_client.post("/api/auth/login",
+                         data={"username": username, "password": password})
+    assert r.status_code == 200, r.text
+    return {"Authorization": f"Bearer {r.json()['access_token']}"}
+
+
 def test_register_and_login(http_client):
     r = http_client.post("/api/auth/register",
-                         json={"username": "alice", "password": "secret123",
-                               "role": "doctor"})
+                         json={"username": "alice", "password": "secret123"})
     assert r.status_code == 200
     body = r.json()
     assert body["token_type"] == "bearer"
     assert body["user"]["username"] == "alice"
+    assert body["user"]["role"] == "student"   # default self-register role
 
     # Duplicate registration is rejected.
     r = http_client.post("/api/auth/register",
@@ -36,6 +43,59 @@ def test_register_and_login(http_client):
                         headers={"Authorization": f"Bearer {token}"})
     assert r.status_code == 200
     assert r.json()["username"] == "alice"
+
+
+def test_self_register_cannot_claim_privileged_roles(http_client):
+    import audit
+    for role in ("admin", "doctor", "radiologist", "resident"):
+        r = http_client.post("/api/auth/register",
+                             json={"username": f"mallory_{role}",
+                                   "password": "secret123", "role": role})
+        assert r.status_code == 403, (role, r.text)
+        assert "administrator" in r.json()["detail"]
+    # Nothing was created, and every attempt left an audit trail.
+    r = http_client.post("/api/auth/login",
+                         data={"username": "mallory_admin", "password": "secret123"})
+    assert r.status_code == 401
+    denials = audit.query(action_prefix="auth.register", outcome="deny", limit=50)
+    assert len(denials) >= 4
+    assert http_client.get("/api/auth/register-policy").json() == {
+        "self_register_roles": ["student"]}
+
+
+def test_admin_creates_privileged_accounts(http_client):
+    import auth
+    auth.create_user(username="root_admin", password="adminpass1", role="admin")
+    admin = _login(http_client, "root_admin", "adminpass1")
+    r = http_client.post("/api/auth/register", headers=admin,
+                         json={"username": "dr_new", "password": "doctorpass1",
+                               "role": "doctor"})
+    assert r.status_code == 200, r.text
+    assert r.json()["user"]["role"] == "doctor"
+    doc = _login(http_client, "dr_new", "doctorpass1")
+    assert http_client.get("/api/ehr", headers=doc).status_code == 200
+
+    # A non-admin token does not unlock privileged roles.
+    r = http_client.post("/api/auth/register", headers=doc,
+                         json={"username": "dr_evil", "password": "doctorpass1",
+                               "role": "admin"})
+    assert r.status_code == 403
+    # User listing is admin-only.
+    assert http_client.get("/api/auth/users", headers=doc).status_code == 403
+    names = {u["username"] for u in http_client.get("/api/auth/users", headers=admin).json()["users"]}
+    assert {"root_admin", "dr_new"} <= names and "dr_evil" not in names
+
+
+def test_self_register_roles_configurable(http_client, monkeypatch):
+    monkeypatch.setenv("SELF_REGISTER_ROLES", "student,resident")
+    r = http_client.post("/api/auth/register",
+                         json={"username": "res_one", "password": "secret123",
+                               "role": "resident"})
+    assert r.status_code == 200 and r.json()["user"]["role"] == "resident"
+    monkeypatch.setenv("SELF_REGISTER_ROLES", "")
+    r = http_client.post("/api/auth/register",
+                         json={"username": "nobody", "password": "secret123"})
+    assert r.status_code == 403 and "disabled" in r.json()["detail"]
 
 
 def test_login_rejects_bad_password(http_client):
@@ -111,12 +171,11 @@ def test_ehr_build_rejects_garbage_llm_output(http_client, auth_headers, fake_co
 def test_ehr_scoped_per_user(http_client, fake_core):
     # User A creates a record; User B must not see it.
     fake_core.script = [("answer", EHR_JSON), ("answer", EHR_JSON)]
-    ra = http_client.post("/api/auth/register",
-                          json={"username": "userone", "password": "pwpwpw"})
-    rb = http_client.post("/api/auth/register",
-                          json={"username": "usertwo", "password": "pwpwpw"})
-    ha = {"Authorization": f"Bearer {ra.json()['access_token']}"}
-    hb = {"Authorization": f"Bearer {rb.json()['access_token']}"}
+    import auth
+    auth.create_user(username="userone", password="pwpwpw", role="doctor")
+    auth.create_user(username="usertwo", password="pwpwpw", role="doctor")
+    ha = _login(http_client, "userone", "pwpwpw")
+    hb = _login(http_client, "usertwo", "pwpwpw")
     http_client.post("/api/ehr/build",
                      json={"patient_info": "x", "language": "en"}, headers=ha)
     assert http_client.get("/api/ehr", headers=ha).json()["records"]

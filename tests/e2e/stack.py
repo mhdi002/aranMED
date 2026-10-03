@@ -128,8 +128,8 @@ def seed(work: Path) -> None:
                      data={"username": "admin", "password": ADMIN_PW}).json()["access_token"]
     H = {"Authorization": f"Bearer {tok}"}
     for user, role in (("e2e_doctor", "doctor"), ("e2e_rad", "radiologist")):
-        httpx.post(f"{BASE}/api/auth/register",
-                   json={"username": user, "password": USER_PW, "role": role})
+        httpx.post(f"{BASE}/api/auth/register", headers=H,
+                   json={"username": user, "password": USER_PW, "role": role}).raise_for_status()
 
     def stow(dsets):
         bnd = multipart.boundary()
@@ -184,7 +184,8 @@ def seed_clinical(work: Path) -> None:
                json=_facility(PEER_BASE, "2.25.901", "E2E Peer Hospital", "E2EPEER", PEER_DIMSE_PORT))
     httpx.post(f"{PEER_BASE}/api/facilities", headers=P,
                json=_facility(BASE, "2.25.900", "E2E General Hospital", "E2EPACS", DIMSE_PORT))
-    httpx.post(f"{PEER_BASE}/api/auth/register", json={"username": "peer_doc", "password": USER_PW, "role": "doctor"})
+    httpx.post(f"{PEER_BASE}/api/auth/register", headers=P,
+               json={"username": "peer_doc", "password": USER_PW, "role": "doctor"}).raise_for_status()
     PD = {"Authorization": "Bearer " + httpx.post(f"{PEER_BASE}/api/auth/login",
                                                   data={"username": "peer_doc", "password": USER_PW}).json()["access_token"]}
 
@@ -215,10 +216,18 @@ def seed_clinical(work: Path) -> None:
         httpx.post(f"{BASE}/api/clinical/patients/{lpid}/observations", headers=DH, json={
             "category": "laboratory", "code_system": "http://loinc.org", "code": "2160-0", "display": "Creatinine",
             "value_num": v, "unit": "mg/dL", "ref_low": 0.6, "ref_high": 1.2, "effective": d})
+    httpx.post(f"{BASE}/api/clinical/patients/{lpid}/encounters", headers=DH, json={
+        "class": "AMB", "type_text": "Cardiology clinic visit", "reason": "Exertional chest pain",
+        "start_at": "2026-08-01T09:30:00", "department": "Cardiology", "attending": "Dr. Rostami",
+        "status": "finished"}).raise_for_status()
     httpx.post(f"{BASE}/api/clinical/patients/{lpid}/conditions", headers=DH,
                json={"display": "Coronary artery disease", "clinical_status": "active"})
     httpx.post(f"{BASE}/api/clinical/patients/{lpid}/documents", headers=DH, json={
         "title": "Cardiology note", "doc_type": "progress-note", "content": "Stable angina, on DAPT."})
+    # A legacy free-text EHR (dictation pipeline) for the EHR / alerts pages.
+    httpx.post(f"{BASE}/api/ehr/build", headers=DH, timeout=60, json={
+        "patient_info": "54F, cough and fever 4 days, CAP RLL, on azithromycin and metformin, PCN allergy",
+        "language": "en"}).raise_for_status()
     # A restricted record.
     vip = httpx.post(f"{BASE}/api/clinical/patients", headers=DH, json={
         "demographics": {"family": "Vip", "given": "Staff", "birth_date": "1970-01-01"}, "mrn": "VIP-9"}).json()
