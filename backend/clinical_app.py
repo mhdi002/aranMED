@@ -22,8 +22,13 @@ def mount(app: FastAPI) -> None:
     from pacs import config as pacs_config
     from pacs import dicomweb, worklist  # noqa: F401  (worklist registers ingest hook)
 
+    from ehr import api as ehr_api, bridge as ehr_bridge, links as ehr_links
+
     app.include_router(clinicaldb_api.router)
     app.include_router(pacs_api.router)
+    app.include_router(ehr_api.router)
+    ehr_bridge.install()
+    ehr_links.install()
     app.include_router(dicomweb.make_router())
     clinicaldb_api.announce("dicomweb", base=pacs_config.dicomweb_prefix(),
                             services=["QIDO-RS", "WADO-RS", "STOW-RS", "WADO-URI"])

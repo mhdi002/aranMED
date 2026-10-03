@@ -25,6 +25,17 @@ def _slugify(name: str) -> str:
     return base or uuid.uuid4().hex[:8]
 
 
+# Observers of saved EHR records (e.g. backend/ehr/bridge.py projecting them
+# into the relational EHR). A failing observer is logged, never allowed to
+# fail the save the caller asked for.
+_after_save_hooks: list = []
+
+
+def register_after_save(fn) -> None:
+    if fn not in _after_save_hooks:
+        _after_save_hooks.append(fn)
+
+
 def upsert_patient(*, owner_user_id: int, data: dict,
                    patient_id: str | None = None,
                    language: str = "en") -> dict:
@@ -66,7 +77,13 @@ def upsert_patient(*, owner_user_id: int, data: dict,
               updated_at=excluded.updated_at
         """, (pid, owner_user_id, stored_name, language, stored_data,
               created_at, now))
-    return get_patient(pid, owner_user_id=owner_user_id) or record
+    saved = get_patient(pid, owner_user_id=owner_user_id) or record
+    for hook in _after_save_hooks:
+        try:
+            hook(saved, owner_user_id)
+        except Exception:  # noqa: BLE001
+            log.exception("after-save hook failed for patient %s", pid)
+    return saved
 
 
 def get_patient(patient_id: str, *, owner_user_id: int | None = None) -> dict | None:
