@@ -264,7 +264,31 @@ def _migrate(c: sqlite3.Connection) -> None:
             log.info("db: migrated — added column %s.%s", table, column)
 
 
+# Additional schemas owned by feature packages (backend/clinicaldb, pacs,
+# ehr, interop). Each hook applies its own idempotent, versioned migrations
+# and is re-run whenever the database is (re)initialised, e.g. by
+# set_db_path() in tests. Registering runs the hook immediately too, so a
+# package imported after start-up still finds its tables.
+_schema_hooks: list = []
+
+
+def register_schema_hook(fn) -> None:
+    if fn not in _schema_hooks:
+        _schema_hooks.append(fn)
+    fn()
+
+
+def _run_schema_hooks() -> None:
+    for fn in list(_schema_hooks):
+        fn()
+
+
 def _init_schema() -> None:
+    _init_core_schema()
+    _run_schema_hooks()
+
+
+def _init_core_schema() -> None:
     if is_postgres():
         import dialect  # noqa: PLC0415
         with _lock, connect() as c:

@@ -107,6 +107,11 @@ from routes import router as extra_router  # noqa: E402
 
 app.include_router(extra_router)
 
+# PACS, EHR/MPI and interoperability (FHIR, HL7, DICOM, EMS) — see clinical_app.
+import clinical_app  # noqa: E402
+
+clinical_app.mount(app)
+
 
 # ---------------------------------------------------------------------------
 # Module-level singletons

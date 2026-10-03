@@ -1,8 +1,9 @@
 {
   "_comment": "Role -> permission grants. Edit this file (not Python) to change who can do what; PROMPTS-style data-driven config, overridable with RBAC_POLICY_FILE. '*' grants everything. A trailing '.*' grants a whole namespace, e.g. 'ehr.*' covers ehr.read/write/delete. Unknown roles get no permissions (deny by default).",
   "roles": {
-    "admin": ["*"],
-
+    "admin": [
+      "*"
+    ],
     "doctor": [
       "ehr.*",
       "alerts.*",
@@ -10,18 +11,24 @@
       "knowledge.*",
       "education.*",
       "chat.*",
-      "models.read"
+      "models.read",
+      "pacs.read",
+      "pacs.write",
+      "clinical.*",
+      "transfer.*",
+      "ems.*"
     ],
-
     "radiologist": [
       "ehr.read",
       "report.*",
       "knowledge.*",
       "chat.*",
       "alerts.read",
-      "models.read"
+      "models.read",
+      "pacs.*",
+      "clinical.read",
+      "transfer.read"
     ],
-
     "resident": [
       "ehr.read",
       "report.read",
@@ -30,9 +37,12 @@
       "education.*",
       "chat.*",
       "alerts.read",
-      "models.read"
+      "models.read",
+      "pacs.read",
+      "clinical.read",
+      "transfer.read",
+      "ems.read"
     ],
-
     "student": [
       "knowledge.read",
       "education.*",
@@ -40,7 +50,6 @@
       "models.read"
     ]
   },
-
   "_permission_notes": {
     "ehr.read": "List/fetch patient records (still scoped to records the caller owns)",
     "ehr.write": "Create or update a patient record, record a dose",
@@ -56,6 +65,17 @@
     "chat.write": "Use chat paths that can mutate data via tools",
     "models.read": "Read the model registry / health introspection",
     "audit.read": "Read the audit trail (admin-only by default)",
-    "users.manage": "Create/modify other user accounts"
+    "users.manage": "Create/modify other user accounts",
+    "pacs.read": "Search/view imaging studies, DICOMweb reads, open the viewer",
+    "pacs.write": "Upload/import studies, edit worklist entries, link reports, retrieve from remote nodes",
+    "pacs.admin": "Manage DICOM nodes/peers, delete studies, forward/route studies",
+    "clinical.read": "Read the relational EHR chart, MPI search, federated records from peer hospitals",
+    "clinical.write": "Write EHR resources, register/merge MPI persons",
+    "clinical.breakglass": "Emergency access to a record without consent (always audited, reason required)",
+    "transfer.read": "View inter-hospital transfers",
+    "transfer.write": "Request/accept/progress inter-hospital transfers",
+    "ems.read": "View inbound EMS/ambulance notifications",
+    "ems.write": "Ingest/acknowledge EMS patient care reports",
+    "interop.admin": "Manage facilities/peers, view the interop message log, FHIR/HL7 endpoints admin"
   }
 }
