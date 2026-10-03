@@ -1,0 +1,11 @@
+{
+  "_comment": "What an authenticated peer facility may do, by its trust_level in the facility registry. Same wildcard rules as rbac.json. Override with PEER_POLICY_FILE. A peer's requests are additionally limited by the purpose-of-use it declares and are always audited.",
+  "levels": {
+    "peer": ["pacs.read", "pacs.write", "clinical.read", "transfer.*", "ems.write"],
+    "partner": ["pacs.read", "clinical.read", "transfer.read"],
+    "ems": ["ems.write", "ems.read", "transfer.read", "clinical.read"],
+    "imaging-center": ["pacs.read", "pacs.write"],
+    "untrusted": []
+  },
+  "purposes": ["TREAT", "ETREAT", "TRANSFER", "HPAYMT", "PATRQT", "OPERATIONS"]
+}

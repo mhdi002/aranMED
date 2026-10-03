@@ -163,6 +163,10 @@ services:
       ASR_HF_DEFAULT: "${ASR_HF_DEFAULT:-true}"
       ASR_TRITON_ENABLED: "${ASR_TRITON_ENABLED:-true}"
       ASR_TRITON_DEFAULT: "${ASR_TRITON_DEFAULT:-false}"
+      # DICOM / MLLP listeners run in the clinical-listeners service; API
+      # replicas must not each try to own those ports.
+      PACS_DIMSE_ENABLED: "false"
+      HL7_MLLP_ENABLED: "false"
     volumes:
       - hf-cache:${DOCKER_HF_HOME:-/models}
       - ./backend/models.docker.yaml:/app/backend/models.yaml:ro
@@ -562,6 +566,35 @@ services:
     ports:
       - "${VLLM_EMBED_PORT:-8001}:${VLLM_EMBED_CONTAINER_PORT:-8001}"
     deploy: *gpu-reservation
+    restart: unless-stopped
+    logging: *default-logging
+
+  # Clinical network listeners: DICOM SCP (PACS) and HL7 v2 MLLP. A port can
+  # only be bound once, so these run in one singleton service next to the
+  # (scalable) API replicas, sharing the database and PACS storage. See
+  # backend/clinical_listeners.py and docs/core/PACS_v1.md.
+  clinical-listeners:
+    build:
+      context: .
+      target: backend
+      args:
+        TORCH_INDEX: ${TORCH_INDEX:-https://download.pytorch.org/whl/cu128}
+    env_file: [.env]
+    working_dir: /app/backend
+    command: ["python", "-m", "clinical_listeners"]
+    environment:
+      DATABASE_URL: "${DATABASE_URL:-}"
+      PACS_DIMSE_ENABLED: "${PACS_DIMSE_ENABLED:-true}"
+      PACS_DIMSE_BIND: "0.0.0.0"
+      PACS_DIMSE_PORT: "${PACS_DIMSE_PORT:-11112}"
+      HL7_MLLP_ENABLED: "${HL7_MLLP_ENABLED:-true}"
+      HL7_MLLP_BIND: "0.0.0.0"
+      HL7_MLLP_PORT: "${HL7_MLLP_PORT:-2575}"
+    volumes:
+      - ./backend/data:/app/backend/data
+    ports:
+      - "${PACS_DIMSE_PUBLISH_PORT:-11112}:${PACS_DIMSE_PORT:-11112}"
+      - "${HL7_MLLP_PUBLISH_PORT:-2575}:${HL7_MLLP_PORT:-2575}"
     restart: unless-stopped
     logging: *default-logging
 

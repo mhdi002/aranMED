@@ -25,7 +25,8 @@
       "chat.*",
       "alerts.read",
       "models.read",
-      "pacs.*",
+      "pacs.read",
+      "pacs.write",
       "clinical.read",
       "transfer.read"
     ],
