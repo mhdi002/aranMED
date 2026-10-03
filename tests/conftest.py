@@ -25,6 +25,9 @@ sys.path.insert(0, str(BACKEND))
 
 # Force a deterministic registry yaml during tests.
 os.environ.setdefault("ASR_AGENT_REGISTRY_YAML", str(BACKEND / "models.test.yaml"))
+# The suite's fixtures register short throwaway passwords; production keeps
+# the 12-character default from backend/auth.py.
+os.environ.setdefault("PASSWORD_MIN_LENGTH", "6")
 
 # ---------------------------------------------------------------------------
 # Fake provider implementations
@@ -209,11 +212,29 @@ def png_bytes() -> bytes:
 # ---------------------------------------------------------------------------
 # Fresh SQLite database for each test (auth, EHR, alerts, education)
 # ---------------------------------------------------------------------------
+def _truncate_postgres(db) -> None:
+    """Postgres has no per-test file to throw away, so empty every table.
+
+    Runs only when the suite is pointed at Postgres via DATABASE_URL; the
+    SQLite default never reaches here.
+    """
+    with db.connect() as c:
+        rows = c.execute(
+            "SELECT tablename FROM pg_tables WHERE schemaname = current_schema()"
+        ).fetchall()
+        names = [r["tablename"] for r in rows]
+        if names:
+            c.execute("TRUNCATE " + ", ".join(f'"{n}"' for n in names)
+                      + " RESTART IDENTITY CASCADE")
+
+
 @pytest.fixture(autouse=True)
 def fresh_db(tmp_path):
     """Bind the DB module to a throwaway file under the test's tmp_path."""
     import db
     original = db.get_db_path()
+    if db.is_postgres():
+        _truncate_postgres(db)
     db.set_db_path(tmp_path / "test_app.db")
     yield db.get_db_path()
     db.set_db_path(original)

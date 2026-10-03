@@ -50,7 +50,7 @@ venv:
 
 deps: venv
 	$(PIP) install torch torchaudio --index-url $(TORCH_INDEX)
-	$(PIP) install -r backend/requirements.txt
+	$(PIP) install -r backend/requirements.txt -r backend/requirements-interop.txt
 
 frontend-deps:
 	cd frontend && (npm ci 2>/dev/null || npm install)

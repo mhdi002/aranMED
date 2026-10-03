@@ -65,14 +65,19 @@ RUN python -m pip install --upgrade pip wheel \
 #     Stdlib has no AEAD and hand-rolling a cipher is not acceptable, so this
 #     is the one place the project takes a crypto dependency.
 #   psycopg      -> backend/dialect.py, Postgres beyond SQLite's single writer.
-#   pydicom      -> backend/dicom_ingest.py, DICOM study metadata + rendering.
+#   pydicom      -> backend/dicom_ingest.py + backend/pacs/, DICOM I/O.
+#   pynetdicom   -> backend/pacs/dimse.py, DICOM networking (PACS SCP/SCU).
+#   lxml         -> backend/interop/cda.py, C-CDA build/parse.
+# The same list lives in backend/requirements-interop.txt for bare-metal.
 RUN pip install --no-cache-dir \
         "cryptography>=43.0.0" \
         "psycopg[binary]>=3.2" \
         "pydicom>=2.4" \
+        "pynetdicom>=2.1" \
+        "lxml>=5.0" \
     && python -c "\
 from cryptography.hazmat.primitives.ciphers.aead import AESGCM; \
-import psycopg, pydicom; \
+import psycopg, pydicom, pynetdicom, lxml; \
 print('security/interop deps OK')"
 
 COPY backend /app/backend

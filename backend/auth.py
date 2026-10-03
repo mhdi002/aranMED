@@ -480,7 +480,7 @@ def create_user(*, username: str, password: str, email: str | None = None,
                 "VALUES (?,?,?,?,?)",
                 (username, email, hash_password(password), role, db.now()),
             )
-        except db.sqlite3.IntegrityError as e:  # type: ignore[attr-defined]
+        except db.INTEGRITY_ERRORS as e:
             raise ValueError("username or email already in use") from e
         row = c.execute("SELECT * FROM users WHERE username=?",
                         (username,)).fetchone()

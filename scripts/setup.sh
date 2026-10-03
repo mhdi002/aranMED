@@ -78,7 +78,7 @@ PY="$VENV/bin/python"
 # ─────────────────────────────────────────────────────────────────────────────
 step "2/6" "Installing backend Python requirements"
 "$PY" -m pip install --upgrade pip wheel setuptools --quiet
-"$PY" -m pip install -r "$ROOT/backend/requirements.txt" --quiet
+"$PY" -m pip install -r "$ROOT/backend/requirements.txt" -r "$ROOT/backend/requirements-interop.txt" --quiet
 ok "core backend requirements installed"
 
 # omnilingual-asr (fairseq2 ecosystem) — separate because it pulls torch 2.8+

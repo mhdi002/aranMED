@@ -37,7 +37,8 @@ from typing import Any, Iterator
 
 log = logging.getLogger("db")
 
-_DEFAULT_PATH = Path(__file__).resolve().parent / "data" / "app.db"
+_DEFAULT_PATH = Path(os.getenv("DB_PATH", "").strip()
+                     or Path(__file__).resolve().parent / "data" / "app.db")
 _db_path: Path = _DEFAULT_PATH
 _lock = threading.Lock()
 
@@ -79,6 +80,22 @@ def is_postgres() -> bool:
 
 def backend_name() -> str:
     return "postgres" if is_postgres() else "sqlite"
+
+
+def _integrity_errors() -> tuple[type[BaseException], ...]:
+    errs: list[type[BaseException]] = [sqlite3.IntegrityError]
+    if is_postgres():
+        try:
+            import psycopg  # noqa: PLC0415
+            errs.append(psycopg.IntegrityError)
+        except ImportError:  # pragma: no cover - psycopg ships with PG deploys
+            pass
+    return tuple(errs)
+
+
+# Catch this rather than sqlite3.IntegrityError so a unique/foreign-key
+# violation is recognised on whichever backend is active.
+INTEGRITY_ERRORS = _integrity_errors()
 
 
 def connect():
