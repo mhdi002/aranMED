@@ -6,9 +6,15 @@ produced by :mod:`interop.hl7_handlers`. It runs its own asyncio loop in a
 background thread, so it works both inside the API process and in the
 standalone ``clinical_listeners`` service.
 
-Settings: ``HL7_MLLP_ENABLED``, ``HL7_MLLP_BIND``, ``HL7_MLLP_PORT``,
-``HL7_MLLP_ALLOWED_PEERS`` (comma-separated source IPs; empty = any),
-``HL7_MLLP_MAX_BYTES``. Optional TLS via ``HL7_MLLP_TLS_CERT``/``_KEY``.
+Settings: ``HL7_MLLP_ENABLED``, ``HL7_MLLP_BIND`` (default 127.0.0.1),
+``HL7_MLLP_PORT``, ``HL7_MLLP_ALLOWED_PEERS`` (comma-separated source IPs),
+``HL7_MLLP_MAX_BYTES``, ``HL7_MLLP_IDLE_SEC`` (idle connection timeout).
+Optional TLS via ``HL7_MLLP_TLS_CERT``/``_KEY``.
+
+HL7 v2 carries no credentials, so a listener on a non-loopback address must
+be restricted: by a peer allowlist, by TLS, or by an explicit
+``HL7_MLLP_ALLOW_ANY_PEER=true`` (e.g. inside a container whose published
+port is already restricted). Otherwise it refuses to start.
 """
 from __future__ import annotations
 
@@ -32,7 +38,7 @@ def frame(message: str) -> bytes:
 
 class MllpServer:
     def __init__(self, *, bind: Optional[str] = None, port: Optional[int] = None) -> None:
-        self.bind = bind or settings.env("HL7_MLLP_BIND", "0.0.0.0")
+        self.bind = bind or settings.env("HL7_MLLP_BIND", "127.0.0.1")
         self.port = port if port is not None else settings.env_int("HL7_MLLP_PORT", 2575)
         self._loop: Optional[asyncio.AbstractEventLoop] = None
         self._server = None
@@ -41,6 +47,18 @@ class MllpServer:
         self.max_bytes = settings.env_int("HL7_MLLP_MAX_BYTES", 16 * 1024 * 1024)
         allowed = settings.env("HL7_MLLP_ALLOWED_PEERS", "")
         self.allowed = {a.strip() for a in allowed.split(",") if a.strip()}
+        self.idle_sec = float(settings.env("HL7_MLLP_IDLE_SEC", "60") or 60)
+        self._check_exposure()
+
+    def _check_exposure(self) -> None:
+        loopback = self.bind in ("127.0.0.1", "::1", "localhost")
+        any_ok = settings.env("HL7_MLLP_ALLOW_ANY_PEER", "").strip().lower() in ("1", "true", "yes")
+        if loopback or self.allowed or any_ok or self._ssl() is not None:
+            return
+        raise RuntimeError(
+            f"refusing to expose HL7 MLLP on {self.bind}:{self.port} without access control: "
+            "set HL7_MLLP_ALLOWED_PEERS, enable TLS (HL7_MLLP_TLS_CERT/_KEY), or set "
+            "HL7_MLLP_ALLOW_ANY_PEER=true if the network already restricts who can connect")
 
     async def _handle(self, reader: asyncio.StreamReader, writer: asyncio.StreamWriter) -> None:
         from interop import hl7_handlers
@@ -50,10 +68,14 @@ class MllpServer:
             log.warning("MLLP connection from %s refused (not in HL7_MLLP_ALLOWED_PEERS)", peer_ip)
             writer.close()
             return
-        buf = b""
+        buf = bytearray()
         try:
             while True:
-                chunk = await reader.read(65536)
+                try:
+                    chunk = await asyncio.wait_for(reader.read(65536), timeout=self.idle_sec)
+                except asyncio.TimeoutError:
+                    log.info("MLLP connection from %s idle for %.0fs; closing", peer_ip, self.idle_sec)
+                    break
                 if not chunk:
                     break
                 buf += chunk
@@ -65,8 +87,8 @@ class MllpServer:
                     end = buf.find(FS + CR, start + 1) if start >= 0 else -1
                     if start < 0 or end < 0:
                         break
-                    raw = buf[start + 1:end].decode("utf-8", errors="replace")
-                    buf = buf[end + 2:]
+                    raw = bytes(buf[start + 1:end]).decode("utf-8", errors="replace")
+                    del buf[:end + 2]
                     resp = await asyncio.get_running_loop().run_in_executor(
                         None, lambda r=raw: hl7_handlers.process(r, peer=f"mllp:{peer_ip}"))
                     writer.write(frame(resp))

@@ -100,7 +100,9 @@ class Agent:
             attach_note = ("\n[attachments: " +
                            ", ".join(f"{k}({len(v)} bytes)" for k, v in attachments.items())
                            + "]")
-        conv = self.memory.get(session_id)
+        if not self.memory.owned_by(session_id, owner_user_id):
+            raise PermissionError("this conversation belongs to another user")
+        conv = self.memory.claim(session_id, owner_user_id)
         conv.append(ChatMessage(role="user", content=user_text + attach_note))
 
         # 2) prep messages with sliding-window/summary

@@ -25,7 +25,6 @@ import hmac
 import logging
 import os
 import struct
-import threading
 import time
 from urllib.parse import quote
 
@@ -37,9 +36,6 @@ TOTP_STEP_SEC = int(os.environ.get("MFA_TOTP_STEP_SEC", "30"))
 TOTP_WINDOW = int(os.environ.get("MFA_TOTP_WINDOW", "1"))
 TOTP_ISSUER = os.environ.get("MFA_TOTP_ISSUER", "AranMed")
 
-# jti-style replay guard: (user_id, code) -> expiry.
-_used: dict[tuple[int, str], float] = {}
-_used_lock = threading.Lock()
 
 
 def generate_secret() -> str:
@@ -71,13 +67,6 @@ def verify(secret_b32: str, code: str, *, user_id: int | None = None) -> bool:
         return False
 
     now = time.time()
-    if user_id is not None:
-        _sweep(now)
-        with _used_lock:
-            if (user_id, code) in _used:
-                log.warning("mfa: replayed TOTP code rejected for user %s", user_id)
-                return False
-
     step = int(now // TOTP_STEP_SEC)
     ok = False
     for drift in range(-TOTP_WINDOW, TOTP_WINDOW + 1):
@@ -87,19 +76,14 @@ def verify(secret_b32: str, code: str, *, user_id: int | None = None) -> bool:
             ok = True
 
     if ok and user_id is not None:
-        with _used_lock:
-            _used[(user_id, code)] = now + TOTP_STEP_SEC * (TOTP_WINDOW + 1)
+        # Replay guard in the shared throttle store, so a captured code can't
+        # be reused on another replica within its validity window.
+        import throttle
+        if not throttle.claim_once(f"totp:{user_id}:{code}",
+                                   TOTP_STEP_SEC * (2 * TOTP_WINDOW + 1)):
+            log.warning("mfa: replayed TOTP code rejected for user %s", user_id)
+            return False
     return ok
-
-
-def _sweep(now: float) -> None:
-    with _used_lock:
-        if len(_used) < 4096:
-            expired = [k for k, exp in _used.items() if exp < now]
-        else:
-            expired = [k for k, exp in _used.items() if exp < now] or list(_used)[:1024]
-        for k in expired:
-            _used.pop(k, None)
 
 
 def provisioning_uri(secret_b32: str, *, account: str, issuer: str | None = None) -> str:

@@ -154,26 +154,33 @@ def list_templates() -> list[dict]:
     return out
 
 
+_SAFE_STEM = re.compile(r"^[A-Za-z0-9][A-Za-z0-9_\-]{0,119}$")
+
+
+def _template_path(template_id: str) -> Path:
+    """Resolve a template id to its file, never outside TEMPLATES_DIR.
+
+    The id arrives from request bodies; joining it unchecked let
+    ``../initial-admin-password`` read arbitrary ``*.txt`` files into the
+    LLM prompt. Only plain stems are accepted, and the resolved path must
+    still sit directly inside the templates directory.
+    """
+    root = TEMPLATES_DIR.resolve()
+    for stem in (_slugify(template_id), template_id):
+        if not _SAFE_STEM.match(stem or ""):
+            continue
+        p = (TEMPLATES_DIR / f"{stem}.txt").resolve()
+        if p.parent == root and p.is_file():
+            return p
+    raise FileNotFoundError(template_id)
+
+
 def get_template(template_id: str) -> str:
     """Return the clinical template body (metadata headers stripped)."""
-    p = TEMPLATES_DIR / f"{_slugify(template_id)}.txt"
-    if not p.exists():
-        # Also allow exact stem match without re-slugifying already-slug ids
-        p2 = TEMPLATES_DIR / f"{template_id}.txt"
-        if p2.exists():
-            p = p2
-        else:
-            raise FileNotFoundError(template_id)
-    _meta, body = _parse_template_file(p)
+    _meta, body = _parse_template_file(_template_path(template_id))
     return body
 
 
 def get_template_meta(template_id: str) -> dict[str, str]:
-    p = TEMPLATES_DIR / f"{_slugify(template_id)}.txt"
-    if not p.exists():
-        p2 = TEMPLATES_DIR / f"{template_id}.txt"
-        if not p2.exists():
-            raise FileNotFoundError(template_id)
-        p = p2
-    meta, _body = _parse_template_file(p)
+    meta, _body = _parse_template_file(_template_path(template_id))
     return meta

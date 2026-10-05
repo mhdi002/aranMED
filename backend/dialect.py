@@ -188,8 +188,10 @@ CREATE TABLE IF NOT EXISTS users (
   created_at    DOUBLE PRECISION NOT NULL,
   totp_secret   TEXT,
   mfa_enabled   INTEGER NOT NULL DEFAULT 0,
-  password_changed_at DOUBLE PRECISION
+  password_changed_at DOUBLE PRECISION,
+  disabled      INTEGER NOT NULL DEFAULT 0
 );
+ALTER TABLE users ADD COLUMN IF NOT EXISTS disabled INTEGER NOT NULL DEFAULT 0;
 
 CREATE TABLE IF NOT EXISTS patients (
   id            TEXT    PRIMARY KEY,
@@ -255,6 +257,7 @@ CREATE TABLE IF NOT EXISTS agent_sessions (
   last_used   DOUBLE PRECISION NOT NULL
 );
 CREATE INDEX IF NOT EXISTS ix_agent_sessions_last_used ON agent_sessions(last_used);
+ALTER TABLE agent_sessions ADD COLUMN IF NOT EXISTS owner_id BIGINT;
 
 CREATE TABLE IF NOT EXISTS login_throttle (
   key          TEXT    PRIMARY KEY,

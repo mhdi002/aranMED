@@ -106,7 +106,7 @@ async def test_enrich_report_payload_critical_and_mismatch():
     assert out["template_mismatch"]["mismatch"] is True
 
 
-def test_api_report_critical_and_mismatch(http_client, fake_core):
+def test_api_report_critical_and_mismatch(http_client, auth_headers, fake_core):
     """POST /api/report returns critical_alerts + template_mismatch metadata."""
     fake_core.script = [
         (
@@ -122,6 +122,7 @@ def test_api_report_critical_and_mismatch(http_client, fake_core):
     r = http_client.post(
         "/api/report",
         json={"transcript": transcript, "template_id": "chest"},
+        headers=auth_headers,
     )
     assert r.status_code == 200, r.text
     data = r.json()
@@ -130,7 +131,7 @@ def test_api_report_critical_and_mismatch(http_client, fake_core):
     assert data.get("template_mismatch", {}).get("mismatch") is True
 
 
-def test_api_report_non_critical(http_client, fake_core):
+def test_api_report_non_critical(http_client, auth_headers, fake_core):
     fake_core.script = [
         (
             "answer",
@@ -145,6 +146,7 @@ def test_api_report_non_critical(http_client, fake_core):
     r = http_client.post(
         "/api/report",
         json={"transcript": transcript, "template_id": "chest"},
+        headers=auth_headers,
     )
     assert r.status_code == 200, r.text
     data = r.json()

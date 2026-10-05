@@ -21,9 +21,11 @@ from pacs import config, dimse, federation, index, jobs, nodes, reports, worklis
 from pacs.adapters import AdapterError, for_node
 
 router = APIRouter(prefix="/api/pacs", tags=["pacs"])
-READ = Depends(pr.require("pacs.read"))
-WRITE = Depends(pr.require("pacs.write"))
-ADMIN = Depends(pr.require("pacs.admin"))
+# Signed-in users only: this management API has no consent filter, so peer
+# hospitals are kept to DICOMweb/DIMSE, where the patient's consent applies.
+READ = Depends(pr.require_user("pacs.read"))
+WRITE = Depends(pr.require_user("pacs.write"))
+ADMIN = Depends(pr.require_user("pacs.admin"))
 
 
 def _ip(request: Request) -> Optional[str]:
@@ -87,6 +89,14 @@ def study_detail(study_uid: str, request: Request, p: dict = READ) -> dict:
     s = index.get_study(study_uid)
     if not s:
         raise HTTPException(404, "study not found")
+    if s["_ext"].get("person_id"):
+        # Images of a restricted record follow the record: a stated reason
+        # (break the glass) is needed first, exactly as for the chart.
+        from ehr import access
+        allowed, why = access.decide(s["_ext"]["person_id"], p)
+        if not allowed:
+            _audit(p, "pacs.study.read", f"study:{study_uid}", request, outcome="deny", why=why)
+            raise HTTPException(403, why)
     series = index.query_series({"StudyInstanceUID": study_uid})
     objects = []
     for se in series:

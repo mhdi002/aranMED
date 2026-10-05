@@ -451,6 +451,22 @@ def test_existing_patient_merges_and_resend_is_idempotent(net):
     # Re-send while B is still expecting packages (accepted, then arrived): nothing duplicates.
     ok(a.post(f"/api/transfers/{ts['id']}/resend-package", role="doctor"))
     assert counts() == before
+
+    # A package may only add this patient's records: an entry that updates or
+    # deletes B's own data is refused and changes nothing.
+    own = next(x for x in items(b, pb, "conditions") if x["display"] == "Hypothyroidism")
+    peer = {"Authorization": f"Bearer {mint(A_OID, b.oid)}"}
+    evil = {"resourceType": "Bundle", "type": "transaction", "entry": [
+        {"request": {"method": "DELETE", "url": f"Condition/{own['id']}"}, "resource": {}}]}
+    r = httpx.post(f"{b.base}/api/transfers/inbound/{ts['id']}/package", json=evil,
+                   headers=peer, timeout=30)
+    assert r.status_code in (400, 409, 422), r.text
+    assert any(x["id"] == own["id"] for x in items(b, pb, "conditions"))
+    # Peers have no access to the PACS management API (no consent filter there).
+    r = httpx.get(f"{b.base}/api/pacs/studies", headers=peer, timeout=30)
+    assert r.status_code == 403, r.text
+    assert counts() == before
+
     ok(a.post(f"/api/transfers/{ts['id']}/depart", role="doctor", json={}))
     ok(b.post(f"/api/transfers/{td['id']}/arrive", role="doctor", json={}))
     ok(a.post(f"/api/transfers/{ts['id']}/resend-package", role="doctor"))

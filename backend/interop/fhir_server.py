@@ -414,7 +414,17 @@ def process_bundle(bundle: dict, p: dict, request: Request) -> dict:
                    key=lambda i: 0 if (entries[i].get("resource") or {}).get("resourceType") == "Patient" else 1)
     mapping: dict[str, str] = {}
     created: list[tuple[str, str]] = []
+    # (rtype, rid, row before the change) for PUT/DELETE, restored on rollback
+    changed: list[tuple[str, str, dict]] = []
     results: dict[int, dict] = {}
+
+    def _remember(rt: str, rid: str) -> None:
+        if rt == "Patient" or rt not in fhir_map.FHIR_TO_TYPE:
+            return
+        rtype = fhir_map.FHIR_TO_TYPE[rt]
+        before = store.get(rtype, rid, include_deleted=True)
+        if before is not None:
+            changed.append((rtype, rid, before))
     try:
         for i in order:
             e = entries[i]
@@ -432,11 +442,15 @@ def process_bundle(bundle: dict, p: dict, request: Request) -> dict:
                         created.append((fhir_map.FHIR_TO_TYPE[out["resourceType"]], out["id"]))
                 elif method == "PUT":
                     rt, rid = url.split("/")[:2]
+                    _remember(rt, rid)
                     out, status = update(rt, rid, res, p, request, None)
                     if e.get("fullUrl"):
                         mapping[e["fullUrl"]] = f"{rt}/{rid}"
+                    if status == 201 and rt != "Patient":
+                        created.append((fhir_map.FHIR_TO_TYPE[rt], rid))
                 elif method == "DELETE":
                     rt, rid = url.split("/")[:2]
+                    _remember(rt, rid)
                     delete(rt, rid, p, request)
                     out, status = None, 204
                 elif method == "GET":
@@ -454,10 +468,17 @@ def process_bundle(bundle: dict, p: dict, request: Request) -> dict:
                     "resourceType": "OperationOutcome",
                     "issue": [{"severity": "error", "code": fe.code, "diagnostics": fe.diagnostics}]}}}
     except FhirError:
-        # all-or-nothing: compensate everything this transaction created
+        # all-or-nothing: compensate everything this transaction created,
+        # then put updated or deleted rows back the way they were
         for rtype, rid in reversed(created):
             try:
                 store.delete(rtype, rid, actor="transaction-rollback")
+            except Exception:  # noqa: BLE001
+                log.exception("rollback of %s/%s failed", rtype, rid)
+        for rtype, rid, before in reversed(changed):
+            try:
+                store.update(rtype, rid, before, actor="transaction-rollback",
+                             deleted=bool(before.get("deleted")))
             except Exception:  # noqa: BLE001
                 log.exception("rollback of %s/%s failed", rtype, rid)
         raise

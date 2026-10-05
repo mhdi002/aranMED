@@ -70,28 +70,31 @@ RUN python -m pip install --upgrade pip wheel \
 #     JPEG 2000/HTJ2K) so every device's compressed images can be shown.
 #   pynetdicom   -> backend/pacs/dimse.py, DICOM networking (PACS SCP/SCU).
 #   lxml         -> backend/interop/cda.py, C-CDA build/parse.
-# The same list lives in backend/requirements-interop.txt for bare-metal.
-RUN pip install --no-cache-dir \
-        "cryptography>=43.0.0" \
-        "psycopg[binary]>=3.2" \
-        "pydicom>=3.0" \
-        "pynetdicom>=2.1" \
-        "pylibjpeg>=2.0" "pylibjpeg-libjpeg>=2.1" "pylibjpeg-openjpeg>=2.3" \
-        "pyjpegls>=1.4" "python-gdcm>=3.0.24" \
-        "lxml>=5.0" \
+# The list lives in backend/requirements-interop.txt (shared with bare-metal).
+COPY backend/requirements-interop.txt /app/backend/requirements-interop.txt
+RUN pip install --no-cache-dir -r /app/backend/requirements-interop.txt \
     && python -c "\
 from cryptography.hazmat.primitives.ciphers.aead import AESGCM; \
 import psycopg, pydicom, pynetdicom, lxml, pylibjpeg, jpeg_ls, gdcm; \
 print('security/interop deps OK')"
 
-COPY backend /app/backend
-COPY scripts /app/scripts
+# Run as an unprivileged user. Bind-mounted data directories must be writable
+# by this uid (deploy.sh does `chown -R 10001:10001 backend/data`).
+RUN groupadd --system --gid 10001 aranmed \
+    && useradd --system --uid 10001 --gid aranmed --home-dir /app --shell /usr/sbin/nologin aranmed \
+    && mkdir -p /models && chown aranmed:aranmed /models /app
+
+COPY --chown=aranmed:aranmed backend /app/backend
+COPY --chown=aranmed:aranmed scripts /app/scripts
 
 WORKDIR /app/backend
 EXPOSE 8010
+USER aranmed
 
+# Liveness only: /api/health probes model servers and would restart a healthy
+# API whenever a GPU service is slow. Readiness is /api/ready (compose).
 HEALTHCHECK --interval=30s --timeout=10s --start-period=120s --retries=3 \
-    CMD curl -sf http://127.0.0.1:8010/api/health || exit 1
+    CMD curl -sf http://127.0.0.1:8010/api/live || exit 1
 
 # Bind host/port/workers from env so the same image serves any topology.
 #
@@ -110,11 +113,13 @@ if [ \"${BACKEND_TLS_ENABLED:-0}\" = \"1\" ]; then \
   echo 'backend: serving HTTPS (BACKEND_TLS_ENABLED=1)'; \
   exec python -m uvicorn app:app --host ${HOST:-0.0.0.0} --port ${PORT:-8010} \
        --workers ${BACKEND_WORKERS:-1} --backlog ${BACKEND_BACKLOG:-2048} \
+       --proxy-headers --forwarded-allow-ips \"${FORWARDED_ALLOW_IPS:-127.0.0.1}\" \
        --ssl-keyfile ${BACKEND_TLS_KEY:-/etc/aranmed/certs/tls.key} \
        --ssl-certfile ${BACKEND_TLS_CERT:-/etc/aranmed/certs/tls.crt}; \
 else \
   exec python -m uvicorn app:app --host ${HOST:-0.0.0.0} --port ${PORT:-8010} \
-       --workers ${BACKEND_WORKERS:-1} --backlog ${BACKEND_BACKLOG:-2048}; \
+       --workers ${BACKEND_WORKERS:-1} --backlog ${BACKEND_BACKLOG:-2048} \
+       --proxy-headers --forwarded-allow-ips \"${FORWARDED_ALLOW_IPS:-127.0.0.1}\"; \
 fi"]
 
 
@@ -211,7 +216,7 @@ RUN npm run build
 FROM node:20-alpine AS frontend
 
 WORKDIR /app
-COPY --from=frontend-build /app ./
+COPY --from=frontend-build --chown=node:node /app ./
 
 ENV NODE_ENV=production \
     HOST=0.0.0.0 \
@@ -219,6 +224,8 @@ ENV NODE_ENV=production \
     BACKEND_URL=http://backend:8010
 
 EXPOSE 3000
+# The official node image ships an unprivileged "node" user.
+USER node
 
 HEALTHCHECK --interval=30s --timeout=10s --start-period=60s --retries=3 \
     CMD wget -qO- http://127.0.0.1:3000/ >/dev/null || exit 1

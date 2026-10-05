@@ -127,7 +127,7 @@ class CrispASRProvider(ASRProvider):
                 if isinstance(data, list):
                     texts = [seg.get("Content", "") for seg in data if "Content" in seg]
                     result_text = " ".join(texts).strip()
-                    log.info("ASR transcription: %s", result_text[:100])
+                    log.debug("ASR transcription finished: %d characters", len(result_text))
                     return result_text
                 elif isinstance(data, dict):
                     return data.get("text", data.get("Content", "")).strip()

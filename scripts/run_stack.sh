@@ -39,7 +39,8 @@ echo "Starting backend on 0.0.0.0:${BACKEND_PORT}..."
   cd "$ROOT/backend"
   export PYTHONPATH="$ROOT/backend"
   export PORT="$BACKEND_PORT"
-  exec "$VENV/bin/python" -m uvicorn app:app --host 0.0.0.0 --port "$BACKEND_PORT"
+  exec "$VENV/bin/python" -m uvicorn app:app --host 0.0.0.0 --port "$BACKEND_PORT" \
+    --proxy-headers --forwarded-allow-ips "${FORWARDED_ALLOW_IPS:-127.0.0.1}"
 ) >"$RUN_DIR/backend.log" 2>&1 &
 echo $! >"$RUN_DIR/backend.pid"
 

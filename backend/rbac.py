@@ -83,6 +83,11 @@ def grants_for(role: str) -> list[str]:
     return []
 
 
+def known_roles() -> set[str]:
+    """Roles defined by the policy (plus the break-glass admin)."""
+    return set(load_policy()) | {"admin"}
+
+
 def allows(role: str, permission: str) -> bool:
     """True when *role* grants *permission*.
 

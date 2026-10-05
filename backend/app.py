@@ -45,20 +45,34 @@ from registry import Registry
 # ---------------------------------------------------------------------------
 # Logging – enable debug for llama.cpp to see vision model loading issues
 # ---------------------------------------------------------------------------
-logging.getLogger("provider.llamacpp").setLevel(logging.DEBUG)
-logging.getLogger("llama_cpp").setLevel(logging.DEBUG)
+_LOG_LEVEL = os.getenv("LOG_LEVEL", "INFO").upper()
+if os.getenv("LLAMACPP_DEBUG", "").strip().lower() in ("1", "true", "yes"):
+    logging.getLogger("provider.llamacpp").setLevel(logging.DEBUG)
+    logging.getLogger("llama_cpp").setLevel(logging.DEBUG)
 logging.basicConfig(
-    level=logging.INFO,
+    level=getattr(logging, _LOG_LEVEL, logging.INFO),
     format="%(asctime)s [%(levelname)s] %(name)s: %(message)s",
 )
 log = logging.getLogger("api")
 
 app = FastAPI(title="aranmed — Bilingual Radiology Reporter", version="2.0.0")
 
-# Default stays "*" so an on-prem single-origin install works out of the box;
-# set CORS_ALLOW_ORIGINS to a comma-separated allowlist for any deployment
-# reachable from more than the operator's own browser.
-_cors_origins = [o.strip() for o in os.getenv("CORS_ALLOW_ORIGINS", "*").split(",") if o.strip()]
+# The browser reaches the API same-origin through the frontend server, so
+# no cross-origin access is needed by default. CORS_ALLOW_ORIGINS (comma
+# separated, "*" for any) opens it up, e.g. for NEXT_PUBLIC_BACKEND_URL setups;
+# without it only PUBLIC_BASE_URL's origin is allowed.
+def _default_cors() -> str:
+    from urllib.parse import urlsplit
+    base = os.getenv("PUBLIC_BASE_URL", "").strip()
+    if base:
+        u = urlsplit(base)
+        if u.scheme and u.netloc:
+            return f"{u.scheme}://{u.netloc}"
+    return ""
+
+
+_cors_origins = [o.strip() for o in os.getenv("CORS_ALLOW_ORIGINS", _default_cors()).split(",")
+                 if o.strip()]
 app.add_middleware(
     CORSMiddleware,
     allow_origins=_cors_origins,
@@ -101,6 +115,26 @@ async def global_exception_handler(request, exc):
         status_code=500,
         content={"detail": "internal server error", "error_id": error_id},
     )
+
+# ---------------------------------------------------------------------------
+# Authentication for the AI endpoints
+# ---------------------------------------------------------------------------
+def _env_true(name: str, default: str = "false") -> bool:
+    return os.getenv(name, default).strip().lower() in ("1", "true", "yes", "on")
+
+
+def ai_user(token: Optional[str] = Depends(auth.oauth2_scheme)) -> Optional[dict]:
+    """Signed-in user for the dictation, report, chat and vision endpoints.
+
+    These endpoints read audio, images and dictation (PHI) and drive the agent,
+    whose tools reach patient records, so they require a session. A local
+    demo can opt back into anonymous use with ALLOW_ANONYMOUS_AI=true; an
+    anonymous caller then gets no patient-record tools (tools/ehr.py refuses).
+    """
+    if not token and _env_true("ALLOW_ANONYMOUS_AI"):
+        return None
+    return auth.current_user(token)
+
 
 # Auth, EHR, alerts and education routes live in their own module.
 from routes import router as extra_router  # noqa: E402
@@ -156,6 +190,7 @@ class ReportOut(BaseModel):
     auto_selected_template: bool = False
     template_selection_confidence: Optional[float] = None
     template_selection_reason: Optional[str] = None
+    transcript: Optional[str] = None  # set by /api/dictate
 
 
 class TemplateSuggestIn(BaseModel):
@@ -262,6 +297,20 @@ async def live() -> dict:
     ``/api/health`` is the deeper readiness view. See docs/core/DEPLOYMENT.md.
     """
     return {"ok": True, "service": "aranmed"}
+
+
+@app.get("/api/ready")
+def ready() -> JSONResponse:
+    """Readiness: 503 until this process can serve requests, i.e. its database
+    answers. Model servers are not required (the API serves the EHR and PACS
+    without them); ``/api/health`` reports on those."""
+    try:
+        with db.connect() as c:
+            c.execute("SELECT 1").fetchone()
+    except Exception as e:  # noqa: BLE001
+        log.warning("readiness: database unavailable: %s", e)
+        return JSONResponse({"ok": False, "database": "unavailable"}, status_code=503)
+    return JSONResponse({"ok": True, "database": db.backend_name()})
 
 
 # `/api/health` fans out to Ollama and MedicalRAG. Doing that per request melts
@@ -412,6 +461,7 @@ async def transcribe(
     file: UploadFile = File(...),
     language: Optional[str] = Form(None),
     model: Optional[str] = Form(None),
+    user: Optional[dict] = Depends(ai_user),
 ) -> TranscribeOut:
     raw = await file.read()
     if not raw:
@@ -423,10 +473,11 @@ async def transcribe(
         )
         raw_transcript = getattr(asr, "last_raw_transcript", None) or None
         language_timeline = getattr(asr, "last_timeline", None) or None
-        log.info("Transcription result: %s", text[:200])
+        log.debug("Transcription finished: %d characters", len(text))
     except Exception as e:  # noqa: BLE001
-        log.exception("ASR failed")
-        raise HTTPException(500, f"ASR failed: {e}") from e
+        error_id = uuid.uuid4().hex[:12]
+        log.exception("ASR failed [%s]", error_id)
+        raise HTTPException(502, f"speech recognition failed (error id {error_id})") from e
     treport = getattr(asr, "last_translation_report", None) or {}
     return TranscribeOut(
         text=text,
@@ -439,7 +490,8 @@ async def transcribe(
 
 
 @app.post("/api/templates/suggest", response_model=TemplateSuggestOut)
-async def suggest_template(req: TemplateSuggestIn) -> TemplateSuggestOut:
+async def suggest_template(req: TemplateSuggestIn,
+                           user: Optional[dict] = Depends(ai_user)) -> TemplateSuggestOut:
     import template_selection
 
     suggestions = template_selection.suggest_templates(req.transcript, top_k=req.top_k)
@@ -447,7 +499,7 @@ async def suggest_template(req: TemplateSuggestIn) -> TemplateSuggestOut:
 
 
 @app.post("/api/report", response_model=ReportOut)
-async def report(req: ReportIn) -> ReportOut:
+async def report(req: ReportIn, user: Optional[dict] = Depends(ai_user)) -> ReportOut:
     template_id = req.template_id
     auto_selected = False
     selection_confidence: Optional[float] = None
@@ -470,7 +522,7 @@ async def report(req: ReportIn) -> ReportOut:
     try:
         tpl = templates_mod.get_template(template_id)
         meta = templates_mod.get_template_meta(template_id)
-    except FileNotFoundError:
+    except (FileNotFoundError, ValueError):
         raise HTTPException(404, "template not found")
     from tools.builtin import _STRUCTURE_SYS  # type: ignore[attr-defined]
     from clinical_safety import enrich_report_payload
@@ -520,6 +572,7 @@ async def report(req: ReportIn) -> ReportOut:
         report_text=report_text,
         template_id=template_id,
         patient_id=req.patient_id,
+        owner_user_id=(user or {}).get("id"),
     )
     return ReportOut(
         report=report_text,
@@ -540,6 +593,7 @@ async def dictate(
     language: Optional[str] = Form(None),
     extra_context: Optional[str] = Form(None),
     model: Optional[str] = Form(None),
+    user: Optional[dict] = Depends(ai_user),
 ) -> ReportOut:
     raw = await file.read()
     if not raw:
@@ -550,16 +604,22 @@ async def dictate(
             raw, language=language, filename_hint=file.filename or ""
         )
     except Exception as e:  # noqa: BLE001
-        log.exception("ASR failed")
-        raise HTTPException(500, f"ASR failed: {e}") from e
-    return await report(
+        error_id = uuid.uuid4().hex[:12]
+        log.exception("ASR failed [%s]", error_id)
+        raise HTTPException(502, f"speech recognition failed (error id {error_id})") from e
+    out = await report(
         ReportIn(
             transcript=transcript,
             template_id=template_id,
             extra_context=extra_context,
             model=model,
-        )
+        ),
+        user=user,
     )
+    # The client shows the transcript beside the report; returning it here
+    # saves a second upload and a second ASR pass of the same audio.
+    out.transcript = transcript
+    return out
 
 
 # ---------------------------------------------------------------------------
@@ -572,8 +632,11 @@ async def chat(
     core_model: Optional[str] = Form(None),
     audio: Optional[list[UploadFile]] = File(None),
     images: Optional[list[UploadFile]] = File(None),
-    user: Optional[dict] = Depends(auth.current_user_optional),
+    user: Optional[dict] = Depends(ai_user),
 ) -> ChatOut:
+    owner = (user or {}).get("id")
+    if session_id and not memory.owned_by(session_id, owner):
+        raise HTTPException(403, "this conversation belongs to another user")
     sid = session_id or uuid.uuid4().hex
     attachments: dict[str, bytes] = {}
     for i, f in enumerate(audio or []):
@@ -673,8 +736,9 @@ async def chat(
         try:
             resp = await vision.chat([msg])
         except Exception as e:
-            log.exception("Vision chat failed")
-            raise HTTPException(500, f"Vision model error: {e}")
+            error_id = uuid.uuid4().hex[:12]
+            log.exception("Vision chat failed [%s]", error_id)
+            raise HTTPException(502, f"vision model failed (error id {error_id})") from e
         from clinical_safety import enrich_text_payload
 
         critical = await enrich_text_payload(
@@ -695,7 +759,7 @@ async def chat(
         user_text=text or "(no text)",
         attachments=attachments,
         core_name=core_model,
-        owner_user_id=(user or {}).get("id"),
+        owner_user_id=owner,
     )
     from clinical_safety import enrich_text_payload
 
@@ -715,7 +779,9 @@ async def chat(
 
 
 @app.post("/api/sessions/{session_id}/reset")
-async def reset_session(session_id: str) -> dict:
+async def reset_session(session_id: str, user: Optional[dict] = Depends(ai_user)) -> dict:
+    if not memory.owned_by(session_id, (user or {}).get("id")):
+        raise HTTPException(403, "this conversation belongs to another user")
     memory.reset(session_id)
     return {"ok": True, "session_id": session_id}
 
@@ -728,12 +794,13 @@ async def vision_endpoint(
     prompt: Optional[str] = Form(None),
     image: UploadFile = File(...),
     model: Optional[str] = Form(None),
+    user: Optional[dict] = Depends(ai_user),
 ) -> VisionOut:
     """Analyse a single radiology image using the vision model."""
     if not prompt:
         prompt = "Describe this radiology image in detail."
 
-    log.info(f"Vision request: prompt='{prompt[:50]}...', image={image.filename}, model={model}")
+    log.info("Vision request: model=%s", model)
 
     img_bytes = await image.read()
     if not img_bytes:
@@ -745,8 +812,9 @@ async def vision_endpoint(
     try:
         resp = await vision.chat([msg])
     except Exception as e:
-        log.exception("Vision inference failed")
-        raise HTTPException(500, f"Vision error: {e}")
+        error_id = uuid.uuid4().hex[:12]
+        log.exception("Vision inference failed [%s]", error_id)
+        raise HTTPException(502, f"vision model failed (error id {error_id})") from e
 
     from clinical_safety import enrich_text_payload
 

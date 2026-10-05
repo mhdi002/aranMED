@@ -27,7 +27,14 @@ async def test_agent_tool_and_rest_path_share_one_store(fresh_registry, fake_cor
     from tools.ehr import BuildEHRTool, _system_owner_user_id
 
     templates_mod.initialise()
-    ctx = ToolContext(registry=fresh_registry, templates=templates_mod)
+    # A context without a signed-in owner is refused outright (it used to
+    # fall back to the system owner, i.e. anonymous chat saw admin's records).
+    anon = ToolContext(registry=fresh_registry, templates=templates_mod)
+    from tools.ehr import _owner_id
+    with pytest.raises(PermissionError):
+        _owner_id(anon)
+    ctx = ToolContext(registry=fresh_registry, templates=templates_mod,
+                      owner_user_id=_system_owner_user_id())
 
     fake_core.script = [
         (
@@ -67,7 +74,7 @@ async def test_get_ehr_tool_reads_rest_built_record(fresh_registry):
         language="en",
     )
 
-    ctx = ToolContext(registry=fresh_registry)
+    ctx = ToolContext(registry=fresh_registry, owner_user_id=owner_id)
     res = await GetEHRTool().run(ctx, patient_id="jane-roe")
     assert res.error is None
     assert res.data["record"]["patient"]["name"] == "Jane Roe"

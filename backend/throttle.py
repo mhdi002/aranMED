@@ -90,6 +90,15 @@ class MemoryThrottle(ThrottleBackend):
         with self._lock:
             self._state.pop(key, None)
 
+    def claim_once(self, key: str, ttl: float) -> bool:
+        now = time.time()
+        with self._lock:
+            _, until = self._state.get(key, ([], 0.0))
+            if until > now:
+                return False
+            self._state[key] = ([], now + ttl)
+            return True
+
 
 class SqliteThrottle(ThrottleBackend):
     """Shared counters via the existing SQLite database (no new services)."""
@@ -145,7 +154,7 @@ class SqliteThrottle(ThrottleBackend):
         except Exception as e:  # noqa: BLE001
             log.warning("throttle: sqlite clear failed (%s)", e)
 
-    def record_failure_atomic(self, key: str) -> bool:
+    def record_failure_atomic(self, key: str, max_attempts: int | None = None) -> bool:
         """Read-modify-write inside a single write transaction.
 
         ``BEGIN IMMEDIATE`` takes the write lock up front, so two concurrent
@@ -176,7 +185,7 @@ class SqliteThrottle(ThrottleBackend):
                     conn.execute("COMMIT")
                     return True
                 attempts.append(now)
-                if len(attempts) >= MAX_ATTEMPTS:
+                if len(attempts) >= (max_attempts or MAX_ATTEMPTS):
                     locked_until, attempts = now + LOCKOUT_SEC, []
                 else:
                     locked_until = 0.0
@@ -203,6 +212,45 @@ class SqliteThrottle(ThrottleBackend):
             log.warning("throttle: sqlite atomic record_failure failed (%s); "
                         "attempt not recorded", e)
             return False
+
+    def claim_once(self, key: str, ttl: float) -> bool:
+        """Atomically mark *key* used for *ttl* seconds; False if already used.
+
+        Shares the login_throttle table: ``locked_until`` doubles as the
+        expiry, so the existing sweep removes spent entries.
+        """
+        import db
+        now = time.time()
+        try:
+            conn = db.connect()
+            try:
+                db.begin_immediate(conn)
+                row = conn.execute("SELECT locked_until FROM login_throttle WHERE key=?",
+                                   (key,)).fetchone()
+                if row is not None and float(row["locked_until"] or 0) > now:
+                    conn.execute("COMMIT")
+                    return False
+                conn.execute(
+                    """INSERT INTO login_throttle (key, attempts, locked_until, updated_at)
+                       VALUES (?, '[]', ?, ?)
+                       ON CONFLICT(key) DO UPDATE SET
+                         locked_until=excluded.locked_until,
+                         updated_at=excluded.updated_at""",
+                    (key, now + ttl, now),
+                )
+                conn.execute("COMMIT")
+                return True
+            except Exception:
+                try:
+                    conn.execute("ROLLBACK")
+                except Exception:  # noqa: BLE001
+                    pass
+                raise
+            finally:
+                conn.close()
+        except Exception as e:  # noqa: BLE001
+            log.warning("throttle: sqlite claim_once failed (%s); allowing", e)
+            return True
 
 
 class RedisThrottle(ThrottleBackend):
@@ -247,6 +295,13 @@ class RedisThrottle(ThrottleBackend):
         except Exception as e:  # noqa: BLE001
             log.warning("throttle: redis clear failed (%s)", e)
 
+    def claim_once(self, key: str, ttl: float) -> bool:
+        try:
+            return bool(self._r.set(self._k(key), "1", nx=True, ex=max(1, int(ttl))))
+        except Exception as e:  # noqa: BLE001
+            log.warning("throttle: redis claim_once failed (%s); allowing", e)
+            return True
+
     # Server-side Lua so the prune → append → lock decision is one atomic
     # step. Without this, two simultaneous failed logins can both read the
     # same count and one increment is lost.
@@ -286,15 +341,16 @@ class RedisThrottle(ThrottleBackend):
     if locked_until > 0 then return 1 else return 0 end
     """
 
-    def record_failure_atomic(self, key: str) -> bool:
+    def record_failure_atomic(self, key: str, max_attempts: int | None = None) -> bool:
         """Returns True when this failure caused (or found) a lockout."""
+        limit = max_attempts or MAX_ATTEMPTS
         try:
             script = getattr(self, "_script", None)
             if script is None:
                 script = self._r.register_script(self._LUA_RECORD_FAILURE)
                 self._script = script
             res = script(keys=[self._k(key)],
-                        args=[time.time(), WINDOW_SEC, MAX_ATTEMPTS, LOCKOUT_SEC])
+                        args=[time.time(), WINDOW_SEC, limit, LOCKOUT_SEC])
             return bool(int(res or 0))
         except Exception as e:  # noqa: BLE001
             log.warning("throttle: redis atomic record_failure failed (%s) — "
@@ -303,7 +359,7 @@ class RedisThrottle(ThrottleBackend):
             attempts, _ = self.load(key)
             attempts = [t for t in attempts if now - t < WINDOW_SEC]
             attempts.append(now)
-            if len(attempts) >= MAX_ATTEMPTS:
+            if len(attempts) >= limit:
                 self.save(key, [], now + LOCKOUT_SEC)
                 return True
             self.save(key, attempts, 0.0)
@@ -357,6 +413,17 @@ def set_backend(b: ThrottleBackend | None) -> None:
 # ---------------------------------------------------------------------------
 # Public API used by auth.py / the login route
 # ---------------------------------------------------------------------------
+# Per-source-address budget, independent of the username: stops one client
+# spraying a common password across many accounts, which the per-account
+# key alone never notices.
+IP_MAX_ATTEMPTS = int(os.environ.get("LOGIN_THROTTLE_IP_MAX_ATTEMPTS", "30"))
+REGISTER_MAX_PER_WINDOW = int(os.environ.get("REGISTER_THROTTLE_MAX", "10"))
+
+
+def ip_key(client_ip: str, scope: str = "login") -> str:
+    return f"{scope}-ip|{client_ip}"
+
+
 def make_key(username: str, client_ip: str = "") -> str:
     return f"{(username or '').strip().lower()}|{client_ip}"
 
@@ -368,7 +435,7 @@ def seconds_locked(key: str) -> float:
     return remaining if remaining > 0 else 0.0
 
 
-def record_failure(key: str) -> None:
+def record_failure(key: str, max_attempts: int | None = None) -> None:
     """Count a failed attempt; lock the key out once it exceeds the window.
 
     Backends that can do the whole read-modify-write atomically implement
@@ -377,10 +444,11 @@ def record_failure(key: str) -> None:
     increment is lost, letting an attacker running parallel requests get
     slightly more attempts than the policy allows.
     """
+    limit = max_attempts or MAX_ATTEMPTS
     b = backend()
     atomic = getattr(b, "record_failure_atomic", None)
     if atomic is not None:
-        locked = atomic(key)
+        locked = atomic(key, limit)
         if locked:
             log.warning("auth: login locked out for %ss (key=%s)", LOCKOUT_SEC, key)
         return
@@ -389,7 +457,7 @@ def record_failure(key: str) -> None:
     attempts, _ = b.load(key)
     attempts = [t for t in attempts if now - t < WINDOW_SEC]
     attempts.append(now)
-    if len(attempts) >= MAX_ATTEMPTS:
+    if len(attempts) >= limit:
         b.save(key, [], now + LOCKOUT_SEC)
         log.warning("auth: login locked out for %ss (key=%s)", LOCKOUT_SEC, key)
     else:
@@ -398,3 +466,11 @@ def record_failure(key: str) -> None:
 
 def record_success(key: str) -> None:
     backend().clear(key)
+
+
+def claim_once(key: str, ttl: float) -> bool:
+    """True the first time *key* is seen within *ttl* seconds, across every
+    replica sharing this backend; False on a repeat. Used for one-time values
+    (TOTP codes, peer-token ids) whose replay must be refused globally, not
+    just by the worker that saw them first."""
+    return backend().claim_once(f"once:{key}", ttl)

@@ -388,13 +388,28 @@ def receive_package(remote_id: str, bundle: dict, peer: dict, request) -> dict:
                                    facility_oid=i.get("facility_oid"))
             continue
         kept.append(e)
+    # Consent is decided by the patient at each hospital; a peer's consent
+    # rows never become this hospital's sharing rules.
+    kept = [e for e in kept if (e.get("resource") or {}).get("resourceType") != "Consent"]
     me = {"reference": f"Patient/{t['person_id']}"}
     for e in kept:
         res = e["resource"]
+        rt = res.get("resourceType")
+        # A package only ever adds this patient's clinical records. Anything
+        # else -- PUT/DELETE/GET entries, other resource types, writes aimed
+        # at another patient -- would let a peer change records it does not
+        # own with this hospital's authority, so each entry is rebuilt as a
+        # plain create of an allowed type, pinned to the transfer's person.
+        if rt not in fhir_map.FHIR_TO_TYPE:
+            raise TransferError(f"resource type not allowed in a transfer package: {rt}")
+        method = ((e.get("request") or {}).get("method") or "POST").upper()
+        if method != "POST":
+            raise TransferError(f"only creates are allowed in a transfer package, got {method}")
+        e["request"] = {"method": "POST", "url": rt}
         for key in ("subject", "patient"):
             if key in res:
                 res[key] = me
-    bundle = {**bundle, "entry": kept}
+    bundle = {**bundle, "type": "transaction", "entry": kept}
     resp = fhir_server.process_bundle(bundle, system, request)
     counts: dict[str, int] = {}
     for e in resp["entry"]:

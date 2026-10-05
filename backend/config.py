@@ -14,7 +14,11 @@ _PROJECT_ROOT = ROOT.parent
 # Prefer project-root .env (shared by all services), then backend/.env.
 load_dotenv(_PROJECT_ROOT / ".env")
 load_dotenv(ROOT / ".env")
-load_dotenv(_PROJECT_ROOT / ".env.example")  # documented local defaults only
+# .env.example documents every setting; loading it as live configuration let
+# example values (hosts, ports, toggles) silently become production settings
+# whenever .env lacked a key. Opt in explicitly for a quick local try-out.
+if os.getenv("LOAD_ENV_EXAMPLE", "").strip().lower() in ("1", "true", "yes"):
+    load_dotenv(_PROJECT_ROOT / ".env.example")
 
 ASR_MODEL_ID = os.getenv("ASR_MODEL_ID", "facebook/omniASR-LLM-7B")
 ASR_DEVICE = os.getenv("ASR_DEVICE", "auto")

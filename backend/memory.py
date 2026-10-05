@@ -53,6 +53,10 @@ class Conversation:
     messages: list[ChatMessage] = field(default_factory=list)
     summary: str = ""
     last_used: float = field(default_factory=time.time)
+    # The user who started the conversation (None = anonymous). A session id
+    # is not a secret -- chart-ask ids are derived from the patient -- so every
+    # read and reset is checked against it.
+    owner_id: int | None = None
     lock: asyncio.Lock = field(default_factory=asyncio.Lock, repr=False, compare=False)
 
     def append(self, m: ChatMessage) -> None:
@@ -94,6 +98,27 @@ class MemoryStore:
             self._sessions[session_id] = conv or Conversation(session_id=session_id)
         return self._sessions[session_id]
 
+    def owned_by(self, session_id: str, owner_id: int | None) -> bool:
+        """True when *owner_id* may use *session_id*: the session is new or
+        was started by the same user (anonymous sessions only by anonymous
+        callers)."""
+        conv = self._sessions.get(session_id)
+        if conv is None and self.persist_enabled:
+            conv = self._load_from_db(session_id)
+            if conv is not None:
+                self._evict_if_needed()
+                self._sessions[session_id] = conv
+        if conv is None or not (conv.messages or conv.summary):
+            return True
+        return conv.owner_id == owner_id
+
+    def claim(self, session_id: str, owner_id: int | None) -> Conversation:
+        """Get the conversation, recording *owner_id* on a brand-new one."""
+        conv = self.get(session_id)
+        if not (conv.messages or conv.summary):
+            conv.owner_id = owner_id
+        return conv
+
     def reset(self, session_id: str) -> None:
         self._sessions.pop(session_id, None)
         if self.persist_enabled:
@@ -119,16 +144,21 @@ class MemoryStore:
         conv = self._sessions[session_id]
         try:
             import db
-            payload = db.dumps_json([_msg_to_dict(m) for m in conv.messages])
+            import phi_crypto
+            # Conversations carry chart text; encrypt them like the record.
+            payload = phi_crypto.encrypt_json([_msg_to_dict(m) for m in conv.messages],
+                                              patient_id=f"session:{session_id}",
+                                              owner_user_id=conv.owner_id)
             with db.connect() as c:
                 c.execute(
-                    """INSERT INTO agent_sessions (session_id, messages, summary, last_used)
-                       VALUES (?, ?, ?, ?)
+                    """INSERT INTO agent_sessions (session_id, messages, summary, last_used, owner_id)
+                       VALUES (?, ?, ?, ?, ?)
                        ON CONFLICT(session_id) DO UPDATE SET
                          messages=excluded.messages,
                          summary=excluded.summary,
-                         last_used=excluded.last_used""",
-                    (session_id, payload, conv.summary, conv.last_used),
+                         last_used=excluded.last_used,
+                         owner_id=excluded.owner_id""",
+                    (session_id, payload, conv.summary, conv.last_used, conv.owner_id),
                 )
         except Exception as e:  # noqa: BLE001
             log.warning("memory: failed to persist session %s: %s", session_id, e)
@@ -174,15 +204,19 @@ class MemoryStore:
             import db
             with db.connect() as c:
                 row = c.execute(
-                    "SELECT messages, summary, last_used FROM agent_sessions WHERE session_id=?",
+                    "SELECT messages, summary, last_used, owner_id FROM agent_sessions WHERE session_id=?",
                     (session_id,),
                 ).fetchone()
             if row is None:
                 return None
-            messages = [_msg_from_dict(d) for d in (db.loads_json(row["messages"]) or [])]
+            import phi_crypto
+            raw = phi_crypto.decrypt_json(row["messages"], patient_id=f"session:{session_id}",
+                                          owner_user_id=row["owner_id"])
+            messages = [_msg_from_dict(d) for d in (raw or [])]
             log.info("memory: rehydrated session %s from disk (%d msgs)", session_id, len(messages))
             return Conversation(session_id=session_id, messages=messages,
-                                summary=row["summary"] or "", last_used=row["last_used"])
+                                summary=row["summary"] or "", last_used=row["last_used"],
+                                owner_id=row["owner_id"])
         except Exception as e:  # noqa: BLE001
             log.warning("memory: failed to load persisted session %s: %s", session_id, e)
             return None

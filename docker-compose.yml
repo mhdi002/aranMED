@@ -167,6 +167,10 @@ services:
       # replicas must not each try to own those ports.
       PACS_DIMSE_ENABLED: "false"
       HL7_MLLP_ENABLED: "false"
+      # Requests arrive through the gateway on the private compose network, so
+      # its X-Forwarded-For carries the real client address (login lockouts and
+      # audit use it). Never publish the backend port while this is "*".
+      FORWARDED_ALLOW_IPS: "${FORWARDED_ALLOW_IPS:-*}"
     volumes:
       - hf-cache:${DOCKER_HF_HOME:-/models}
       - ./backend/models.docker.yaml:/app/backend/models.yaml:ro
@@ -191,7 +195,7 @@ services:
       # A single $ would be interpolated by Compose at parse time, which never
       # sees BACKEND_TLS_ENABLED set by the internal-tls overlay — the probe
       # would then speak HTTP to an HTTPS listener and report unhealthy.
-      test: ["CMD-SHELL", "if [ \"$${BACKEND_TLS_ENABLED:-0}\" = \"1\" ]; then curl -skf \"https://127.0.0.1:$${PORT:-8010}/api/health\"; else curl -sf \"http://127.0.0.1:$${PORT:-8010}/api/health\"; fi"]
+      test: ["CMD-SHELL", "if [ \"$${BACKEND_TLS_ENABLED:-0}\" = \"1\" ]; then curl -skf \"https://127.0.0.1:$${PORT:-8010}/api/ready\"; else curl -sf \"http://127.0.0.1:$${PORT:-8010}/api/ready\"; fi"]
       interval: "${HEALTHCHECK_INTERVAL:-30s}"
       timeout: 10s
       retries: 5
@@ -339,7 +343,9 @@ services:
     # when the backend runs outside the compose network. Incompatible with
     # MEDRAG_REPLICAS>1 (a fixed host port cannot fan out).
     ports:
-      - "${MEDRAG_PUBLISH_PORT:-8081}:${MEDRAG_PORT:-8080}"
+      # Loopback only by default: the gateway reaches MedRAG over the compose
+      # network. Set MEDRAG_PUBLISH_HOST=0.0.0.0 to expose it on the host network.
+      - "${MEDRAG_PUBLISH_HOST:-127.0.0.1}:${MEDRAG_PUBLISH_PORT:-8081}:${MEDRAG_PORT:-8080}"
     healthcheck:
       # /live is dependency-free, so a replica reports healthy as soon as the
       # process is serving; /health (models + Qdrant) is the deeper probe.
@@ -372,7 +378,8 @@ services:
       # Point MEDRAG_QDRANT_STORAGE at your existing corpus to use it as-is.
       - ${MEDRAG_QDRANT_STORAGE:-./qdrant_storage}:/qdrant/storage
     ports:
-      - "${QDRANT_PUBLISH_PORT:-6333}:${QDRANT_HTTP_PORT:-6333}"
+      # Qdrant has no authentication here: loopback only by default.
+      - "${QDRANT_PUBLISH_HOST:-127.0.0.1}:${QDRANT_PUBLISH_PORT:-6333}:${QDRANT_HTTP_PORT:-6333}"
     healthcheck:
       # The qdrant image ships bash but no curl/wget, so probe the port directly.
       # Qdrant does not bind HTTP until every collection is recovered, so a
@@ -589,12 +596,17 @@ services:
       PACS_DIMSE_PORT: "${PACS_DIMSE_PORT:-11112}"
       HL7_MLLP_ENABLED: "${HL7_MLLP_ENABLED:-true}"
       HL7_MLLP_BIND: "0.0.0.0"
+      # HL7 v2 has no authentication of its own. Inside the container the
+      # listener accepts any peer, so the host port below is published on
+      # loopback only; to accept a HIS on the network, publish it on an
+      # interface the HIS can reach AND enable TLS (HL7_MLLP_TLS_CERT/_KEY).
+      HL7_MLLP_ALLOW_ANY_PEER: "${HL7_MLLP_ALLOW_ANY_PEER:-true}"
       HL7_MLLP_PORT: "${HL7_MLLP_PORT:-2575}"
     volumes:
       - ./backend/data:/app/backend/data
     ports:
       - "${PACS_DIMSE_PUBLISH_PORT:-11112}:${PACS_DIMSE_PORT:-11112}"
-      - "${HL7_MLLP_PUBLISH_PORT:-2575}:${HL7_MLLP_PORT:-2575}"
+      - "${HL7_MLLP_PUBLISH_HOST:-127.0.0.1}:${HL7_MLLP_PUBLISH_PORT:-2575}:${HL7_MLLP_PORT:-2575}"
     restart: unless-stopped
     logging: *default-logging
 

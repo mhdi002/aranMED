@@ -380,12 +380,30 @@ def purge_expired_sessions() -> int:
 RECOVERY_CODE_COUNT = int(os.environ.get("MFA_RECOVERY_CODE_COUNT", "10"))
 
 
-def _hash_recovery(code: str) -> str:
-    """Recovery codes are high-entropy, so a fast salted hash is appropriate —
-    unlike passwords, there is nothing to brute-force in a useful timeframe,
-    and scrypt per code would make verification needlessly slow.
+def _norm_recovery(code: str) -> str:
+    return code.strip().lower()
+
+
+def _hash_recovery(code: str, salt: str | None = None) -> str:
+    """Salted SHA-256 of a recovery code, ``v2$<salt>$<digest>``.
+
+    Recovery codes are high-entropy, so a fast salted hash is appropriate --
+    unlike passwords there is nothing to brute-force in a useful timeframe.
+    The salt is random per code and stored with it; earlier versions keyed
+    the hash on SECRET, so every code silently stopped working whenever the
+    secret changed (including the ephemeral one regenerated on each restart).
     """
-    return hashlib.sha256((SECRET + "|recovery|" + code.strip().lower()).encode()).hexdigest()
+    salt = salt or secrets.token_hex(8)
+    digest = hashlib.sha256(f"{salt}|recovery|{_norm_recovery(code)}".encode()).hexdigest()
+    return f"v2${salt}${digest}"
+
+
+def _recovery_matches(stored: str, code: str) -> bool:
+    if stored.startswith("v2$"):
+        _, salt, _digest = stored.split("$", 2)
+        return hmac.compare_digest(stored, _hash_recovery(code, salt))
+    legacy = hashlib.sha256((SECRET + "|recovery|" + _norm_recovery(code)).encode()).hexdigest()
+    return hmac.compare_digest(stored, legacy)
 
 
 def generate_recovery_codes(user_id: int) -> list[str]:
@@ -410,20 +428,21 @@ def generate_recovery_codes(user_id: int) -> list[str]:
 
 def consume_recovery_code(user_id: int, code: str) -> bool:
     """Verify and burn a recovery code. Single-use by construction."""
-    if not code:
+    if not code or not code.strip():
         return False
-    h = _hash_recovery(code)
     try:
         with db.connect() as c:
-            row = c.execute(
-                "SELECT id FROM mfa_recovery_codes WHERE user_id=? AND code_hash=? "
-                "AND used_at IS NULL",
-                (user_id, h),
-            ).fetchone()
-            if row is None:
+            rows = c.execute(
+                "SELECT id, code_hash FROM mfa_recovery_codes WHERE user_id=? AND used_at IS NULL",
+                (user_id,),
+            ).fetchall()
+            hit = next((r for r in rows if _recovery_matches(r["code_hash"], code)), None)
+            if hit is None:
                 return False
-            c.execute("UPDATE mfa_recovery_codes SET used_at=? WHERE id=?",
-                      (db.now(), row["id"]))
+            cur = c.execute("UPDATE mfa_recovery_codes SET used_at=? WHERE id=? AND used_at IS NULL",
+                            (db.now(), hit["id"]))
+            if getattr(cur, "rowcount", 1) == 0:
+                return False  # a concurrent request burnt it first
         log.warning("auth: MFA recovery code consumed for user %s", user_id)
         return True
     except Exception as e:  # noqa: BLE001
@@ -501,6 +520,8 @@ def authenticate(*, username: str, password: str) -> dict | None:
     if not verify_password(password, row["password_hash"]):
         return None
     user = _user_to_dict(row)
+    if user.get("disabled"):
+        return None
     # The bootstrap password file has served its purpose the moment its owner
     # signs in; leaving a plaintext credential on disk indefinitely is the
     # thing that turns a convenience into a liability.
@@ -529,6 +550,41 @@ def list_users() -> list[dict]:
     with db.connect() as c:
         rows = c.execute("SELECT * FROM users ORDER BY username").fetchall()
     return [_user_to_dict(r) for r in rows]
+
+
+def set_password(user_id: int, new_password: str) -> None:
+    """Replace a password (policy-checked) and stamp password_changed_at, which
+    invalidates every token issued before the change (see current_user)."""
+    user = get_user(user_id)
+    if user is None:
+        raise KeyError(user_id)
+    validate_password(new_password, username=user["username"])
+    with db.connect() as c:
+        c.execute("UPDATE users SET password_hash=?, password_changed_at=? WHERE id=?",
+                  (hash_password(new_password), db.now(), user_id))
+
+
+def update_user(user_id: int, *, role: str | None = None, disabled: bool | None = None) -> dict:
+    sets, args = [], []
+    if role is not None:
+        sets.append("role=?")
+        args.append(role.strip().lower())
+    if disabled is not None:
+        sets.append("disabled=?")
+        args.append(1 if disabled else 0)
+    if sets:
+        with db.connect() as c:
+            c.execute(f"UPDATE users SET {', '.join(sets)} WHERE id=?", (*args, user_id))
+    user = get_user(user_id)
+    if user is None:
+        raise KeyError(user_id)
+    return user
+
+
+def count_active_admins() -> int:
+    with db.connect() as c:
+        return int(c.execute("SELECT COUNT(*) AS n FROM users WHERE role='admin' "
+                             "AND COALESCE(disabled,0)=0").fetchone()["n"])
 
 
 def get_user(user_id: int) -> dict | None:
@@ -657,6 +713,8 @@ def _user_to_dict(row) -> dict:
         "created_at": row["created_at"],
         # Never expose totp_secret — this dict is returned to clients.
         "mfa_enabled": bool(row["mfa_enabled"]) if "mfa_enabled" in keys else False,
+        "disabled": bool(row["disabled"]) if "disabled" in keys else False,
+        "password_changed_at": row["password_changed_at"] if "password_changed_at" in keys else None,
     }
 
 
@@ -666,13 +724,24 @@ def _user_to_dict(row) -> dict:
 def get_totp_secret(user_id: int) -> str | None:
     with db.connect() as c:
         row = c.execute("SELECT totp_secret FROM users WHERE id=?", (user_id,)).fetchone()
-    return (row["totp_secret"] if row else None) or None
+    stored = (row["totp_secret"] if row else None) or None
+    if stored is None:
+        return None
+    import phi_crypto
+    if phi_crypto.is_encrypted(stored):
+        return phi_crypto.decrypt_json(stored, patient_id=f"totp:{user_id}", owner_user_id=user_id)
+    return stored  # stored before encryption was configured
 
 
 def set_totp_secret(user_id: int, secret: str, *, enabled: bool) -> None:
+    """Store the TOTP seed, encrypted with the PHI key when one is configured:
+    whoever holds the seed can produce the second factor."""
+    import phi_crypto
+    stored = (phi_crypto.encrypt_json(secret, patient_id=f"totp:{user_id}", owner_user_id=user_id)
+              if phi_crypto.enabled() else secret)
     with db.connect() as c:
         c.execute("UPDATE users SET totp_secret=?, mfa_enabled=? WHERE id=?",
-                  (secret, 1 if enabled else 0, user_id))
+                  (stored, 1 if enabled else 0, user_id))
 
 
 def clear_totp_secret(user_id: int) -> None:
@@ -696,10 +765,22 @@ def current_user(token: Optional[str] = Depends(oauth2_scheme)) -> dict:
     user = get_user(int(payload["sub"]))
     if user is None:
         raise HTTPException(status.HTTP_401_UNAUTHORIZED, "user not found")
+    if not token_still_valid_for(user, payload):
+        raise HTTPException(status.HTTP_401_UNAUTHORIZED,
+                            "session ended — the account was disabled or its password changed",
+                            headers={"WWW-Authenticate": "Bearer"})
     # Keep "active sessions" honest: it should reflect what is actually being
     # used, not merely what was issued.
     touch_session(payload.get("jti") or "")
     return user
+
+
+def token_still_valid_for(user: dict, payload: dict) -> bool:
+    """A token outlives neither a disabled account nor a password change."""
+    if user.get("disabled"):
+        return False
+    changed = user.get("password_changed_at")
+    return not (changed and float(payload.get("iat") or 0) < float(changed) - 1)
 
 
 def current_user_optional(token: Optional[str] = Depends(oauth2_scheme)) -> dict | None:
@@ -714,4 +795,5 @@ def current_user_optional(token: Optional[str] = Depends(oauth2_scheme)) -> dict
         payload = decode_token(token)
     except ValueError:
         return None
-    return get_user(int(payload["sub"]))
+    user = get_user(int(payload["sub"]))
+    return user if user and token_still_valid_for(user, payload) else None

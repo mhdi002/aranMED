@@ -72,6 +72,8 @@ def test_admin_creates_privileged_accounts(http_client):
                                "role": "doctor"})
     assert r.status_code == 200, r.text
     assert r.json()["user"]["role"] == "doctor"
+    # The administrator gets the account, never a session for it.
+    assert r.json()["access_token"] is None
     doc = _login(http_client, "dr_new", "doctorpass1")
     assert http_client.get("/api/ehr", headers=doc).status_code == 200
 

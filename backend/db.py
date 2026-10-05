@@ -251,6 +251,8 @@ _ADDED_COLUMNS: list[tuple[str, str, str]] = [
     ("users", "totp_secret", "TEXT"),
     ("users", "mfa_enabled", "INTEGER NOT NULL DEFAULT 0"),
     ("users", "password_changed_at", "REAL"),
+    ("agent_sessions", "owner_id", "INTEGER"),
+    ("users", "disabled", "INTEGER NOT NULL DEFAULT 0"),
 ]
 
 

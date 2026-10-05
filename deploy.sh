@@ -158,6 +158,14 @@ step "3/6" "Building images (backend + frontend + medrag + triton; each installs
 dc "${PROFILE_ARGS[@]}" build
 ok "Images built"
 
+# The backend image runs as uid 10001. Hand it the bind-mounted data dir and
+# the shared model cache (volumes created by older root-run images are
+# root-owned). Idempotent; runs as root inside a throwaway container.
+mkdir -p "$ROOT/backend/data"
+MSYS_NO_PATHCONV=1 dc run --rm --no-deps -u 0 --entrypoint sh backend \
+  -c 'chown -R 10001:10001 /app/backend/data "${HF_HOME:-/models}"' \
+  || warn "Could not hand backend/data and the model cache to uid 10001 — fix ownership by hand if the backend cannot write."
+
 # ── 4) Model downloads ──────────────────────────────────────────────────────
 if [[ $SKIP_MODELS -eq 0 ]]; then
   step "4/6" "Downloading models"

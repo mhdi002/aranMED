@@ -137,12 +137,17 @@ def _system_owner_user_id() -> int:
 # Storage helpers — thin wrappers over backend/store.py (see module docstring)
 # --------------------------------------------------------------------------
 def _owner_id(ctx: ToolContext | None) -> int:
-    """The authenticated caller when available, else the shared system owner.
+    """The authenticated caller, or the shared system owner for internal calls.
 
     Never mix the two namespaces for the same call: an authenticated chat
-    session must only ever see its own patients.
+    session must only ever see its own patients. A tool call made on behalf of
+    an anonymous chat (a context with no owner) is refused outright -- falling
+    back to the system owner handed anonymous callers the admin's records.
+    Only in-process callers that pass no context at all use the system owner.
     """
-    if ctx is not None and ctx.owner_user_id is not None:
+    if ctx is not None:
+        if ctx.owner_user_id is None:
+            raise PermissionError("patient records require a signed-in user")
         return ctx.owner_user_id
     return _system_owner_user_id()
 

@@ -19,6 +19,7 @@ import auth
 import mfa
 import rbac
 import store
+import throttle
 from providers.base import ChatMessage
 from registry import Registry
 
@@ -47,7 +48,7 @@ class RegisterIn(BaseModel):
 
 
 class TokenOut(BaseModel):
-    access_token: str
+    access_token: Optional[str] = None
     token_type: str = "bearer"
     user: dict
 
@@ -67,6 +68,15 @@ async def register_policy() -> dict:
 @router.post("/auth/register", response_model=TokenOut)
 async def register(request: Request, body: RegisterIn,
                    caller: Optional[dict] = Depends(auth.current_user_optional)) -> TokenOut:
+    if not caller:
+        # Anonymous sign-up is rate limited per source address.
+        rkey = throttle.ip_key(_ip(request) or "", "register")
+        locked_for = throttle.seconds_locked(rkey)
+        if locked_for > 0:
+            raise HTTPException(status.HTTP_429_TOO_MANY_REQUESTS,
+                                f"too many sign-ups — try again in {int(locked_for)}s",
+                                headers={"Retry-After": str(int(locked_for))})
+        throttle.record_failure(rkey, throttle.REGISTER_MAX_PER_WINDOW)
     allowed = self_register_roles()
     role = (body.role or (allowed[0] if allowed else "")).strip().lower()
     is_manager = bool(caller) and rbac.allows((caller.get("role") or "").strip().lower(),
@@ -86,12 +96,18 @@ async def register(request: Request, body: RegisterIn,
         audit.record("auth.register", actor_name=body.username, outcome="deny",
                      client_ip=_ip(request), detail={"reason": str(e)})
         raise HTTPException(status.HTTP_400_BAD_REQUEST, str(e)) from e
+    by_admin = is_manager and caller is not None
     audit.record("auth.register", actor=caller or user, client_ip=_ip(request),
                  detail={"role": user["role"], "user": user["username"],
-                         "created_by_admin": is_manager and caller is not None})
+                         "created_by_admin": by_admin})
+    if by_admin:
+        # The administrator gets the account, not a session for it.
+        return TokenOut(access_token=None, user=user)
     token = auth.create_token({"sub": str(user["id"]),
                                "role": user["role"],
                                "username": user["username"]})
+    auth.record_session(auth.decode_token(token), client_ip=_ip(request),
+                        user_agent=request.headers.get("user-agent"))
     return TokenOut(access_token=token, user=user)
 
 
@@ -100,12 +116,92 @@ async def list_users(user: dict = Depends(rbac.require("users.manage"))) -> dict
     return {"users": auth.list_users(), "self_register_roles": self_register_roles()}
 
 
+class PasswordChangeIn(BaseModel):
+    current_password: str = Field(min_length=1, max_length=256)
+    new_password: str = Field(min_length=1, max_length=256)
+
+
+@router.post("/auth/password")
+def change_password(request: Request, body: PasswordChangeIn,
+                    user: dict = Depends(auth.current_user)) -> dict:
+    """Change your own password. Every other session is signed out."""
+    if auth.authenticate(username=user["username"], password=body.current_password) is None:
+        audit.record("auth.password.change", actor=user, outcome="deny", client_ip=_ip(request))
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, "current password is incorrect")
+    try:
+        auth.set_password(user["id"], body.new_password)
+    except ValueError as e:
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, str(e)) from e
+    ended = auth.revoke_all_sessions(user["id"], reason="password_change")
+    audit.record("auth.password.change", actor=user, client_ip=_ip(request),
+                 detail={"sessions_ended": ended})
+    # The caller's own token predates the change too; give them a fresh one.
+    fresh = auth.get_user(user["id"])
+    token = auth.create_token({"sub": str(fresh["id"]), "role": fresh["role"],
+                               "username": fresh["username"]})
+    auth.record_session(auth.decode_token(token), client_ip=_ip(request),
+                        user_agent=request.headers.get("user-agent"))
+    return {"ok": True, "access_token": token, "token_type": "bearer", "user": fresh}
+
+
+class UserPatchIn(BaseModel):
+    role: Optional[str] = Field(default=None, max_length=32)
+    disabled: Optional[bool] = None
+
+
+def _target_user(user_id: int) -> dict:
+    target = auth.get_user(user_id)
+    if target is None:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "user not found")
+    return target
+
+
+@router.patch("/auth/users/{user_id}")
+def patch_user(user_id: int, body: UserPatchIn, request: Request,
+               admin: dict = Depends(rbac.require("users.manage"))) -> dict:
+    """Change a user's role or disable/enable the account (administrators)."""
+    target = _target_user(user_id)
+    role = body.role.strip().lower() if body.role else None
+    if role is not None and role not in rbac.known_roles():
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, f"unknown role '{role}'")
+    losing_admin = target["role"] == "admin" and not target.get("disabled") and (
+        body.disabled or (role is not None and role != "admin"))
+    if losing_admin and auth.count_active_admins() <= 1:
+        raise HTTPException(status.HTTP_409_CONFLICT, "cannot remove the last active administrator")
+    if target["id"] == admin["id"] and body.disabled:
+        raise HTTPException(status.HTTP_409_CONFLICT, "you cannot disable your own account")
+    updated = auth.update_user(user_id, role=role, disabled=body.disabled)
+    ended = 0
+    if body.disabled or (role is not None and role != target["role"]):
+        ended = auth.revoke_all_sessions(user_id, reason="account_change")
+    audit.record("auth.user.update", actor=admin, client_ip=_ip(request),
+                 resource=f"user:{user_id}",
+                 detail={"role": role, "disabled": body.disabled, "sessions_ended": ended})
+    return {"ok": True, "user": updated}
+
+
+@router.post("/auth/users/{user_id}/reset-password")
+def reset_password(user_id: int, request: Request,
+                   admin: dict = Depends(rbac.require("users.manage"))) -> dict:
+    """Set a one-time random password, shown once, and sign the user out."""
+    import secrets as _secrets
+    target = _target_user(user_id)
+    temp = _secrets.token_urlsafe(12)
+    auth.set_password(user_id, temp)
+    ended = auth.revoke_all_sessions(user_id, reason="password_reset")
+    audit.record("auth.password.reset", actor=admin, client_ip=_ip(request),
+                 resource=f"user:{user_id}", detail={"sessions_ended": ended})
+    return {"ok": True, "username": target["username"], "temporary_password": temp,
+            "note": "Give this to the user through a trusted channel; it is shown once."}
+
+
 @router.post("/auth/login", response_model=TokenOut)
 async def login(request: Request,
                 form: OAuth2PasswordRequestForm = Depends()) -> TokenOut:
     client_ip = _ip(request) or ""
     key = auth.throttle_key(form.username, client_ip)
-    locked_for = auth.login_is_locked(key)
+    ipk = throttle.ip_key(client_ip)
+    locked_for = max(auth.login_is_locked(key), throttle.seconds_locked(ipk))
     if locked_for > 0:
         audit.record("auth.login", actor_name=form.username, outcome="deny",
                      client_ip=client_ip, detail={"reason": "locked_out",
@@ -118,6 +214,7 @@ async def login(request: Request,
     user = auth.authenticate(username=form.username, password=form.password)
     if user is None:
         auth.record_login_failure(key)
+        throttle.record_failure(ipk, throttle.IP_MAX_ATTEMPTS)
         audit.record("auth.login", actor_name=form.username, outcome="deny",
                      client_ip=client_ip, detail={"reason": "bad_credentials"})
         # Deliberately identical message for "no such user" and "wrong
@@ -236,15 +333,35 @@ class MfaVerifyIn(BaseModel):
     code: str = Field(min_length=4, max_length=12)
 
 
+class MfaEnrollIn(BaseModel):
+    code: Optional[str] = Field(default=None, max_length=32)
+
+
 @router.post("/auth/mfa/enroll")
-async def mfa_enroll(request: Request,
+async def mfa_enroll(request: Request, body: Optional[MfaEnrollIn] = None,
                      user: dict = Depends(auth.current_user)) -> dict:
     """Start enrolment: mint a secret and return it plus an otpauth:// URI.
 
     The secret is stored but MFA is *not* enabled until the user proves they
     can generate a code from it (``/auth/mfa/verify``), so nobody locks
     themselves out by enabling it against a secret their app never received.
+
+    Re-enrolling while MFA is on replaces the second factor, so it needs the
+    same proof as disabling it: a current code or a recovery code. Without
+    that check a stolen token could switch MFA off and enrol its own device.
     """
+    if user.get("mfa_enabled"):
+        code = ((body.code if body else None) or "").strip()
+        secret_now = auth.get_totp_secret(user["id"])
+        ok = bool(code) and (
+            (secret_now and mfa.verify(secret_now, code, user_id=user["id"]))
+            or auth.consume_recovery_code(user["id"], code))
+        if not ok:
+            audit.record("auth.mfa.enroll_start", actor=user, outcome="deny",
+                         client_ip=_ip(request), detail={"reason": "mfa already enabled"})
+            raise HTTPException(status.HTTP_409_CONFLICT,
+                                "MFA is already enabled — confirm with a current code "
+                                "or a recovery code to replace it")
     secret = mfa.generate_secret()
     auth.set_totp_secret(user["id"], secret, enabled=False)
     audit.record("auth.mfa.enroll_start", actor=user, client_ip=_ip(request))

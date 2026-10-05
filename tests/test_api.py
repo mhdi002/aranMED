@@ -16,6 +16,11 @@ def client(fresh_registry):
     from agent import Agent
     app_mod.agent = Agent(registry=fresh_registry, memory=app_mod.memory)
     with TestClient(app_mod.app) as c:
+        # The AI endpoints require a signed-in user.
+        import auth
+        auth.create_user(username="api_tester", password="apitest-pass", role="doctor")
+        r = c.post("/api/auth/login", data={"username": "api_tester", "password": "apitest-pass"})
+        c.headers.update({"Authorization": f"Bearer {r.json()['access_token']}"})
         yield c
 
 

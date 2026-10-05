@@ -26,7 +26,6 @@ import hmac
 import json
 import os
 import secrets
-import threading
 import time
 from pathlib import Path
 from typing import Any, Optional
@@ -41,8 +40,6 @@ from clinicaldb import facilities, settings
 PEER_TYP = "peer+jwt"
 _DEFAULT_POLICY = Path(__file__).resolve().parents[1] / "data" / "peer_policy.json"
 _policy_cache: Optional[dict] = None
-_seen_jti: dict[str, float] = {}
-_jti_lock = threading.Lock()
 
 
 def _b64(b: bytes) -> str:
@@ -127,19 +124,24 @@ def verify_peer_token(token: str) -> dict:
         raise ValueError("peer token expired")
     if claims.get("iat", 0) > now + 60:
         raise ValueError("peer token issued in the future")
+    # A peer mints its own tokens, so cap their lifetime here: a token valid
+    # for years is a standing credential, not a short-lived assertion.
+    max_life = settings.env_int("PEER_TOKEN_MAX_LIFETIME_SEC", 900)
+    if float(claims.get("exp", 0)) - float(claims.get("iat", 0)) > max_life:
+        raise ValueError(f"peer token lifetime exceeds {max_life}s")
     if claims.get("aud") != settings.facility_oid():
         raise ValueError("peer token audience is not this facility")
     if claims.get("purpose") not in peer_policy().get("purposes", []):
         raise ValueError("purpose of use not accepted")
     jti = claims.get("jti")
-    if jti:
-        with _jti_lock:
-            for k, exp in list(_seen_jti.items()):
-                if exp < now:
-                    _seen_jti.pop(k, None)
-            if jti in _seen_jti and settings.env_bool("PEER_TOKEN_SINGLE_USE", False):
-                raise ValueError("peer token replayed")
-            _seen_jti[jti] = float(claims.get("exp", now))
+    if not jti:
+        raise ValueError("peer token has no jti")
+    if settings.env_bool("PEER_TOKEN_SINGLE_USE", False):
+        # Shared across replicas (throttle store), not per process.
+        import throttle
+        if not throttle.claim_once(f"peer-jti:{iss}:{jti}",
+                                   max(1.0, float(claims.get("exp", now)) - now + 60)):
+            raise ValueError("peer token replayed")
     return {"facility": facility, "claims": claims}
 
 
@@ -179,6 +181,10 @@ def resolve_principal(request: Request) -> dict:
     user = auth.get_user(int(payload["sub"]))
     if user is None:
         raise HTTPException(status.HTTP_401_UNAUTHORIZED, "user not found")
+    if not auth.token_still_valid_for(user, payload):
+        raise HTTPException(status.HTTP_401_UNAUTHORIZED,
+                            "session ended — the account was disabled or its password changed",
+                            headers={"WWW-Authenticate": "Bearer"})
     return {**user, "kind": "user", "facility_oid": settings.facility_oid()}
 
 
@@ -199,6 +205,29 @@ def require(permission: str):
                      client_ip=request.client.host if request.client else None,
                      detail={"kind": p.get("kind"), "path": request.url.path})
         raise HTTPException(status.HTTP_403_FORBIDDEN, f"not permitted to {permission}")
+    return _dep
+
+
+def require_user(permission: str):
+    """Like :func:`require` but for signed-in users only.
+
+    Management APIs (``/api/pacs/*``) have no consent filtering: peer
+    hospitals exchange images over DICOMweb/DIMSE, where the patient's
+    sharing consent is enforced, and are refused here.
+    """
+    inner = require(permission)
+
+    async def _dep(request: Request) -> dict:
+        p = await inner(request)
+        if p.get("kind") != "user":
+            audit.record("rbac.deny", actor_name=p.get("username"), actor_id=p.get("id"),
+                         resource=permission, outcome="deny",
+                         client_ip=request.client.host if request.client else None,
+                         detail={"kind": p.get("kind"), "path": request.url.path,
+                                 "why": "user-only endpoint"})
+            raise HTTPException(status.HTTP_403_FORBIDDEN,
+                                "this endpoint is for signed-in users; peers use DICOMweb")
+        return p
     return _dep
 
 
