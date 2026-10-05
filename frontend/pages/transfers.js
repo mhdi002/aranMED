@@ -1,10 +1,5 @@
-import AppShell from "../components/AppShell";
-import TransfersView from "../components/views/TransfersView";
+import Redirect from "../components/Redirect";
 
 export default function Page() {
-  return (
-    <AppShell>
-      <TransfersView />
-    </AppShell>
-  );
+  return <Redirect to="/ehr?tab=transfers" />;
 }

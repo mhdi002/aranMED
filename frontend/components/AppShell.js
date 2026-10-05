@@ -31,7 +31,8 @@ export default function AppShell({ children, title }) {
     }
   }, [user, userRole, view, router]);
 
-  const heading = title || VIEW_TITLES[view] || "aranmed";
+  const titleKey = `title.${view}`;
+  const heading = title || (t(titleKey) !== titleKey ? t(titleKey) : VIEW_TITLES[view]) || "aranmed";
 
   return (
     <>

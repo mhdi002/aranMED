@@ -1,10 +1,5 @@
-import AppShell from "../../components/AppShell";
-import ClinicalSearchView from "../../components/views/ClinicalSearchView";
+import Redirect from "../../components/Redirect";
 
 export default function Page() {
-  return (
-    <AppShell>
-      <ClinicalSearchView />
-    </AppShell>
-  );
+  return <Redirect to="/ehr?tab=patients" />;
 }

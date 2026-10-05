@@ -8,7 +8,7 @@ test.describe.configure({ mode: "serial" });
 test("find a patient and open the unified chart", async ({ page, request }) => {
   const st = state();
   await loginAs(page, request, "e2e_doctor", st.user_password);
-  await page.goto("/clinical");
+  await page.goto("/ehr?tab=patients");
   await page.locator("input[name=q]").fill("L-1001");
   await page.getByRole("button", { name: "Search", exact: true }).click();
   const results = page.getByTestId("patient-results");
@@ -24,7 +24,7 @@ test("find a patient and open the unified chart", async ({ page, request }) => {
 test("records from the peer hospital appear with their source; imaging is retrieved on demand", async ({ page, request }) => {
   const st = state();
   await loginAs(page, request, "e2e_doctor", st.user_password);
-  await page.goto(`/clinical/chart?id=${st.local_person}`);
+  await page.goto(`/ehr/chart?id=${st.local_person}`);
   await page.getByTestId("toggle-remote").check();
   const summary = page.getByTestId("summary");
   await expect(summary).toContainText("Iodinated contrast", { timeout: 30_000 });
@@ -44,7 +44,7 @@ test("records from the peer hospital appear with their source; imaging is retrie
 test("results trend, documents, adding data and CCD export", async ({ page, request }) => {
   const st = state();
   await loginAs(page, request, "e2e_doctor", st.user_password);
-  await page.goto(`/clinical/chart?id=${st.local_person}`);
+  await page.goto(`/ehr/chart?id=${st.local_person}`);
   await page.locator('[data-tab="results"]').click();
   const results = page.getByTestId("results-table");
   await expect(results).toContainText("1.8 mg/dL");
@@ -71,7 +71,7 @@ test("results trend, documents, adding data and CCD export", async ({ page, requ
 test("imaging order from the chart lands on the worklist", async ({ page, request }) => {
   const st = state();
   await loginAs(page, request, "e2e_doctor", st.user_password);
-  await page.goto(`/clinical/chart?id=${st.local_person}`);
+  await page.goto(`/ehr/chart?id=${st.local_person}`);
   await page.locator('[data-tab="orders"]').click();
   await page.getByRole("button", { name: "+ Order imaging" }).click();
   const form = page.getByTestId("add-service-requests");
@@ -86,7 +86,7 @@ test("imaging order from the chart lands on the worklist", async ({ page, reques
 test("restricted record requires break-the-glass", async ({ page, request }) => {
   const st = state();
   await loginAs(page, request, "e2e_doctor", st.user_password);
-  await page.goto(`/clinical/chart?id=${st.vip_person}`);
+  await page.goto(`/ehr/chart?id=${st.vip_person}`);
   const box = page.getByTestId("restricted");
   await expect(box).toContainText("Restricted record");
   await box.locator("input").fill("Collapsed in clinic, need full history now");
@@ -97,7 +97,7 @@ test("restricted record requires break-the-glass", async ({ page, request }) => 
 
 test("register a new patient", async ({ page, request }) => {
   await loginAs(page, request, "e2e_doctor", state().user_password);
-  await page.goto("/clinical");
+  await page.goto("/ehr?tab=patients");
   await page.getByTestId("register-open").click();
   const dlg = page.getByRole("dialog");
   await dlg.locator("input").nth(0).fill("Moradi");
@@ -110,7 +110,7 @@ test("register a new patient", async ({ page, request }) => {
 
 test("incoming transfer: accept, package arrives, arrive and complete", async ({ page, request }) => {
   await loginAs(page, request, "e2e_doctor", state().user_password);
-  await page.goto("/transfers");
+  await page.goto("/ehr?tab=transfers");
   const card = page.getByTestId("transfer-requested");
   await expect(card).toContainText("E2E Peer Hospital");
   await expect(card).toContainText("Primary PCI");
@@ -126,7 +126,7 @@ test("incoming transfer: accept, package arrives, arrive and complete", async ({
 
 test("EMS board: inbound critical patient through handover", async ({ page, request }) => {
   await loginAs(page, request, "e2e_doctor", state().user_password);
-  await page.goto("/ems");
+  await page.goto("/ehr?tab=ems");
   const board = page.getByTestId("ems-board");
   await expect(board).toContainText("Chest pain");
   await expect(board).toContainText("MEDIC-21");
@@ -156,9 +156,9 @@ test("interop admin: peer test, HL7 message, message log", async ({ page, reques
 test("Persian chart renders RTL", async ({ page, request }) => {
   const st = state();
   await loginAs(page, request, "e2e_doctor", st.user_password);
-  await page.goto(`/clinical/chart?id=${st.local_person}`);
+  await page.goto(`/ehr/chart?id=${st.local_person}`);
   await page.locator(".lang-pick button", { hasText: "FA" }).click();
   await expect(page.locator("html")).toHaveAttribute("dir", "rtl");
   await expect(page.locator('[data-tab="summary"]')).toHaveText("خلاصه");
-  await expect(page.locator(".sidebar")).toContainText("بیماران");
+  await expect(page.locator(".sidebar")).toContainText("پرونده الکترونیک سلامت");
 });

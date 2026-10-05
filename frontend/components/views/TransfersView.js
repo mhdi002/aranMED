@@ -77,7 +77,7 @@ export default function TransfersView() {
                   </div>
                 </>
               )}
-              <div className="toolbar"><Button variant="ghost" onClick={() => router.push(`/clinical/chart?id=${tr.person_id}`)}>{t("cl.open")}</Button></div>
+              <div className="toolbar"><Button variant="ghost" onClick={() => router.push(`/ehr/chart?id=${tr.person_id}`)}>{t("cl.open")}</Button></div>
               <details className="small"><summary>history</summary>
                 <ul className="mini-list">{(tr.history || []).map((h, i) => <li key={i}>{fmtDate(h.at)} · {h.status || "note"} · {h.by || ""} {h.note ? `— ${h.note}` : ""}</li>)}</ul>
               </details>

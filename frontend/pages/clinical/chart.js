@@ -1,10 +1,5 @@
-import AppShell from "../../components/AppShell";
-import ChartView from "../../components/views/ChartView";
+import Redirect from "../../components/Redirect";
 
 export default function Page() {
-  return (
-    <AppShell>
-      <ChartView />
-    </AppShell>
-  );
+  return <Redirect to="/ehr/chart" keepQuery />;
 }

@@ -1,6 +1,6 @@
 import {
   Stethoscope, Mic, Document, Brain, Activity, Folder, Settings,
-  Heart, XRay, Bell, GradCap, Layers, ListChecks, Upload, Network, User, Send, Activity as Pulse,
+  Heart, XRay, GradCap, Layers, ListChecks, Upload, Network,
 } from "./icons";
 import { useT } from "../lib/i18n";
 import { viewsForRole } from "../lib/roles";
@@ -10,16 +10,12 @@ const NAV = [
   { id: "radiology", labelKey: "nav.radiology", icon: XRay,       sectionKey: "nav.workspace" },
   { id: "reports",   labelKey: "nav.reports",   icon: Document,   sectionKey: "nav.workspace" },
   { id: "templates", labelKey: "nav.templates", icon: Folder,     sectionKey: "nav.workspace" },
-  { id: "ehr",       labelKey: "nav.ehr",       icon: Stethoscope,sectionKey: "nav.workspace" },
-  { id: "alerts",    labelKey: "nav.alerts",    icon: Bell,       sectionKey: "nav.workspace" },
-  { id: "clinical",      labelKey: "nav.patients",     icon: User,       sectionKey: "nav.clinical" },
-  { id: "transfers",     labelKey: "nav.transfers",    icon: Send,       sectionKey: "nav.clinical" },
-  { id: "ems",           labelKey: "nav.ems",          icon: Pulse,      sectionKey: "nav.clinical" },
-  { id: "interop",       labelKey: "nav.interop",      icon: Network,    sectionKey: "nav.clinical" },
+  { id: "ehr",           labelKey: "nav.ehrHub",       icon: Stethoscope,sectionKey: "nav.ehrSection" },
   { id: "pacs",          labelKey: "nav.pacs",         icon: Layers,     sectionKey: "nav.imaging" },
   { id: "pacs/worklist", labelKey: "nav.pacsWorklist", icon: ListChecks, sectionKey: "nav.imaging" },
   { id: "pacs/upload",   labelKey: "nav.pacsUpload",   icon: Upload,     sectionKey: "nav.imaging" },
   { id: "pacs/nodes",    labelKey: "nav.pacsNodes",    icon: Network,    sectionKey: "nav.imaging" },
+  { id: "interop",       labelKey: "nav.interop",      icon: Network,    sectionKey: "nav.admin" },
   { id: "education", labelKey: "nav.tutor",     icon: GradCap,    sectionKey: "nav.education" },
   { id: "asr",       labelKey: "nav.asr",       icon: Brain,      sectionKey: "nav.models" },
   { id: "llm",       labelKey: "nav.llm",       icon: Activity,   sectionKey: "nav.models" },
@@ -54,7 +50,7 @@ export default function Sidebar({ active = "dictate", onSelect, open = false, ro
                 <button
                   key={n.id}
                   type="button"
-                  className={`nav-item ${active === n.id || (n.id === "pacs" && active === "pacs/viewer") || (n.id === "clinical" && active === "clinical/chart") ? "active" : ""}`}
+                  className={`nav-item ${active === n.id || (n.id === "pacs" && active === "pacs/viewer") || (n.id === "ehr" && active === "ehr/chart") ? "active" : ""}`}
                   onClick={() => pick(n.id)}
                 >
                   <span className="ico"><Ico size={16} /></span>

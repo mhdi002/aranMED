@@ -1,21 +1,33 @@
 // Role-based view access — radiologists get a focused ASR + chat workspace.
+// Every patient-data screen (search, chart, transfers, EMS, medication
+// alerts, free-text intake) lives inside the single EHR section ("ehr" hub +
+// "ehr/chart"); EHR_TABS says which hub tabs each role sees.
 export const ROLE_VIEWS = {
-  radiologist: ["dictate", "radiology", "pacs", "pacs/viewer", "pacs/worklist", "pacs/upload",
-                "clinical", "clinical/chart", "transfers"],
-  doctor: ["dictate", "radiology", "reports", "templates", "ehr", "alerts",
-           "clinical", "clinical/chart", "transfers", "ems",
+  radiologist: ["dictate", "radiology", "ehr", "ehr/chart",
+                "pacs", "pacs/viewer", "pacs/worklist", "pacs/upload"],
+  doctor: ["dictate", "radiology", "reports", "templates", "ehr", "ehr/chart",
            "pacs", "pacs/viewer", "pacs/worklist", "pacs/upload", "settings"],
-  resident: ["dictate", "radiology", "reports", "templates", "ehr",
-             "clinical", "clinical/chart", "transfers", "ems",
+  resident: ["dictate", "radiology", "reports", "templates", "ehr", "ehr/chart",
              "pacs", "pacs/viewer", "pacs/worklist", "education", "settings"],
   student: ["education", "settings"],
   admin: [
-    "dictate", "radiology", "reports", "templates", "ehr", "alerts",
-    "clinical", "clinical/chart", "transfers", "ems", "interop",
+    "dictate", "radiology", "reports", "templates", "ehr", "ehr/chart", "interop",
     "pacs", "pacs/viewer", "pacs/worklist", "pacs/upload", "pacs/nodes",
     "education", "asr", "llm", "vision", "settings",
   ],
 };
+
+export const EHR_TABS = {
+  radiologist: ["patients", "transfers"],
+  doctor: ["patients", "transfers", "ems", "alerts", "intake"],
+  resident: ["patients", "transfers", "ems", "intake"],
+  student: [],
+  admin: ["patients", "transfers", "ems", "alerts", "intake"],
+};
+
+export function ehrTabsForRole(role) {
+  return EHR_TABS[role] || EHR_TABS.doctor;
+}
 
 export const ROLE_LABELS = {
   radiologist: "Radiologist",

@@ -97,11 +97,11 @@ test("reporting workspace", async ({ page, request }) => {
 
 test("legacy EHR, alerts", async ({ page, request }) => {
   await as(page, request, "doctor");
-  await open(page, "/ehr", ".list-row");
+  await open(page, "/ehr?tab=intake", ".list-row");
   await page.locator(".list-row", { hasText: "Maryam Ahmadi" }).getByRole("button").first().click();
   await expect(page.getByText("Azithromycin").first()).toBeVisible();
   await snap(page, "14-ehr");
-  await open(page, "/alerts", ".sidebar");
+  await open(page, "/ehr?tab=alerts", ".sidebar");
   await page.getByRole("button", { name: "Check medications" }).click();
   await expect(page.getByText("Metformin").first()).toBeVisible({ timeout: 20_000 });
   await snap(page, "15-alerts");
@@ -172,7 +172,7 @@ test("pacs worklist, upload, nodes", async ({ page, request }) => {
 // --------------------------------------------------------------------------
 test("patient search and registration", async ({ page, request }) => {
   await as(page, request, "doctor");
-  await page.goto("/clinical");
+  await page.goto("/ehr?tab=patients");
   await page.locator("input[name=q]").fill("Farahani");
   await page.getByRole("button", { name: "Search", exact: true }).click();
   await expect(page.getByTestId("patient-results")).toContainText("Reza Farahani");
@@ -185,7 +185,7 @@ test("patient search and registration", async ({ page, request }) => {
 test("unified chart tabs", async ({ page, request }) => {
   const st = state();
   await as(page, request, "doctor");
-  await page.goto(`/clinical/chart?id=${st.local_person}`);
+  await page.goto(`/ehr/chart?id=${st.local_person}`);
   await expect(page.getByTestId("chart-name")).toHaveText("Reza Farahani");
   await snap(page, "32-chart-summary");
   await page.getByTestId("toggle-remote").check();
@@ -221,17 +221,17 @@ test("unified chart tabs", async ({ page, request }) => {
 
 test("restricted record (break the glass)", async ({ page, request }) => {
   await as(page, request, "doctor");
-  await page.goto(`/clinical/chart?id=${state().vip_person}`);
+  await page.goto(`/ehr/chart?id=${state().vip_person}`);
   await expect(page.getByTestId("restricted")).toContainText("Restricted record");
   await snap(page, "39-chart-restricted");
 });
 
 test("transfers, EMS, interop", async ({ page, request }) => {
   await as(page, request, "doctor");
-  await page.goto("/transfers");
+  await page.goto("/ehr?tab=transfers");
   await expect(page.getByTestId("transfer-requested")).toContainText("E2E Peer Hospital");
   await snap(page, "40-transfers");
-  await page.goto("/ems");
+  await page.goto("/ehr?tab=ems");
   await expect(page.getByTestId("ems-board")).toContainText("MEDIC-21");
   await snap(page, "41-ems");
 });
@@ -272,10 +272,10 @@ test("persian rtl", async ({ page, request }) => {
   await expect(page.locator("html")).toHaveAttribute("dir", "rtl");
   await expect(page.getByTestId("study-table").locator("tbody tr").first()).toBeVisible();
   await snap(page, "60-fa-pacs");
-  await page.goto(`/clinical/chart?id=${st.local_person}`);
+  await page.goto(`/ehr/chart?id=${st.local_person}`);
   await expect(page.locator('[data-tab="summary"]')).toHaveText("خلاصه");
   await snap(page, "61-fa-chart");
-  await page.goto("/ems");
+  await page.goto("/ehr?tab=ems");
   await expect(page.getByTestId("ems-board")).toContainText("MEDIC-21");
   await snap(page, "62-fa-ems");
 });
@@ -287,7 +287,7 @@ test("dark theme", async ({ page, request }) => {
   await expect(page.getByTestId("viewport-0")).toHaveAttribute("data-loaded", "true", { timeout: 60_000 });
   await expect(page.locator("html")).toHaveAttribute("data-theme", "dark");
   await snap(page, "70-dark-viewer");
-  await page.goto(`/clinical/chart?id=${st.local_person}`);
+  await page.goto(`/ehr/chart?id=${st.local_person}`);
   await expect(page.getByTestId("chart-name")).toHaveText("Reza Farahani");
   await snap(page, "71-dark-chart");
 });

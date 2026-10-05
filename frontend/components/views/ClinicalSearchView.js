@@ -35,7 +35,7 @@ export default function ClinicalSearchView() {
       const { mrn, national_id, ...demo } = form;
       const r = await clinicalApi.register({ demographics: demo, mrn: mrn || null, national_id: national_id || null }, token);
       setOpen(false);
-      router.push(`/clinical/chart?id=${r.person_id}`);
+      router.push(`/ehr/chart?id=${r.person_id}`);
     } catch (e2) { setErr(e2.message); }
   }
   const f = (k) => (e) => setForm((x) => ({ ...x, [k]: e.target.value }));
@@ -76,7 +76,7 @@ export default function ClinicalSearchView() {
                     {p.identifiers.slice(0, 3).map((i) => i.value).join(" · ")}
                   </div>
                 </div>
-                <Button variant="ghost" onClick={() => router.push(`/clinical/chart?id=${p.person_id}`)}>{t("cl.open")}</Button>
+                <Button variant="ghost" onClick={() => router.push(`/ehr/chart?id=${p.person_id}`)}>{t("cl.open")}</Button>
               </li>
             ))}
           </ul>

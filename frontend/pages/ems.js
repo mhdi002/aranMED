@@ -1,10 +1,5 @@
-import AppShell from "../components/AppShell";
-import EmsView from "../components/views/EmsView";
+import Redirect from "../components/Redirect";
 
 export default function Page() {
-  return (
-    <AppShell>
-      <EmsView />
-    </AppShell>
-  );
+  return <Redirect to="/ehr?tab=ems" />;
 }

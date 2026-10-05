@@ -50,7 +50,7 @@ export default function EmsView() {
                 <div className="toolbar">
                   {canWrite && (NEXT[n.status] || []).map((st) => (
                     <Button key={st} onClick={() => set(n, st)} data-action={st}>{t(LABEL[st])}</Button>))}
-                  {n.person_id && <Button variant="ghost" onClick={() => router.push(`/clinical/chart?id=${n.person_id}`)}>{t("cl.open")}</Button>}
+                  {n.person_id && <Button variant="ghost" onClick={() => router.push(`/ehr/chart?id=${n.person_id}`)}>{t("cl.open")}</Button>}
                 </div>
               </Card>
             );

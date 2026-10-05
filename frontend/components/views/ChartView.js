@@ -184,6 +184,9 @@ export default function ChartView() {
 
   return (
     <div data-testid="chart">
+      <div className="toolbar" style={{ marginBottom: 12 }}>
+        <Button variant="ghost" onClick={() => router.push("/ehr?tab=patients")} data-testid="back-to-ehr">← {t("nav.ehrHub")}</Button>
+      </div>
       <Card>
         <div className="chart-head">
           <div className="avatar">{(d.given || "?")[0]}{(d.family || "?")[0]}</div>

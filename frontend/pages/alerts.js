@@ -1,10 +1,5 @@
-import AppShell from "../components/AppShell";
-import AlertsView from "../components/views/AlertsView";
+import Redirect from "../components/Redirect";
 
-export default function AlertsPage() {
-  return (
-    <AppShell>
-      <AlertsView />
-    </AppShell>
-  );
+export default function Page() {
+  return <Redirect to="/ehr?tab=alerts" />;
 }
