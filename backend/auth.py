@@ -273,18 +273,30 @@ def record_session(payload: dict, *, client_ip: str | None = None,
         log.warning("auth: could not record session %s: %s", jti, e)
 
 
+# last_seen only needs minute resolution; writing it on every authenticated
+# request added a database write (and, on SQLite, write-lock contention) to
+# every read. Bounded map: an entry is just a timestamp per active session.
+_TOUCH_EVERY_SEC = float(os.environ.get("SESSION_TOUCH_INTERVAL_SEC", "60"))
+_last_touch: dict[str, float] = {}
+
+
 def touch_session(jti: str) -> None:
     """Update last_seen so 'active sessions' reflects real use, not just issue
     time. Best-effort: a failure here must never break a request.
     """
     if not jti:
         return
+    now = time.time()
+    if now - _last_touch.get(jti, 0.0) < _TOUCH_EVERY_SEC:
+        return
+    if len(_last_touch) > 50_000:
+        _last_touch.clear()
+    _last_touch[jti] = now
     try:
         with db.connect() as c:
-            c.execute("UPDATE auth_sessions SET last_seen=? WHERE jti=?",
-                      (time.time(), jti))
-    except Exception:  # noqa: BLE001
-        pass
+            c.execute("UPDATE auth_sessions SET last_seen=? WHERE jti=?", (now, jti))
+    except Exception as e:  # noqa: BLE001
+        log.warning("auth: could not record session activity: %s", e)
 
 
 def list_sessions(user_id: int, *, include_expired: bool = False) -> list[dict]:

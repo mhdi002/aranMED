@@ -19,6 +19,8 @@ huggingface_hub>=0.25.0
 beautifulsoup4==4.12.3
 requests==2.34.2  # CVE-2024-47081 fixed in 2.32.4
 python-dotenv==1.0.1
+# /api/metrics (optional at runtime; enabled by METRICS_TOKEN)
+prometheus-client>=0.20
 PyYAML>=6.0.2
 anyio>=4.4.0
 Pillow>=10.4.0

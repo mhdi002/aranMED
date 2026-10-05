@@ -121,8 +121,10 @@ def require(permission: str):
     Returns the authenticated user dict, so it replaces
     ``Depends(auth.current_user)`` rather than sitting alongside it.
     """
-    async def _dep(request: Request,
-                   user: dict = Depends(auth.current_user)) -> dict:
+    # Sync on purpose: FastAPI runs sync dependencies in its threadpool, so
+    # the token/user lookups and the audit write never block the event loop.
+    def _dep(request: Request,
+             user: dict = Depends(auth.current_user)) -> dict:
         role = (user.get("role") or "").strip().lower()
         if allows(role, permission):
             return user

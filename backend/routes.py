@@ -61,12 +61,12 @@ def self_register_roles() -> list[str]:
 
 
 @router.get("/auth/register-policy")
-async def register_policy() -> dict:
+def register_policy() -> dict:
     return {"self_register_roles": self_register_roles()}
 
 
 @router.post("/auth/register", response_model=TokenOut)
-async def register(request: Request, body: RegisterIn,
+def register(request: Request, body: RegisterIn,
                    caller: Optional[dict] = Depends(auth.current_user_optional)) -> TokenOut:
     if not caller:
         # Anonymous sign-up is rate limited per source address.
@@ -112,7 +112,7 @@ async def register(request: Request, body: RegisterIn,
 
 
 @router.get("/auth/users")
-async def list_users(user: dict = Depends(rbac.require("users.manage"))) -> dict:
+def list_users(user: dict = Depends(rbac.require("users.manage"))) -> dict:
     return {"users": auth.list_users(), "self_register_roles": self_register_roles()}
 
 
@@ -196,7 +196,7 @@ def reset_password(user_id: int, request: Request,
 
 
 @router.post("/auth/login", response_model=TokenOut)
-async def login(request: Request,
+def login(request: Request,
                 form: OAuth2PasswordRequestForm = Depends()) -> TokenOut:
     client_ip = _ip(request) or ""
     key = auth.throttle_key(form.username, client_ip)
@@ -267,7 +267,7 @@ async def login(request: Request,
 
 # --- Session management -----------------------------------------------------
 @router.get("/auth/sessions")
-async def list_sessions(request: Request,
+def list_sessions(request: Request,
                         include_expired: bool = False,
                         user: dict = Depends(auth.current_user)) -> dict:
     """Every session open for the calling user, so a lost device can be found
@@ -280,7 +280,7 @@ async def list_sessions(request: Request,
 
 
 @router.delete("/auth/sessions/{jti}")
-async def revoke_session(jti: str, request: Request,
+def revoke_session(jti: str, request: Request,
                          user: dict = Depends(auth.current_user)) -> dict:
     ok = auth.revoke_session(jti, user_id=user["id"], reason="user_revoked")
     audit.record("auth.sessions.revoke", actor=user, resource=f"session:{jti}",
@@ -291,7 +291,7 @@ async def revoke_session(jti: str, request: Request,
 
 
 @router.post("/auth/sessions/revoke-all")
-async def revoke_all_sessions(request: Request,
+def revoke_all_sessions(request: Request,
                               keep_current: bool = True,
                               token: str = Depends(auth.oauth2_scheme),
                               user: dict = Depends(auth.current_user)) -> dict:
@@ -308,7 +308,7 @@ async def revoke_all_sessions(request: Request,
 
 
 @router.post("/auth/logout")
-async def logout(request: Request,
+def logout(request: Request,
                  token: str = Depends(auth.oauth2_scheme)) -> dict:
     """Revoke the presented token. Without this, a leaked token stays valid
     until it expires and the only remedy is rotating the signing secret,
@@ -338,7 +338,7 @@ class MfaEnrollIn(BaseModel):
 
 
 @router.post("/auth/mfa/enroll")
-async def mfa_enroll(request: Request, body: Optional[MfaEnrollIn] = None,
+def mfa_enroll(request: Request, body: Optional[MfaEnrollIn] = None,
                      user: dict = Depends(auth.current_user)) -> dict:
     """Start enrolment: mint a secret and return it plus an otpauth:// URI.
 
@@ -374,7 +374,7 @@ async def mfa_enroll(request: Request, body: Optional[MfaEnrollIn] = None,
 
 
 @router.post("/auth/mfa/verify")
-async def mfa_verify(request: Request, body: MfaVerifyIn,
+def mfa_verify(request: Request, body: MfaVerifyIn,
                      user: dict = Depends(auth.current_user)) -> dict:
     """Confirm enrolment by proving a valid code, which switches MFA on."""
     secret = auth.get_totp_secret(user["id"])
@@ -399,7 +399,7 @@ async def mfa_verify(request: Request, body: MfaVerifyIn,
 
 
 @router.post("/auth/mfa/recovery-codes")
-async def regenerate_recovery_codes(request: Request, body: MfaVerifyIn,
+def regenerate_recovery_codes(request: Request, body: MfaVerifyIn,
                                     user: dict = Depends(auth.current_user)) -> dict:
     """Issue a fresh set, invalidating the old ones. Requires a current TOTP
     code so a stolen token cannot mint recovery codes for later use.
@@ -416,13 +416,13 @@ async def regenerate_recovery_codes(request: Request, body: MfaVerifyIn,
 
 
 @router.get("/auth/mfa/recovery-codes")
-async def recovery_code_status(user: dict = Depends(auth.current_user)) -> dict:
+def recovery_code_status(user: dict = Depends(auth.current_user)) -> dict:
     """How many codes remain — the codes themselves are never retrievable."""
     return auth.count_recovery_codes(user["id"])
 
 
 @router.post("/auth/mfa/disable")
-async def mfa_disable(request: Request, body: MfaVerifyIn,
+def mfa_disable(request: Request, body: MfaVerifyIn,
                       user: dict = Depends(auth.current_user)) -> dict:
     """Turn MFA off. Requires a current code — otherwise anyone holding a
     stolen token could strip the second factor off the account.
@@ -437,7 +437,7 @@ async def mfa_disable(request: Request, body: MfaVerifyIn,
 
 
 @router.get("/auth/me")
-async def me(user: dict = Depends(auth.current_user)) -> dict:
+def me(user: dict = Depends(auth.current_user)) -> dict:
     return user
 
 
@@ -476,16 +476,16 @@ async def ehr_build(body: BuildEHRIn,
 
 
 @router.get("/ehr")
-async def ehr_list(request: Request,
-                   user: dict = Depends(rbac.require("ehr.read"))) -> dict:
-    records = store.list_patients(owner_user_id=user["id"])
+def ehr_list(request: Request, limit: int = 200, offset: int = 0,
+             user: dict = Depends(rbac.require("ehr.read"))) -> dict:
+    records = store.list_patients(owner_user_id=user["id"], limit=limit, offset=offset)
     audit.record("ehr.list", actor=user, client_ip=_ip(request),
                  detail={"count": len(records)})
     return {"records": records}
 
 
 @router.get("/ehr/{patient_id}")
-async def ehr_get(patient_id: str, request: Request,
+def ehr_get(patient_id: str, request: Request,
                   user: dict = Depends(rbac.require("ehr.read"))) -> dict:
     rec = store.get_patient(patient_id, owner_user_id=user["id"])
     if rec is None:
@@ -501,7 +501,7 @@ async def ehr_get(patient_id: str, request: Request,
 
 
 @router.delete("/ehr/{patient_id}")
-async def ehr_delete(patient_id: str, request: Request,
+def ehr_delete(patient_id: str, request: Request,
                      user: dict = Depends(rbac.require("ehr.delete"))) -> dict:
     ok = store.delete_patient(patient_id, owner_user_id=user["id"])
     if not ok:
@@ -520,7 +520,7 @@ class RecordDoseIn(BaseModel):
 
 
 @router.post("/ehr/{patient_id}/dose")
-async def ehr_record_dose(patient_id: str, body: RecordDoseIn,
+def ehr_record_dose(patient_id: str, body: RecordDoseIn,
                           user: dict = Depends(rbac.require("ehr.write"))) -> dict:
     import time as _time
     rec = store.get_patient(patient_id, owner_user_id=user["id"])
@@ -551,7 +551,7 @@ class CheckIn(BaseModel):
 
 
 @router.post("/alerts/check")
-async def alerts_check(body: CheckIn,
+def alerts_check(body: CheckIn,
                        user: dict = Depends(rbac.require("alerts.read"))) -> dict:
     from tools.alerts import build_alert_text, compute_due_medications
     rec = store.get_patient(body.patient_id, owner_user_id=user["id"])
@@ -573,7 +573,7 @@ class SendAlertIn(BaseModel):
 
 
 @router.post("/alerts/send")
-async def alerts_send(body: SendAlertIn,
+def alerts_send(body: SendAlertIn,
                       user: dict = Depends(rbac.require("alerts.send"))) -> dict:
     from tools.alerts import (build_alert_text, compute_due_medications,
                               send_email, send_sms)
@@ -602,7 +602,7 @@ async def alerts_send(body: SendAlertIn,
 
 
 @router.get("/alerts")
-async def alerts_list(patient_id: Optional[str] = None,
+def alerts_list(patient_id: Optional[str] = None,
                       user: dict = Depends(rbac.require("alerts.read"))) -> dict:
     return {"alerts": store.list_alerts(patient_id=patient_id,
                                         owner_user_id=user["id"])}
@@ -846,7 +846,7 @@ async def ehr_ask(patient_id: str, body: EhrAskIn,
 
 
 @router.get("/rules")
-async def rules_list(user: dict = Depends(rbac.require("knowledge.read"))) -> dict:
+def rules_list(user: dict = Depends(rbac.require("knowledge.read"))) -> dict:
     """Read-only Rule Engine introspection — docs/core/RULE_MODEL_SCHEMA_v1.md.
 
     Lists every rule known to the backend's Rule Engine (safety bank plus
@@ -879,12 +879,12 @@ async def medrag_health(user: dict = Depends(rbac.require("models.read"))) -> di
 
 
 @router.get("/education/saved")
-async def edu_saved(user: dict = Depends(rbac.require("education.read"))) -> dict:
+def edu_saved(user: dict = Depends(rbac.require("education.read"))) -> dict:
     return {"items": store.list_quizzes(owner_user_id=user["id"])}
 
 
 @router.get("/education/saved/{quiz_id}")
-async def edu_saved_get(quiz_id: int,
+def edu_saved_get(quiz_id: int,
                         user: dict = Depends(rbac.require("education.read"))) -> dict:
     q = store.get_quiz(quiz_id, owner_user_id=user["id"])
     if q is None:
@@ -896,7 +896,7 @@ async def edu_saved_get(quiz_id: int,
 # Audit trail (governance)
 # ===========================================================================
 @router.get("/audit")
-async def audit_list(
+def audit_list(
     request: Request,
     limit: int = 100,
     offset: int = 0,
@@ -928,7 +928,7 @@ async def audit_list(
 # FHIR R4 export (interoperability)
 # ===========================================================================
 @router.get("/fhir/Patient/{patient_id}")
-async def fhir_patient(patient_id: str, request: Request,
+def fhir_patient(patient_id: str, request: Request,
                        user: dict = Depends(rbac.require("ehr.read"))) -> dict:
     """The stored record as a FHIR R4 ``Patient`` resource."""
     import fhir
@@ -942,7 +942,7 @@ async def fhir_patient(patient_id: str, request: Request,
 
 
 @router.get("/fhir/Patient/{patient_id}/$everything")
-async def fhir_everything(patient_id: str, request: Request,
+def fhir_everything(patient_id: str, request: Request,
                           user: dict = Depends(rbac.require("ehr.read"))) -> dict:
     """The whole record as a FHIR ``Bundle`` — Patient plus Conditions,
     AllergyIntolerances, MedicationStatements and Observations.
@@ -967,7 +967,7 @@ async def fhir_everything(patient_id: str, request: Request,
 # Imaging & messaging interoperability (DICOM, HL7 v2)
 # ===========================================================================
 @router.post("/dicom/ingest")
-async def dicom_ingest(request: Request,
+def dicom_ingest(request: Request,
                        file: UploadFile = File(...),
                        render: bool = True,
                        user: dict = Depends(rbac.require("report.write"))) -> dict:
@@ -985,7 +985,8 @@ async def dicom_ingest(request: Request,
     if not dicom_ingest.available():
         raise HTTPException(503, "DICOM support unavailable (pydicom not installed)")
 
-    raw = await file.read()
+    import upload_limits
+    raw = upload_limits.read(file, upload_limits.image_limit())
     if not raw:
         raise HTTPException(400, "empty upload")
     try:
@@ -1021,7 +1022,7 @@ class Hl7In(BaseModel):
 
 
 @router.post("/hl7/parse")
-async def hl7_parse(request: Request, body: Hl7In,
+def hl7_parse(request: Request, body: Hl7In,
                     user: dict = Depends(rbac.require("ehr.read"))) -> dict:
     """Parse an inbound HL7 v2 message (ADT/ORM/ORU) into the internal shape."""
     import hl7v2
@@ -1051,7 +1052,7 @@ class Hl7OruIn(BaseModel):
 
 
 @router.post("/hl7/oru")
-async def hl7_oru(request: Request, body: Hl7OruIn,
+def hl7_oru(request: Request, body: Hl7OruIn,
                   user: dict = Depends(rbac.require("report.write"))) -> dict:
     """Build an ORU^R01 carrying a finished report, for the ordering system.
 

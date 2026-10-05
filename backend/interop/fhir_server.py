@@ -215,8 +215,11 @@ def _date_filter(values: list[str], col: str, rows: list[dict]) -> list[dict]:
 
 def search(resource_type: str, params: dict[str, list[str]], p: dict, request: Request) -> dict:
     base = _base(request)
-    count = max(1, min(int((params.get("_count") or ["50"])[0]), 500))
-    offset = max(0, int((params.get("_offset") or ["0"])[0]))
+    try:
+        count = max(1, min(int((params.get("_count") or ["50"])[0]), 500))
+        offset = max(0, int((params.get("_offset") or ["0"])[0]))
+    except ValueError as e:
+        raise FhirError(400, "invalid", "_count and _offset must be integers") from e
     entries: list[dict] = []
     if resource_type == "Patient":
         ident = (params.get("identifier") or [None])[0]

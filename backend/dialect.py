@@ -45,7 +45,9 @@ def translate_placeholders(sql: str) -> str:
     while i < len(sql):
         ch = sql[i]
         if quote:
-            out.append(ch)
+            # psycopg scans the whole statement for %-placeholders, literals
+            # included, so a literal percent must be doubled here too.
+            out.append("%%" if ch == "%" else ch)
             if ch == quote:
                 # Doubled quote is an escape, not a terminator.
                 if i + 1 < len(sql) and sql[i + 1] == quote:
@@ -129,10 +131,18 @@ class _Cursor:
 
 
 class PgConnection:
-    """SQLite-shaped facade over a psycopg connection."""
+    """SQLite-shaped facade over a psycopg connection.
 
-    def __init__(self, conn: Any) -> None:
+    The underlying connection comes from a small idle pool (see
+    :func:`connect`) and goes back to it on :meth:`close` or when the facade
+    is garbage collected -- the codebase opens a connection per unit of work
+    (``with db.connect() as c:``), and a fresh TCP + auth handshake for each of
+    them dominated request latency on Postgres.
+    """
+
+    def __init__(self, conn: Any, dsn: str = "") -> None:
         self._conn = conn
+        self._dsn = dsn
 
     # -- sqlite3.Connection surface ----------------------------------------
     def execute(self, sql: str, params: Iterable = ()) -> _Cursor:
@@ -158,7 +168,15 @@ class PgConnection:
         self._conn.rollback()
 
     def close(self) -> None:
-        self._conn.close()
+        conn, self._conn = self._conn, None
+        if conn is not None:
+            _release(self._dsn, conn)
+
+    def __del__(self) -> None:  # return the connection when the facade goes away
+        try:
+            self.close()
+        except Exception:  # noqa: BLE001
+            pass
 
     # -- context manager ----------------------------------------------------
     # sqlite3 with isolation_level=None is autocommit and `with conn:` is a
@@ -290,9 +308,78 @@ CREATE INDEX IF NOT EXISTS ix_recovery_user ON mfa_recovery_codes(user_id);
 """
 
 
-def connect(dsn: str) -> PgConnection:
+# ---------------------------------------------------------------------------
+# Connection pool
+# ---------------------------------------------------------------------------
+# A plain idle pool rather than psycopg_pool, to keep the dependency set as it
+# is: connections are reused LIFO, checked on the way back in (no open
+# transaction, not broken) and capped by PG_POOL_MAX_IDLE. Opening is bounded
+# by PG_CONNECT_TIMEOUT_SEC; PG_STATEMENT_TIMEOUT_MS (0 = off) bounds any one
+# statement so a runaway query cannot pin a worker.
+import threading as _threading
+
+_pool: dict[str, list[Any]] = {}
+_pool_lock = _threading.Lock()
+
+
+def _pool_max() -> int:
+    import os
+    try:
+        return max(0, int(os.getenv("PG_POOL_MAX_IDLE", "10")))
+    except ValueError:
+        return 10
+
+
+def _release(dsn: str, conn: Any) -> None:
+    try:
+        from psycopg import pq  # noqa: PLC0415
+        if conn.closed or conn.broken:
+            return
+        if conn.info.transaction_status != pq.TransactionStatus.IDLE:
+            conn.rollback()  # never hand a half-finished transaction to the next user
+        with _pool_lock:
+            idle = _pool.setdefault(dsn, [])
+            if len(idle) < _pool_max():
+                idle.append(conn)
+                return
+    except Exception:  # noqa: BLE001
+        pass
+    try:
+        conn.close()
+    except Exception:  # noqa: BLE001
+        pass
+
+
+def _open(dsn: str) -> Any:
+    import os
     import psycopg  # noqa: PLC0415
     from psycopg.rows import dict_row  # noqa: PLC0415
 
-    conn = psycopg.connect(dsn, autocommit=True, row_factory=dict_row)
-    return PgConnection(conn)
+    kwargs: dict[str, Any] = {"autocommit": True, "row_factory": dict_row,
+                              "connect_timeout": int(os.getenv("PG_CONNECT_TIMEOUT_SEC", "10"))}
+    stmt_ms = int(os.getenv("PG_STATEMENT_TIMEOUT_MS", "0") or 0)
+    if stmt_ms > 0:
+        kwargs["options"] = f"-c statement_timeout={stmt_ms}"
+    return psycopg.connect(dsn, **kwargs)
+
+
+def connect(dsn: str) -> PgConnection:
+    while True:
+        with _pool_lock:
+            conn = (_pool.get(dsn) or [None]).pop() if _pool.get(dsn) else None
+        if conn is None:
+            return PgConnection(_open(dsn), dsn)
+        if not (conn.closed or conn.broken):
+            return PgConnection(conn, dsn)
+
+
+def close_pool() -> None:
+    """Close every idle connection (tests, shutdown, DSN switches)."""
+    with _pool_lock:
+        conns = [c for idle in _pool.values() for c in idle]
+        _pool.clear()
+    for c in conns:
+        try:
+            c.close()
+        except Exception:  # noqa: BLE001
+            pass

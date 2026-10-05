@@ -106,12 +106,15 @@ def get_patient(patient_id: str, *, owner_user_id: int | None = None) -> dict | 
     return rec
 
 
-def list_patients(*, owner_user_id: int) -> list[dict]:
+def list_patients(*, owner_user_id: int, limit: int = 500, offset: int = 0) -> list[dict]:
+    """Newest first, paged: every row is decrypted, so an unbounded list grew
+    linearly in time and memory with the owner's history."""
+    limit = max(1, min(int(limit), 1000))
     with db.connect() as c:
         rows = c.execute(
             "SELECT id, owner_user_id, name, language, updated_at, data "
-            "FROM patients WHERE owner_user_id=? ORDER BY updated_at DESC",
-            (owner_user_id,),
+            "FROM patients WHERE owner_user_id=? ORDER BY updated_at DESC LIMIT ? OFFSET ?",
+            (owner_user_id, limit, max(0, int(offset))),
         ).fetchall()
     out = []
     for r in rows:

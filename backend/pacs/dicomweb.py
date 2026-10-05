@@ -405,7 +405,8 @@ def make_router() -> APIRouter:
     # ------------------------------------------------------------------ STOW
     async def _stow(request: Request, p: dict, study: Optional[str]) -> Response:
         from starlette.concurrency import run_in_threadpool
-        body = await request.body()
+        import upload_limits
+        body = await upload_limits.abody(request, config.max_upload_mb() * 1024 * 1024)
         return await run_in_threadpool(_stow_sync, request, p, study, body)
 
     def _stow_sync(request: Request, p: dict, study: Optional[str], body: bytes) -> Response:

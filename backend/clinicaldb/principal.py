@@ -196,7 +196,9 @@ def allows(principal: dict, permission: str) -> bool:
 
 def require(permission: str):
     """Dependency: a user *or* peer principal holding *permission*."""
-    async def _dep(request: Request) -> dict:
+    # Sync on purpose: resolving the principal reads the database, and FastAPI
+    # runs sync dependencies in its threadpool instead of on the event loop.
+    def _dep(request: Request) -> dict:
         p = resolve_principal(request)
         if allows(p, permission):
             return p
@@ -217,8 +219,8 @@ def require_user(permission: str):
     """
     inner = require(permission)
 
-    async def _dep(request: Request) -> dict:
-        p = await inner(request)
+    def _dep(request: Request) -> dict:
+        p = inner(request)
         if p.get("kind") != "user":
             audit.record("rbac.deny", actor_name=p.get("username"), actor_id=p.get("id"),
                          resource=permission, outcome="deny",

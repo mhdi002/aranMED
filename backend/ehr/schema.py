@@ -226,4 +226,8 @@ CREATE INDEX IF NOT EXISTS ix_ems_status ON ems_notifications(status, updated_at
 """,
 ])
 
-migrate.register(MODULE, [(1, V1)])
+# v2: peers address transfers by their own id (stored as remote_id); without
+# an index every inbound status update scanned the table.
+V2 = "CREATE INDEX IF NOT EXISTS ix_transfers_remote ON ehr_transfers(remote_id)"
+
+migrate.register(MODULE, [(1, V1), (2, V2)])

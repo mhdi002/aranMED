@@ -13,7 +13,6 @@ from typing import Any, Optional
 
 from fastapi import APIRouter, Depends, File, HTTPException, Request, UploadFile
 from pydantic import BaseModel, Field
-from starlette.concurrency import run_in_threadpool
 
 import audit
 from clinicaldb import principal as pr
@@ -183,14 +182,15 @@ def verify_study(study_uid: str, p: dict = READ) -> dict:
 
 
 @router.post("/upload")
-async def upload(request: Request, files: list[UploadFile] = File(...), p: dict = WRITE) -> dict:
+def upload(request: Request, files: list[UploadFile] = File(...), p: dict = WRITE) -> dict:
     """Browser upload: individual DICOM files and/or .zip archives of them."""
     blobs: list[tuple[str, bytes]] = []
     skipped: list[str] = []
     limit = config.max_upload_mb() * 1024 * 1024
     total = 0
+    import upload_limits
     for f in files:
-        data = await f.read()
+        data = upload_limits.read(f, max(1, limit - total))
         total += len(data)
         if total > limit:
             raise HTTPException(413, "upload too large")
@@ -229,7 +229,7 @@ async def upload(request: Request, files: list[UploadFile] = File(...), p: dict 
         return {"stored": stored, "duplicates": dup, "failed": failed, "skipped": skipped,
                 "studies": [index.get_study(u) for u in studies]}
 
-    res = await run_in_threadpool(work)
+    res = work()  # sync route: already off the event loop
     _audit(p, "pacs.upload", "studies", request, stored=res["stored"],
            failed=len(res["failed"]))
     return res

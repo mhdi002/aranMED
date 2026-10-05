@@ -77,8 +77,9 @@ def mount(app: FastAPI) -> None:
                 log.exception("clinical shutdown step failed")
         _started.clear()
 
-    app.router.on_startup.append(_startup)
-    app.router.on_shutdown.append(_shutdown)
+    # Run by the application's lifespan handler (app.py), before its own startup.
+    app.state.startup_hooks.append(_startup)
+    app.state.shutdown_hooks.append(_shutdown)
 
 
 def start_listeners() -> list:

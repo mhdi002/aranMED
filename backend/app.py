@@ -21,6 +21,7 @@ The HTTP surface has two layers:
 from __future__ import annotations
 
 import asyncio
+import contextlib
 import logging
 import os
 import time
@@ -36,6 +37,7 @@ import audit
 import auth
 import db
 import templates as templates_mod
+import upload_limits
 from agent import Agent
 from config import HOST, PORT
 from memory import MemoryStore
@@ -45,17 +47,50 @@ from registry import Registry
 # ---------------------------------------------------------------------------
 # Logging – enable debug for llama.cpp to see vision model loading issues
 # ---------------------------------------------------------------------------
+import observability  # noqa: E402
+
 _LOG_LEVEL = os.getenv("LOG_LEVEL", "INFO").upper()
 if os.getenv("LLAMACPP_DEBUG", "").strip().lower() in ("1", "true", "yes"):
     logging.getLogger("provider.llamacpp").setLevel(logging.DEBUG)
     logging.getLogger("llama_cpp").setLevel(logging.DEBUG)
-logging.basicConfig(
-    level=getattr(logging, _LOG_LEVEL, logging.INFO),
-    format="%(asctime)s [%(levelname)s] %(name)s: %(message)s",
-)
+observability.configure_logging(_LOG_LEVEL)
 log = logging.getLogger("api")
 
-app = FastAPI(title="aranmed — Bilingual Radiology Reporter", version="2.0.0")
+
+def _env_flag_docs() -> bool:
+    """Interactive API docs (/api/docs): on unless DOCS_ENABLED=false, which a
+    production deployment sets so the full API surface is not advertised."""
+    return os.getenv("DOCS_ENABLED", "true").strip().lower() in ("1", "true", "yes", "on")
+
+@contextlib.asynccontextmanager
+async def _lifespan(app: FastAPI):
+    """Start-up and shut-down, in place of the deprecated on_event hooks.
+
+    Feature packages (clinical_app) add hooks to ``app.state``; they run
+    first, then the core start-up, and shut down in reverse order.
+    """
+    for hook in app.state.startup_hooks:
+        await hook()
+    await _startup()
+    try:
+        yield
+    finally:
+        await _shutdown()
+        for hook in reversed(app.state.shutdown_hooks):
+            try:
+                await hook()
+            except Exception:  # noqa: BLE001
+                log.exception("shutdown hook failed")
+
+
+app = FastAPI(title="AranMed API", version="2.0.0", lifespan=_lifespan,
+              description="Radiology AI, PACS, EHR and inter-hospital exchange.",
+              docs_url="/api/docs" if _env_flag_docs() else None,
+              redoc_url=None,
+              openapi_url="/api/openapi.json" if _env_flag_docs() else None)
+app.state.startup_hooks = []
+app.state.shutdown_hooks = []
+observability.install(app)
 
 # The browser reaches the API same-origin through the frontend server, so
 # no cross-origin access is needed by default. CORS_ALLOW_ORIGINS (comma
@@ -93,10 +128,14 @@ async def _security_headers(request, call_next):
     response.headers.setdefault("X-Content-Type-Options", "nosniff")
     response.headers.setdefault("X-Frame-Options", "DENY")
     response.headers.setdefault("Referrer-Policy", "no-referrer")
-    response.headers.setdefault(
-        "Content-Security-Policy",
-        "default-src 'none'; frame-ancestors 'none'; base-uri 'none'",
-    )
+    if request.url.path == "/api/docs":
+        # Swagger UI loads its script and styles from the jsDelivr CDN.
+        csp = ("default-src 'none'; script-src 'unsafe-inline' https://cdn.jsdelivr.net; "
+               "style-src https://cdn.jsdelivr.net; img-src 'self' data: https://fastapi.tiangolo.com; "
+               "connect-src 'self'; frame-ancestors 'none'; base-uri 'none'")
+    else:
+        csp = "default-src 'none'; frame-ancestors 'none'; base-uri 'none'"
+    response.headers.setdefault("Content-Security-Policy", csp)
     return response
 
 
@@ -109,8 +148,8 @@ async def global_exception_handler(request, exc):
     # nothing else. Echoing str(exc)/type back leaked internals (file paths,
     # driver errors, occasionally query fragments) to anyone who could trigger
     # a 500.
-    error_id = uuid.uuid4().hex[:12]
-    log.exception("Unhandled exception [%s] in %s", error_id, request.url)
+    error_id = observability.error_id()
+    log.exception("Unhandled exception [%s] in %s", error_id, request.url.path)
     return JSONResponse(
         status_code=500,
         content={"detail": "internal server error", "error_id": error_id},
@@ -256,7 +295,6 @@ async def _purge_stale_sessions_loop() -> None:
             log.exception("maintenance loop iteration failed; continuing")
 
 
-@app.on_event("startup")
 async def _startup() -> None:
     templates_mod.initialise()
     # Seed default admin (admin/admin) on first start.
@@ -281,7 +319,6 @@ async def _startup() -> None:
     )
 
 
-@app.on_event("shutdown")
 async def _shutdown() -> None:
     if _purge_task is not None:
         _purge_task.cancel()
@@ -463,7 +500,7 @@ async def transcribe(
     model: Optional[str] = Form(None),
     user: Optional[dict] = Depends(ai_user),
 ) -> TranscribeOut:
-    raw = await file.read()
+    raw = await upload_limits.aread(file, upload_limits.audio_limit())
     if not raw:
         raise HTTPException(400, "empty upload")
     try:
@@ -475,7 +512,7 @@ async def transcribe(
         language_timeline = getattr(asr, "last_timeline", None) or None
         log.debug("Transcription finished: %d characters", len(text))
     except Exception as e:  # noqa: BLE001
-        error_id = uuid.uuid4().hex[:12]
+        error_id = observability.error_id()
         log.exception("ASR failed [%s]", error_id)
         raise HTTPException(502, f"speech recognition failed (error id {error_id})") from e
     treport = getattr(asr, "last_translation_report", None) or {}
@@ -595,7 +632,7 @@ async def dictate(
     model: Optional[str] = Form(None),
     user: Optional[dict] = Depends(ai_user),
 ) -> ReportOut:
-    raw = await file.read()
+    raw = await upload_limits.aread(file, upload_limits.audio_limit())
     if not raw:
         raise HTTPException(400, "empty upload")
     asr = await registry.get_asr()
@@ -604,7 +641,7 @@ async def dictate(
             raw, language=language, filename_hint=file.filename or ""
         )
     except Exception as e:  # noqa: BLE001
-        error_id = uuid.uuid4().hex[:12]
+        error_id = observability.error_id()
         log.exception("ASR failed [%s]", error_id)
         raise HTTPException(502, f"speech recognition failed (error id {error_id})") from e
     out = await report(
@@ -640,9 +677,9 @@ async def chat(
     sid = session_id or uuid.uuid4().hex
     attachments: dict[str, bytes] = {}
     for i, f in enumerate(audio or []):
-        attachments[f"audio:{i}"] = await f.read()
+        attachments[f"audio:{i}"] = await upload_limits.aread(f, upload_limits.audio_limit())
     for i, f in enumerate(images or []):
-        attachments[f"image:{i}"] = await f.read()
+        attachments[f"image:{i}"] = await upload_limits.aread(f, upload_limits.image_limit())
 
     if not text and not attachments:
         raise HTTPException(400, "either text or audio/image attachments required")
@@ -736,7 +773,7 @@ async def chat(
         try:
             resp = await vision.chat([msg])
         except Exception as e:
-            error_id = uuid.uuid4().hex[:12]
+            error_id = observability.error_id()
             log.exception("Vision chat failed [%s]", error_id)
             raise HTTPException(502, f"vision model failed (error id {error_id})") from e
         from clinical_safety import enrich_text_payload
@@ -802,7 +839,7 @@ async def vision_endpoint(
 
     log.info("Vision request: model=%s", model)
 
-    img_bytes = await image.read()
+    img_bytes = await upload_limits.aread(image, upload_limits.image_limit())
     if not img_bytes:
         raise HTTPException(400, "Uploaded image is empty")
 
@@ -812,7 +849,7 @@ async def vision_endpoint(
     try:
         resp = await vision.chat([msg])
     except Exception as e:
-        error_id = uuid.uuid4().hex[:12]
+        error_id = observability.error_id()
         log.exception("Vision inference failed [%s]", error_id)
         raise HTTPException(502, f"vision model failed (error id {error_id})") from e
 
