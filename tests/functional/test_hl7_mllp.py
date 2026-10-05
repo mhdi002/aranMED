@@ -79,6 +79,7 @@ def test_adt_orders_results_documents_queries(mllp_server, client, users):
     wl = client.get("/api/pacs/worklist", headers=doc).json()["items"]
     item = next(w for w in wl if w["order_id"] == sr["id"])
     assert item["modality"] == "CT" and item["person_id"] == pid
+    assert item["scheduled_start"] == "20261002090000"   # DICOM form, so MWL date queries match
     # ORC CA cancels the order and its worklist entry.
     send(mllp_server, msg("ORM^O01", "C7", "PID|1||H-9001^^^&2.25.1001&ISO^MR||X^Y",
                           "ORC|CA|PL-55|FL-55", "OBR|1|PL-55|FL-55|CTH^CT Head"))

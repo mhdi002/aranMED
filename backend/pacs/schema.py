@@ -193,4 +193,21 @@ def _v2(conn) -> None:
     migrate.add_column(conn, "pacs_nodes", "federate", "INTEGER NOT NULL DEFAULT 0")
 
 
-migrate.register(MODULE, [(1, V1), (2, _v2)])
+def _v3(conn) -> None:
+    # Per-node DICOM TLS / mTLS (certificate paths come from env vars, never
+    # the DB), preferred retrieve method and character set for older devices.
+    for col, decl in (("tls", "INTEGER NOT NULL DEFAULT 0"), ("tls_ca_env", "TEXT"),
+                      ("tls_cert_env", "TEXT"), ("tls_key_env", "TEXT"),
+                      ("prefer_cget", "INTEGER NOT NULL DEFAULT 0"), ("charset", "TEXT")):
+        migrate.add_column(conn, "pacs_nodes", col, decl)
+    # Scheduled times are stored in DICOM form (YYYYMMDDHHMMSS) so MWL date
+    # matching works for entries created from HL7/FHIR orders (ISO format).
+    from pacs.worklist import dicom_dt
+    for r in conn.execute("SELECT id, scheduled_start FROM pacs_worklist "
+                          "WHERE scheduled_start IS NOT NULL").fetchall():
+        fixed = dicom_dt(r["scheduled_start"])
+        if fixed != r["scheduled_start"]:
+            conn.execute("UPDATE pacs_worklist SET scheduled_start=? WHERE id=?", (fixed, r["id"]))
+
+
+migrate.register(MODULE, [(1, V1), (2, _v2), (3, _v3)])

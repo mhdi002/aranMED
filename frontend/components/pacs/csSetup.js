@@ -1,19 +1,27 @@
 // Cornerstone3D bootstrap for the AranMed viewer (browser only).
 //
 // We register our own image loader ("aranmed:") instead of the stock DICOM
-// image loader: our DICOMweb server already parses the files, so the viewer
-// only needs (1) WADO-RS metadata, which feeds a metadata provider, and
-// (2) WADO-RS frames, which arrive as native pixels for uncompressed
-// transfer syntaxes. That keeps WASM codecs and web workers out of the
-// Next.js build. Frames in compressed transfer syntaxes fall back to the
-// server-rendered /rendered image (8-bit, windowed server-side).
+// image loader: our DICOMweb server already parses and decodes the files, so
+// the viewer only needs (1) WADO-RS metadata, which feeds a metadata
+// provider, and (2) frames from /frames/N?normalize=1. Those arrive decoded
+// from any transfer syntax: JPEG baseline/extended/lossless, JPEG-LS, JPEG
+// 2000, HTJ2K, RLE, Big Endian and Deflate. Palette colour and YBR come as
+// RGB, 1-bit as 8-bit. Each frame carries its own rescale/window, so Enhanced
+// multi-frame is exact. That keeps WASM codecs and web workers out of the
+// Next.js build while every device's images show true modality values.
+// If a frame cannot be decoded, the server-rendered PNG is the fallback.
 import * as cs from "@cornerstonejs/core";
 import * as cst from "@cornerstonejs/tools";
 import { apiUrl } from "../../lib/config";
 import { DICOMWEB, tagValue } from "../../lib/pacs";
 
-const NATIVE_TS = new Set([
-  "1.2.840.10008.1.2", "1.2.840.10008.1.2.1", "1.2.840.10008.1.2.2", "1.2.840.10008.1.2.1.99",
+export const VIDEO_TS = new Set([
+  "1.2.840.10008.1.2.4.100", "1.2.840.10008.1.2.4.100.1", "1.2.840.10008.1.2.4.101",
+  "1.2.840.10008.1.2.4.101.1", "1.2.840.10008.1.2.4.102", "1.2.840.10008.1.2.4.102.1",
+  "1.2.840.10008.1.2.4.103", "1.2.840.10008.1.2.4.103.1", "1.2.840.10008.1.2.4.104",
+  "1.2.840.10008.1.2.4.104.1", "1.2.840.10008.1.2.4.105", "1.2.840.10008.1.2.4.105.1",
+  "1.2.840.10008.1.2.4.106", "1.2.840.10008.1.2.4.106.1", "1.2.840.10008.1.2.4.107",
+  "1.2.840.10008.1.2.4.108",
 ]);
 
 const meta = new Map();   // imageId -> parsed metadata
@@ -42,15 +50,21 @@ export function registerInstance(studyUid, seriesUid, m) {
   const ps = arr(tagValue(m, "00280030")) || [1, 1];
   const iop = arr(tagValue(m, "00200037"));
   const ipp = arr(tagValue(m, "00200032"));
+  const photometric = tagValue(m, "00280004") || "MONOCHROME2";
+  const spp = num(tagValue(m, "00280002"), 1);
+  // Palette colour and YBR are delivered as RGB by the server; 1-bit as 8-bit.
+  const rgb = spp > 1 || photometric === "PALETTE COLOR";
+  const bits = num(tagValue(m, "00280100"), 16);
   const info = {
     studyUid, seriesUid, sop, frames, rows, cols,
     transferSyntax: tagValue(m, "00020010") || "1.2.840.10008.1.2.1",
-    bitsAllocated: num(tagValue(m, "00280100"), 16),
-    bitsStored: num(tagValue(m, "00280101"), 16),
-    highBit: num(tagValue(m, "00280102"), 15),
+    bitsAllocated: rgb || bits === 1 ? 8 : bits,
+    bitsStored: rgb || bits === 1 ? 8 : num(tagValue(m, "00280101"), 16),
+    highBit: rgb || bits === 1 ? 7 : num(tagValue(m, "00280102"), 15),
     pixelRepresentation: num(tagValue(m, "00280103"), 0),
-    samplesPerPixel: num(tagValue(m, "00280002"), 1),
-    photometric: tagValue(m, "00280004") || "MONOCHROME2",
+    samplesPerPixel: rgb ? 3 : 1,
+    photometric: rgb ? "RGB" : photometric,
+    video: VIDEO_TS.has(tagValue(m, "00020010") || ""),
     slope: num(tagValue(m, "00281053"), 1),
     intercept: num(tagValue(m, "00281052"), 0),
     wc: arr(tagValue(m, "00281050")),
@@ -112,41 +126,24 @@ function metadataProvider(type, imageId) {
   }
 }
 
-function firstPart(buf, contentType) {
-  const mm = /boundary="?([^";,]+)"?/i.exec(contentType || "");
-  const bytes = new Uint8Array(buf);
-  if (!mm) return bytes;
-  // Find the header/body separator after the first boundary, then the next boundary.
-  const sep = [13, 10, 13, 10];
-  let start = -1;
-  for (let i = 0; i < Math.min(bytes.length, 8192); i += 1) {
-    if (bytes[i] === sep[0] && bytes[i + 1] === sep[1] && bytes[i + 2] === sep[2] && bytes[i + 3] === sep[3]) {
-      start = i + 4; break;
-    }
-  }
-  const header = new TextDecoder().decode(bytes.subarray(0, Math.max(0, start)));
-  const len = /content-length:\s*(\d+)/i.exec(header);
-  if (start >= 0 && len) return bytes.subarray(start, start + parseInt(len[1], 10));
-  const tail = new TextEncoder().encode(`\r\n--${mm[1]}`);
-  for (let i = bytes.length - tail.length; i > start; i -= 1) {
-    let ok = true;
-    for (let j = 0; j < tail.length; j += 1) if (bytes[i + j] !== tail[j]) { ok = false; break; }
-    if (ok) return bytes.subarray(start, i);
-  }
-  return bytes.subarray(start);
-}
+const ARRAYS = { u8: Uint8Array, i8: Int8Array, u16: Uint16Array, i16: Int16Array,
+                 u32: Uint32Array, i32: Int32Array, f32: Float32Array };
 
-async function fetchNative(m) {
-  const url = apiUrl(`${DICOMWEB}/studies/${m.studyUid}/series/${m.seriesUid}/instances/${m.sop}/frames/${m.frame}`);
-  const r = await fetch(url, {
-    headers: { Authorization: `Bearer ${token}`,
-               Accept: 'multipart/related; type="application/octet-stream"' },
-  });
+/** One decoded frame from /frames/N?normalize=1 with its per-frame parameters. */
+async function fetchDisplay(m) {
+  const url = apiUrl(`${DICOMWEB}/studies/${m.studyUid}/series/${m.seriesUid}/instances/${m.sop}/frames/${m.frame}?normalize=1`);
+  const r = await fetch(url, { headers: { Authorization: `Bearer ${token}` } });
   if (!r.ok) throw new Error(`frame HTTP ${r.status}`);
-  const part = firstPart(await r.arrayBuffer(), r.headers.get("content-type"));
-  const copy = part.slice().buffer;
-  if (m.samplesPerPixel > 1 || m.bitsAllocated === 8) return { data: new Uint8Array(copy), color: m.samplesPerPixel > 1 };
-  return { data: m.pixelRepresentation === 1 ? new Int16Array(copy) : new Uint16Array(copy), color: false };
+  const h = (k) => r.headers.get(k);
+  const Arr = ARRAYS[h("X-Pixel-Format")] || Uint16Array;
+  const data = new Arr(await r.arrayBuffer());
+  const f = (k) => (h(k) !== null && h(k) !== "" ? parseFloat(h(k)) : undefined);
+  return {
+    data, color: h("X-Samples-Per-Pixel") === "3",
+    width: parseInt(h("X-Columns"), 10) || m.cols, height: parseInt(h("X-Rows"), 10) || m.rows,
+    slope: f("X-Rescale-Slope") ?? m.slope, intercept: f("X-Rescale-Intercept") ?? m.intercept,
+    wc: f("X-Window-Center"), ww: f("X-Window-Width"), photometric: h("X-Photometric") || m.photometric,
+  };
 }
 
 async function fetchRendered(m) {
@@ -168,8 +165,12 @@ function loadImage(imageId) {
   const promise = (async () => {
     const m = meta.get(imageId);
     if (!m) throw new Error(`no metadata for ${imageId}`);
-    const native = NATIVE_TS.has(m.transferSyntax);
-    const px = native ? await fetchNative(m) : await fetchRendered(m);
+    let px;
+    try {
+      px = await fetchDisplay(m);
+    } catch (e) {
+      px = await fetchRendered(m);   // undecodable on the server: show its best PNG
+    }
     const width = px.width || m.cols;
     const height = px.height || m.rows;
     let scalar;
@@ -182,7 +183,8 @@ function loadImage(imageId) {
     } else {
       // Pre-apply the modality LUT so values are in modality units (HU for CT):
       // windowing presets, probes and ROI statistics then read true values.
-      slope = m.slope; intercept = m.intercept;
+      // Enhanced multi-frame objects have a slope/intercept per frame.
+      slope = px.slope ?? m.slope; intercept = px.intercept ?? m.intercept;
       scalar = new Float32Array(px.data.length);
       for (let i = 0; i < px.data.length; i += 1) scalar[i] = px.data[i] * slope + intercept;
     }
@@ -193,8 +195,8 @@ function loadImage(imageId) {
       if (v < min) min = v;
       if (v > max) max = v;
     }
-    const wc = px.rendered ? 127.5 : (m.wc ? m.wc[0] : (min + max) / 2);
-    const ww = px.rendered ? 255 : (m.ww ? m.ww[0] : Math.max(1, max - min));
+    const wc = px.rendered || px.color ? 127.5 : (px.wc ?? (m.wc ? m.wc[0] : (min + max) / 2));
+    const ww = px.rendered || px.color ? 255 : (px.ww ?? (m.ww ? m.ww[0] : Math.max(1, max - min)));
     const numberOfComponents = px.color ? 3 : 1;
     const voxelManager = cs.utilities.VoxelManager.createImageVoxelManager({
       width, height, scalarData: scalar, numberOfComponents,
@@ -206,7 +208,8 @@ function loadImage(imageId) {
       rows: height, columns: width, height, width,
       color: px.color, rgba: false, numberOfComponents,
       columnPixelSpacing: m.colSpacing, rowPixelSpacing: m.rowSpacing,
-      invert: m.photometric === "MONOCHROME1", photometricInterpretation: px.color ? "RGB" : m.photometric,
+      invert: (px.photometric || m.photometric) === "MONOCHROME1",
+      photometricInterpretation: px.color ? "RGB" : (px.photometric || m.photometric),
       sizeInBytes: scalar.byteLength, dataType: scalar.constructor.name,
       isPreScaled: !px.color && !px.rendered,
       preScale: { enabled: true, scaled: !px.color && !px.rendered,

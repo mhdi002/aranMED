@@ -30,11 +30,23 @@ def _ae():
 
 
 def _assoc(ae, node: dict, **kw):
+    from pacs import nodes
+    ctx = nodes.tls_context(node)
+    if ctx is not None:
+        kw.setdefault("tls_args", (ctx, None))
     assoc = ae.associate(node["host"], int(node["port"]), ae_title=node["ae_title"], **kw)
     if not assoc.is_established:
         raise ScuError(f"association with {node['ae_title']}@{node['host']}:{node['port']} "
                        "was rejected or failed")
     return assoc
+
+
+def _charset(node: dict, values: Iterable[Any]) -> Optional[str]:
+    """SpecificCharacterSet for a query: the node's configured one, else
+    UTF-8 whenever a filter value is not plain ASCII (Persian names)."""
+    if node.get("charset"):
+        return node["charset"]
+    return "ISO_IR 192" if any(isinstance(v, str) and not v.isascii() for v in values) else None
 
 
 def echo(node: dict) -> bool:
@@ -62,6 +74,9 @@ def find(node: dict, level: str, filters: dict[str, Any],
     ae = _ae()
     ae.add_requested_context(sop)
     ds = Dataset()
+    cs = _charset(node, (filters or {}).values())
+    if cs:
+        ds.SpecificCharacterSet = cs
     ds.QueryRetrieveLevel = level.upper()
     for k in return_keys or []:
         setattr(ds, k, "")
@@ -90,12 +105,16 @@ def find(node: dict, level: str, filters: dict[str, Any],
 
 
 def mwl_find(node: dict, *, modality: Optional[str] = None,
-             station_ae: Optional[str] = None, date: Optional[str] = None) -> list[Dataset]:
+             station_ae: Optional[str] = None, date: Optional[str] = None,
+             patient_name: Optional[str] = None) -> list[Dataset]:
     from pynetdicom.sop_class import ModalityWorklistInformationFind
     ae = _ae()
     ae.add_requested_context(ModalityWorklistInformationFind)
     ds = Dataset()
-    ds.PatientName = ""
+    cs = _charset(node, [patient_name])
+    if cs:
+        ds.SpecificCharacterSet = cs
+    ds.PatientName = patient_name or ""
     ds.PatientID = ""
     ds.AccessionNumber = ""
     ds.StudyInstanceUID = ""
@@ -150,19 +169,38 @@ def move(node: dict, *, study_uid: str, series_uid: Optional[str] = None,
     return result
 
 
+def _study_sop_classes(node: dict, study_uid: str, series_uid: Optional[str]) -> list[str]:
+    """SOP classes present in the study, asked with an IMAGE-level C-FIND, so
+    C-GET can offer exactly those (any of the ~170 storage classes, or a
+    vendor-private one) instead of a fixed subset."""
+    filters = {"StudyInstanceUID": study_uid}
+    if series_uid:
+        filters["SeriesInstanceUID"] = series_uid
+    try:
+        rows = find(node, "IMAGE", filters, ["SOPClassUID", "SeriesInstanceUID", "SOPInstanceUID"])
+    except ScuError:
+        return []
+    return list(dict.fromkeys(r["SOPClassUID"] for r in rows if r.get("SOPClassUID")))
+
+
 def get(node: dict, *, study_uid: str, series_uid: Optional[str] = None,
         sop_classes: Optional[list[str]] = None) -> dict:
-    """C-GET a study from *node*; received objects are ingested locally."""
-    from pynetdicom import StoragePresentationContexts, build_role, evt
+    """C-GET a study from *node*; received objects are ingested locally.
+
+    Every storage context offers all transfer syntaxes (compressed ones
+    included), so the sender never has to transcode or drop an object."""
+    from pynetdicom import ALL_TRANSFER_SYNTAXES, StoragePresentationContexts, build_role, evt
     from pynetdicom.sop_class import StudyRootQueryRetrieveInformationModelGet
     ae = _ae()
     ae.add_requested_context(StudyRootQueryRetrieveInformationModelGet)
-    classes = sop_classes or [cx.abstract_syntax for cx in StoragePresentationContexts][:120]
+    classes = sop_classes or _study_sop_classes(node, study_uid, series_uid) or \
+        [cx.abstract_syntax for cx in StoragePresentationContexts]
     roles = []
-    for uid in classes:
-        ae.add_requested_context(uid)
+    for uid in classes[:127]:  # 128 presentation contexts per association
+        ae.add_requested_context(uid, ALL_TRANSFER_SYNTAXES)
         roles.append(build_role(uid, scp_role=True))
     stored: list[str] = []
+    failed: list[str] = []
 
     def on_store(event):
         ds = event.dataset
@@ -175,6 +213,7 @@ def get(node: dict, *, study_uid: str, series_uid: Optional[str] = None,
             return 0x0000
         except Exception:  # noqa: BLE001
             log.exception("C-GET store failed")
+            failed.append(str(getattr(ds, "SOPInstanceUID", "")))
             return 0xA700
 
     ds = Dataset()
@@ -190,42 +229,70 @@ def get(node: dict, *, study_uid: str, series_uid: Optional[str] = None,
                 final = status
     finally:
         assoc.release()
-    return {"status": int(final.Status) if final else None, "stored": len(stored)}
+    messages.log(direction="out", protocol="dicom", message_type="C-GET",
+                 peer=node.get("ae_title"), status="ok" if not failed else "partial",
+                 payload=f"study {study_uid}: stored={len(stored)} failed={len(failed)}")
+    return {"status": int(final.Status) if final else None, "stored": len(stored),
+            "failed": len(failed)}
 
 
 def store(node: dict, datasets_or_bytes: Iterable) -> dict:
-    """C-STORE objects (Part 10 bytes or Datasets) to *node*."""
+    """C-STORE objects (Part 10 bytes or Datasets) to *node*.
+
+    Objects are sent over as many associations as their SOP classes need
+    (128 presentation contexts each). An object whose compressed transfer
+    syntax the receiver did not accept is decompressed to Explicit VR
+    Little Endian rather than dropped."""
     import io
 
     import pydicom
     from pydicom.uid import ExplicitVRLittleEndian, ImplicitVRLittleEndian
+    from pacs.dimse import _accepted_map, _fit
     items = []
     for x in datasets_or_bytes:
         items.append(pydicom.dcmread(io.BytesIO(x), force=True) if isinstance(x, (bytes, bytearray))
                      else x)
-    ae = _ae()
-    seen = set()
-    for ds in items:
-        ts = str(ds.file_meta.TransferSyntaxUID) if getattr(ds, "file_meta", None) else ExplicitVRLittleEndian
-        key = (str(ds.SOPClassUID), ts)
-        if key not in seen and len(seen) < 120:
-            seen.add(key)
-            ae.add_requested_context(str(ds.SOPClassUID),
-                                     list(dict.fromkeys([ts, ExplicitVRLittleEndian,
-                                                         ImplicitVRLittleEndian])))
     if not items:
         return {"sent": 0, "failed": 0}
-    assoc = _assoc(ae, node)
+
+    def ts_of(ds) -> str:
+        return str(ds.file_meta.TransferSyntaxUID) if getattr(ds, "file_meta", None) \
+            else ExplicitVRLittleEndian
+    by_class: dict[str, list] = {}
+    for ds in items:
+        by_class.setdefault(str(ds.SOPClassUID), []).append(ds)
+    groups, cur = [], []
+    for cls, dss in by_class.items():
+        n_ctx = len({ts_of(d) for d in dss})
+        if cur and sum(len({ts_of(d) for d in g[1]}) for g in cur) + n_ctx > 126:
+            groups.append(cur)
+            cur = []
+        cur.append((cls, dss))
+    if cur:
+        groups.append(cur)
     sent = failed = 0
-    try:
-        for ds in items:
-            status = assoc.send_c_store(ds)
-            if status and status.Status in (0x0000, 0xB000, 0xB007, 0xB006):
-                sent += 1
-            else:
-                failed += 1
-    finally:
-        assoc.release()
+    for group in groups:
+        ae = _ae()
+        for cls, dss in group:
+            for ts in dict.fromkeys(ts_of(d) for d in dss):
+                ae.add_requested_context(cls, list(dict.fromkeys([ts, ExplicitVRLittleEndian,
+                                                                  ImplicitVRLittleEndian])))
+        assoc = _assoc(ae, node)
+        accepted = _accepted_map(assoc.accepted_contexts)
+        try:
+            for _cls, dss in group:
+                for ds in dss:
+                    try:
+                        status = assoc.send_c_store(_fit(ds, accepted.get(str(ds.SOPClassUID), set())))
+                    except ValueError as e:  # nothing acceptable negotiated for this object
+                        log.warning("C-STORE of %s skipped: %s", getattr(ds, "SOPInstanceUID", "?"), e)
+                        status = None
+                    if status and status.Status in (0x0000, 0xB000, 0xB007, 0xB006):
+                        sent += 1
+                    else:
+                        failed += 1
+        finally:
+            assoc.release()
     messages.log(direction="out", protocol="dicom", message_type="C-STORE",
                  peer=node.get("ae_title"), status="ok" if not failed else "partial",
                  payload=f"sent={sent} failed={failed}")

@@ -58,7 +58,7 @@ export default function Viewer({ studyUid, series, token, t, onMeasurements, ini
     if (stacks.current[seriesUid]) return stacks.current[seriesUid];
     const metas = await dicomwebJson(`/studies/${studyUid}/series/${seriesUid}/metadata`, token);
     const entries = metas.map((m) => registerInstance(studyUid, seriesUid, m))
-      .filter((e) => e.info.rows > 0);
+      .filter((e) => e.info.rows > 0 && !e.info.video);   // SR/PDF/video live in the objects panel
     entries.sort((a, b) => (a.info.instanceNumber || 0) - (b.info.instanceNumber || 0));
     const ids = entries.flatMap((e) => e.ids);
     stacks.current[seriesUid] = ids;

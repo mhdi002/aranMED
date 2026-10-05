@@ -12,8 +12,12 @@ Implemented:
   forms, with attribute matching, ``limit``/``offset``, ``includefield``.
 * WADO-RS  study / series / instance retrieval (multipart ``application/dicom``),
   ``/metadata`` (DICOM JSON, pixel data as BulkDataURI), ``/frames/{list}``
-  (as stored: native or encapsulated), ``/rendered`` and ``/thumbnail``
-  (PNG or JPEG, optional ``window=center,width``).
+  (as stored; transcoded to Explicit VR Little Endian on request; or
+  normalised for the viewer with ``?normalize=1``), ``/rendered`` and
+  ``/thumbnail`` (PNG or JPEG, optional ``window=center,width``), plus
+  ``/sr`` (Structured Report text), ``/document`` (Encapsulated PDF/CDA/STL)
+  and ``/video`` (MPEG-2/H.264/HEVC stream).
+* Peer hospitals see a patient's images only as their sharing consent allows.
 * STOW-RS  ``POST /studies`` and ``POST /studies/{study}`` with a standard
   store-response (ReferencedSOPSequence / FailedSOPSequence).
 * WADO-URI ``GET /wado?requestType=WADO&studyUID=…&seriesUID=…&objectUID=…``.
@@ -243,21 +247,92 @@ def make_router() -> APIRouter:
     @r.get("/studies/{study}/series/{series}/instances/{sop}/frames/{frames}")
     def wado_frames(study: str, series: str, sop: str, frames: str, request: Request,
                           p: dict = read):
+        """Frames as stored (default / ``transfer-syntax=*``), transcoded to
+        native Explicit VR Little Endian when the client asks for it, or
+        normalised for the in-app viewer with ``?normalize=1``."""
         x = _instances(p, request, study, series, sop)[0]
         ds = render.load(get_storage().get(x["path"]))
         try:
             numbers = [int(f) for f in frames.split(",") if f.strip()]
-            data = [render.frame_bytes(ds, n) for n in numbers]
-        except (ValueError, IndexError) as e:
+        except ValueError as e:
+            raise HTTPException(400, "frame numbers must be integers") from e
+        accept = request.headers.get("accept", "")
+        wants_native = "transfer-syntax=1.2.840.10008.1.2.1" in accept.replace('"', "")
+        if request.query_params.get("normalize") in ("1", "true"):
+            if len(numbers) != 1:
+                raise HTTPException(400, "normalize returns one frame at a time")
+            try:
+                data, info = render.display_frame(ds, numbers[0])
+            except IndexError as e:
+                raise HTTPException(404, str(e)) from e
+            except render.RenderError as e:
+                raise HTTPException(406, str(e)) from e
+            headers = {"X-Pixel-Format": info["format"], "X-Samples-Per-Pixel": str(info["samples"]),
+                       "X-Photometric": info["photometric"], "X-Rows": str(info["rows"]),
+                       "X-Columns": str(info["columns"]), "X-Rescale-Slope": repr(info["slope"]),
+                       "X-Rescale-Intercept": repr(info["intercept"]),
+                       "Access-Control-Expose-Headers": "X-Pixel-Format, X-Samples-Per-Pixel, X-Photometric, "
+                                                        "X-Rows, X-Columns, X-Rescale-Slope, X-Rescale-Intercept, "
+                                                        "X-Window-Center, X-Window-Width"}
+            if info["wc"] is not None and info["ww"] is not None:
+                headers.update({"X-Window-Center": repr(info["wc"]), "X-Window-Width": repr(info["ww"])})
+            return Response(data, media_type="application/octet-stream", headers=headers)
+        transcode = wants_native and (render.is_compressed(ds) or render.transfer_syntax(ds) in (
+            "1.2.840.10008.1.2.2", "1.2.840.10008.1.2.1.99"))
+        try:
+            if transcode:
+                data = [render.native_frame(ds, n) for n in numbers]
+            else:
+                data = [render.frame_bytes(ds, n) for n in numbers]
+        except IndexError as e:
             raise HTTPException(404, str(e)) from e
-        ts = render.transfer_syntax(ds)
-        part_type = (f"application/octet-stream; transfer-syntax={ts}"
-                     if render.is_compressed(ds) else "application/octet-stream")
+        except ValueError as e:
+            raise HTTPException(406, str(e)) from e
+        ts = "1.2.840.10008.1.2.1" if transcode else render.transfer_syntax(ds)
+        compressed = render.is_compressed(ds) and not transcode
+        part_type = (f"application/octet-stream; transfer-syntax={ts}" if compressed
+                     else "application/octet-stream")
         bnd = multipart.boundary()
         body = multipart.encode(((d, part_type) for d in data), bnd)
-        extra = f"; transfer-syntax={ts}" if render.is_compressed(ds) else ""
+        extra = f"; transfer-syntax={ts}"
         return Response(body, media_type=multipart.content_type(
             bnd, "application/octet-stream", extra))
+
+    def _object(p: dict, request: Request, study: str, series: str, sop: str):
+        x = _instances(p, request, study, series, sop)[0]
+        return render.load(get_storage().get(x["path"]))
+
+    @r.get("/studies/{study}/series/{series}/instances/{sop}/sr")
+    def structured_report(study: str, series: str, sop: str, request: Request, p: dict = read):
+        """A DICOM Structured Report as readable text and a content tree."""
+        ds = _object(p, request, study, series, sop)
+        if str(getattr(ds, "Modality", "")) != "SR" and "ContentSequence" not in ds:
+            raise HTTPException(406, "not a structured report")
+        _audit(p, "pacs.sr.read", f"study:{study}", request, sop=sop)
+        return render.sr_text(ds)
+
+    @r.get("/studies/{study}/series/{series}/instances/{sop}/document")
+    def encapsulated(study: str, series: str, sop: str, request: Request, p: dict = read):
+        """The document inside an Encapsulated PDF / CDA / STL / OBJ object."""
+        ds = _object(p, request, study, series, sop)
+        try:
+            data, mime = render.encapsulated_document(ds)
+        except render.RenderError as e:
+            raise HTTPException(406, str(e)) from e
+        _audit(p, "pacs.document.read", f"study:{study}", request, sop=sop)
+        return Response(data, media_type=mime,
+                        headers={"Content-Disposition": f'inline; filename="{sop}.{mime.split("/")[-1]}"'})
+
+    @r.get("/studies/{study}/series/{series}/instances/{sop}/video")
+    def video(study: str, series: str, sop: str, request: Request, p: dict = read):
+        """The encoded video stream of an MPEG-2 / H.264 / HEVC object."""
+        ds = _object(p, request, study, series, sop)
+        try:
+            data, mime = render.video_stream(ds)
+        except render.RenderError as e:
+            raise HTTPException(406, str(e)) from e
+        _audit(p, "pacs.video.read", f"study:{study}", request, sop=sop)
+        return Response(data, media_type=mime)
 
     @r.get("/studies/{study}/series/{series}/instances/{sop}/bulk/{tag}")
     def bulk(study: str, series: str, sop: str, tag: str, request: Request, p: dict = read):
@@ -289,7 +364,9 @@ def make_router() -> APIRouter:
         try:
             img = render.render(get_storage().get(x["path"]), frame=frame, window_center=wc,
                                 window_width=ww, fmt=fmt, max_size=max_size)
-        except ValueError as e:
+        except IndexError as e:
+            raise HTTPException(404, str(e)) from e
+        except ValueError as e:  # RenderError: no pixels, video, undecodable
             raise HTTPException(406, str(e)) from e
         return Response(img, media_type=f"image/{fmt}")
 
@@ -402,9 +479,14 @@ def make_router() -> APIRouter:
         fmt = "png" if "png" in ctype else "jpeg"
         wc = q.get("windowCenter")
         ww = q.get("windowWidth")
-        img = render.render(get_storage().get(x["path"]), frame=int(q.get("frameNumber", "1")),
-                            window_center=float(wc) if wc else None,
-                            window_width=float(ww) if ww else None, fmt=fmt)
+        try:
+            img = render.render(get_storage().get(x["path"]), frame=int(q.get("frameNumber", "1")),
+                                window_center=float(wc) if wc else None,
+                                window_width=float(ww) if ww else None, fmt=fmt)
+        except IndexError as e:
+            raise HTTPException(404, str(e)) from e
+        except ValueError as e:  # bad numbers, no pixels, video, undecodable
+            raise HTTPException(406, str(e)) from e
         return Response(img, media_type=f"image/{fmt}")
 
     return r

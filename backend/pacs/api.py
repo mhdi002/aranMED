@@ -88,11 +88,20 @@ def study_detail(study_uid: str, request: Request, p: dict = READ) -> dict:
     if not s:
         raise HTTPException(404, "study not found")
     series = index.query_series({"StudyInstanceUID": study_uid})
+    objects = []
     for se in series:
         inst = index.query_instances({"SeriesInstanceUID": se["SeriesInstanceUID"]}, limit=5000)
         se["instances"] = [{k: i[k] for k in ("SOPInstanceUID", "InstanceNumber", "Rows",
                                               "Columns", "NumberOfFrames", "SOPClassUID")}
                            for i in inst]
+        for i in inst:
+            kind = object_kind(i["SOPClassUID"], i["_ext"].get("transfer_syntax"), i.get("Rows"))
+            if kind != "image":
+                objects.append({"kind": kind, "SOPInstanceUID": i["SOPInstanceUID"],
+                                "SeriesInstanceUID": se["SeriesInstanceUID"], "SOPClassUID": i["SOPClassUID"],
+                                "Modality": se.get("Modality"), "SeriesDescription": se.get("SeriesDescription")})
+        se["viewable"] = any(object_kind(i["SOPClassUID"], i["_ext"].get("transfer_syntax"), i.get("Rows"))
+                             == "image" for i in inst)
     wl = worklist.get(s["AccessionNumber"]) if s.get("AccessionNumber") else None
     priors = []
     if s["_ext"].get("person_id"):
@@ -101,7 +110,27 @@ def study_detail(study_uid: str, request: Request, p: dict = READ) -> dict:
                   if x["StudyInstanceUID"] != study_uid]
     _audit(p, "pacs.study.read", f"study:{study_uid}", request)
     return {"study": s, "series": series, "reports": reports.list_for_study(study_uid),
-            "worklist": wl, "priors": priors}
+            "worklist": wl, "priors": priors, "objects": objects}
+
+
+_DOC_CLASSES = {"1.2.840.10008.5.1.4.1.1.104.1": "pdf", "1.2.840.10008.5.1.4.1.1.104.2": "cda",
+                "1.2.840.10008.5.1.4.1.1.104.3": "stl", "1.2.840.10008.5.1.4.1.1.104.4": "obj"}
+
+
+def object_kind(sop_class: str, transfer_syntax: Optional[str], rows: Optional[int]) -> str:
+    """image | sr | pdf | cda | stl | obj | video | waveform | rt | other."""
+    from pacs.render import VIDEO_SYNTAXES
+    if sop_class in _DOC_CLASSES:
+        return _DOC_CLASSES[sop_class]
+    if sop_class.startswith("1.2.840.10008.5.1.4.1.1.88."):
+        return "sr"
+    if (transfer_syntax or "") in VIDEO_SYNTAXES:
+        return "video"
+    if sop_class.startswith("1.2.840.10008.5.1.4.1.1.9."):
+        return "waveform"
+    if sop_class.startswith("1.2.840.10008.5.1.4.1.1.481.") and not rows:
+        return "rt"
+    return "image" if rows else "other"
 
 
 class StudyPatch(BaseModel):
@@ -147,6 +176,7 @@ def verify_study(study_uid: str, p: dict = READ) -> dict:
 async def upload(request: Request, files: list[UploadFile] = File(...), p: dict = WRITE) -> dict:
     """Browser upload: individual DICOM files and/or .zip archives of them."""
     blobs: list[tuple[str, bytes]] = []
+    skipped: list[str] = []
     limit = config.max_upload_mb() * 1024 * 1024
     total = 0
     for f in files:
@@ -156,9 +186,20 @@ async def upload(request: Request, files: list[UploadFile] = File(...), p: dict 
             raise HTTPException(413, "upload too large")
         if data[:4] == b"PK\x03\x04":
             with zipfile.ZipFile(io.BytesIO(data)) as z:
-                for name in z.namelist():
-                    if not name.endswith("/"):
-                        blobs.append((f"{f.filename}:{name}", z.read(name)))
+                members = [i for i in z.infolist() if not i.is_dir()]
+                # Guard against zip bombs: the *uncompressed* size counts.
+                total += sum(i.file_size for i in members) - len(data)
+                if total > limit:
+                    raise HTTPException(413, "upload too large once unpacked")
+                for info in members:
+                    base = info.filename.rsplit("/", 1)[-1].upper()
+                    # IHE PDI media (CD/USB) carry a DICOMDIR index and viewer
+                    # files beside the images: index the images, skip the rest.
+                    if base in ("DICOMDIR", "LOCKFILE") or base.endswith((".EXE", ".DLL", ".HTM",
+                                                                           ".HTML", ".INF", ".TXT")):
+                        skipped.append(f"{f.filename}:{info.filename}")
+                        continue
+                    blobs.append((f"{f.filename}:{info.filename}", z.read(info)))
         else:
             blobs.append((f.filename or "file", data))
 
@@ -175,7 +216,7 @@ async def upload(request: Request, files: list[UploadFile] = File(...), p: dict 
                 dup += 1
             else:
                 stored += 1
-        return {"stored": stored, "duplicates": dup, "failed": failed,
+        return {"stored": stored, "duplicates": dup, "failed": failed, "skipped": skipped,
                 "studies": [index.get_study(u) for u in studies]}
 
     res = await run_in_threadpool(work)
@@ -280,6 +321,12 @@ class NodeIn(BaseModel):
     is_move_destination: bool = True
     federate: bool = False
     active: bool = True
+    tls: bool = False
+    tls_ca_env: Optional[str] = None
+    tls_cert_env: Optional[str] = None
+    tls_key_env: Optional[str] = None
+    prefer_cget: bool = False
+    charset: Optional[str] = None
 
 
 @router.get("/nodes")

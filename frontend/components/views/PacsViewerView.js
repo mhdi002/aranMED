@@ -7,6 +7,7 @@ import { pacsApi, fmtDicomDate, STATUS_TONE } from "../../lib/pacs";
 import { Badge, Button, TextArea } from "../ui";
 import CriticalAlertsBanner from "../CriticalAlertsBanner";
 import ReportEditor from "../pacs/ReportEditor";
+import StudyObjects from "../pacs/StudyObjects";
 
 // Cornerstone touches window/WebGL at import time: client-side only.
 const Viewer = dynamic(() => import("../pacs/Viewer"), {
@@ -85,7 +86,7 @@ export default function PacsViewerView() {
       <div className="viewer-body">
         <div className="viewer-main">
           {d && token && (
-            <Viewer studyUid={studyUid} series={d.series} token={token} t={t}
+            <Viewer studyUid={studyUid} series={d.series.filter((x) => x.viewable !== false)} token={token} t={t}
                     initialSeries={router.query.series} onMeasurements={setMeasurements} />
           )}
         </div>
@@ -112,6 +113,7 @@ export default function PacsViewerView() {
                 <span>Origin</span><b>{s._ext?.origin_facility || "—"}</b>
                 <span>Study UID</span><b className="mono small">{s.StudyInstanceUID}</b>
               </div>
+              <StudyObjects studyUid={studyUid} objects={d.objects} token={token} t={t} />
               {d.worklist && (
                 <>
                   <div className="lbl">{t("pacs.order")}</div>

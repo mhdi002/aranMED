@@ -183,3 +183,39 @@ test("Persian UI switches to RTL with translated imaging nav", async ({ page, re
   await expect(page.locator(".page-title")).toHaveText("آرشیو تصاویر پزشکی");
   await shot(page, "pacs-fa");
 });
+
+test("devices as they send it: compressed colour US, JPEG Lossless CT, SR and PDF", async ({ page, request }) => {
+  const st = state();
+  await loginAs(page, request, "e2e_rad", st.user_password);
+  await page.goto(`/pacs/viewer?study=${st.dev_uid}`);
+  await expect(page.getByTestId("viewer-title")).toContainText("Moradi Leila");
+  // Only image series go to the viewports; the SR and PDF are listed as objects.
+  await expect(page.locator(".series-pick button")).toHaveCount(2);
+  const vp = page.getByTestId("viewport-0");
+  await expect(vp).toHaveAttribute("data-loaded", "true", { timeout: 60_000 });
+  // Find the ultrasound series and check it shows real colour (the red patch).
+  const reddish = async (i) => page.evaluate((idx) => {
+    const c = document.querySelector(`[data-testid="viewport-${idx}"] canvas`);
+    const x = document.createElement("canvas");
+    x.width = c.width; x.height = c.height;
+    const ctx = x.getContext("2d");
+    ctx.drawImage(c, 0, 0);
+    const d = ctx.getImageData(0, 0, x.width, x.height).data;
+    let red = 0;
+    for (let k = 0; k < d.length; k += 4) if (d[k] > 180 && d[k + 1] < 90 && d[k + 2] < 90) red += 1;
+    return red;
+  }, i);
+  await page.locator('[data-layout="1x2"]').click();
+  await expect(page.getByTestId("viewport-1")).toHaveAttribute("data-loaded", "true", { timeout: 60_000 });
+  await expect.poll(async () => (await reddish(0)) + (await reddish(1))).toBeGreaterThan(50);
+  // The JPEG Lossless CT keeps true HU values: its window overlay reads the file's W/L.
+  await expect(page.locator(".vp-ov").filter({ hasText: "W 400 · L 40" }).first()).toBeVisible();
+
+  const objects = page.getByTestId("study-objects");
+  await objects.locator('[data-object-kind="sr"]').click();
+  await expect(page.getByTestId("sr-text")).toContainText("Impression: Pneumonia");
+  await page.keyboard.press("Escape");
+  await objects.locator('[data-object-kind="pdf"]').click();
+  await expect(page.getByTestId("pdf-frame")).toBeVisible();
+  await shot(page, "pacs-devices");
+});

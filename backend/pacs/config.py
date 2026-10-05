@@ -61,3 +61,24 @@ def job_max_attempts() -> int:
 
 def http_timeout() -> float:
     return s.env_float("PACS_HTTP_TIMEOUT_SEC", 60.0)
+
+
+def extra_sop_classes() -> list[str]:
+    """Vendor-private storage SOP class UIDs to accept (comma-separated)."""
+    return [u.strip() for u in s.env("PACS_EXTRA_SOP_CLASSES", "").split(",") if u.strip()]
+
+
+def accept_any_storage() -> bool:
+    """Accept C-STORE for any SOP class a device proposes, known or not."""
+    return s.env_bool("PACS_ACCEPT_ANY_STORAGE", False)
+
+
+def require_called_ae() -> bool:
+    """Reject associations addressed to an AE title other than ours."""
+    return s.env_bool("PACS_REQUIRE_CALLED_AE", True)
+
+
+def default_charset() -> str:
+    """Character set assumed for text in objects that do not declare one
+    (older local modalities): tried after UTF-8 when decoding fails."""
+    return s.env("PACS_FALLBACK_CHARSET", "cp1256")

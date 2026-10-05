@@ -44,6 +44,7 @@ CANNOT_UNDERSTAND = 0xC000
 MOVE_DEST_UNKNOWN = 0xA801
 IDENTIFIER_MISMATCH = 0xA900
 PROCESSING_FAILURE = 0x0110
+DUPLICATE_SOP_INSTANCE = 0x0111
 NO_SUCH_OBJECT = 0x0112
 
 _SKIP_FILTER = {"QueryRetrieveLevel", "SpecificCharacterSet", "RetrieveAETitle",
@@ -81,6 +82,32 @@ def _filters(identifier: Dataset) -> tuple[dict[str, str], list[str]]:
             v = "\\".join(str(x) for x in v)
         filters[kw] = str(v)
     return filters, keys
+
+
+def _peer_facility(node: Optional[dict]) -> Optional[str]:
+    """The other hospital a node belongs to, if any. Its patients' sharing
+    consent then applies to DIMSE queries and retrievals exactly as it does
+    to DICOMweb and FHIR."""
+    oid = (node or {}).get("facility_oid")
+    return oid if oid and oid != settings.facility_oid() else None
+
+
+def _allowed_studies(node: Optional[dict], study_uids: Iterable[str]) -> Optional[set[str]]:
+    oid = _peer_facility(node)
+    if not oid:
+        return None  # local modality / workstation: no consent filter
+    from ehr import access
+    from pacs.dicomweb import _person_of_studies
+    allowed = set()
+    for uid, person in _person_of_studies(sorted(set(study_uids))).items():
+        ok, why = (True, "unmatched") if not person else access.peer_read_decision(person, oid, "TREAT")
+        if ok:
+            allowed.add(uid)
+        else:
+            import audit
+            audit.record("pacs.access", actor_name=f"dimse:{(node or {}).get('ae_title')}",
+                         resource=f"study:{uid}", outcome="deny", detail={"why": why, "facility": oid})
+    return allowed
 
 
 # ---------------------------------------------------------------------------
@@ -137,7 +164,7 @@ def handle_find(event):
         return
     identifier = event.identifier
     if event.request.AffectedSOPClassUID == ModalityWorklistInformationFind:
-        for ds in worklist.mwl_query(identifier):
+        for ds in worklist.mwl_query(identifier, charset=(node or {}).get("charset") or None):
             if event.is_cancelled:
                 yield CANCEL, None
                 return
@@ -150,6 +177,16 @@ def handle_find(event):
         return
     filters, keys = _filters(identifier)
     results, _default = _query(level, filters)
+    if level != "PATIENT":
+        allowed = _allowed_studies(node, [r.get("StudyInstanceUID") for r in results
+                                          if r.get("StudyInstanceUID")])
+        if allowed is not None:
+            results = [r for r in results if r.get("StudyInstanceUID") in allowed]
+    elif _peer_facility(node):
+        def visible(p: dict) -> bool:
+            studies = index.query_studies({"PatientID": p.get("PatientID")}, limit=500)
+            return bool(_allowed_studies(node, [x["StudyInstanceUID"] for x in studies]))
+        results = [r for r in results if visible(r)]
     for item in results:
         if event.is_cancelled:
             yield CANCEL, None
@@ -187,12 +224,71 @@ def _matching_instances(identifier: Dataset) -> list[dict]:
     return []
 
 
-def _datasets(instances: Iterable[dict]):
+def _consented(node: Optional[dict], instances: list[dict]) -> list[dict]:
+    allowed = _allowed_studies(node, [i["study_uid"] for i in instances])
+    return instances if allowed is None else [i for i in instances if i["study_uid"] in allowed]
+
+
+def _datasets(instances: Iterable[dict], accepted: Optional[dict[str, set[str]]] = None):
+    """Yield stored objects; when *accepted* (SOP class -> transfer syntaxes the
+    receiver accepted) says the receiver cannot take the stored compressed
+    syntax, decompress to Explicit VR Little Endian first."""
     from pacs.render import load
     from pacs.storage import get_storage
     st = get_storage()
     for inst in instances:
-        yield load(st.get(inst["path"]))
+        ds = load(st.get(inst["path"]))
+        if accepted is not None:
+            ds = _fit(ds, accepted.get(str(ds.SOPClassUID), set()))
+        yield ds
+
+
+def _fit(ds, accepted: set[str]):
+    ts = str(ds.file_meta.TransferSyntaxUID)
+    if ts in accepted or not ds.file_meta.TransferSyntaxUID.is_compressed:
+        return ds
+    from pydicom.uid import ExplicitVRLittleEndian, ImplicitVRLittleEndian
+    if accepted & {ExplicitVRLittleEndian, ImplicitVRLittleEndian} or not accepted:
+        try:
+            # Same object, different encoding: the SOP Instance UID must not change
+            # (pydicom 3 generates a new one unless told otherwise).
+            ds.decompress(generate_instance_uid=False)
+            log.info("transcoded %s from %s for a receiver that does not accept it",
+                     ds.SOPInstanceUID, ts)
+        except Exception:  # noqa: BLE001
+            log.exception("could not decompress %s (%s)", ds.SOPInstanceUID, ts)
+    return ds
+
+
+def _accepted_map(contexts) -> dict[str, set[str]]:
+    out: dict[str, set[str]] = {}
+    for cx in contexts:
+        if cx.transfer_syntax:
+            out.setdefault(str(cx.abstract_syntax), set()).add(str(cx.transfer_syntax[0]))
+    return out
+
+
+def _probe(dest: dict, contexts) -> dict[str, set[str]]:
+    """Which (SOP class, transfer syntax) pairs the move destination accepts,
+    learned by negotiating the same contexts once before the C-MOVE."""
+    from pynetdicom import AE
+    ae = AE(ae_title=config.ae_title())
+    ae.acse_timeout = ae.dimse_timeout = ae.network_timeout = config.network_timeout()
+    for cx in contexts:
+        ae.add_requested_context(cx.abstract_syntax, cx.transfer_syntax)
+    assoc = ae.associate(dest["host"], int(dest["port"]), ae_title=dest["ae_title"],
+                         tls_args=_tls_args(dest))
+    if not assoc.is_established:
+        return {}
+    try:
+        return _accepted_map(assoc.accepted_contexts)
+    finally:
+        assoc.release()
+
+
+def _tls_args(node: dict):
+    ctx = nodes.tls_context(node)
+    return (ctx, None) if ctx else None
 
 
 def _contexts_for(instances: list[dict]):
@@ -222,11 +318,15 @@ def handle_move(event):
         log.warning("C-MOVE to unknown/unauthorised destination %r refused", dest_ae)
         yield None, None
         return
-    instances = _matching_instances(event.identifier)
-    yield dest["host"], int(dest["port"]), {"ae_title": dest["ae_title"],
-                                            "contexts": _contexts_for(instances) or None}
+    instances = _consented(node, _matching_instances(event.identifier))
+    contexts = _contexts_for(instances) or None
+    accepted = _probe(dest, contexts) if contexts else {}
+    kwargs: dict[str, Any] = {"ae_title": dest["ae_title"], "contexts": contexts}
+    if _tls_args(dest):
+        kwargs["tls_args"] = _tls_args(dest)
+    yield dest["host"], int(dest["port"]), kwargs
     yield len(instances)
-    for ds in _datasets(instances):
+    for ds in _datasets(instances, accepted):
         if event.is_cancelled:
             yield CANCEL, None
             return
@@ -240,9 +340,11 @@ def handle_get(event):
     if not ok:
         yield NOT_AUTHORIZED, None
         return
-    instances = _matching_instances(event.identifier)
+    instances = _consented(node, _matching_instances(event.identifier))
     yield len(instances)
-    for ds in _datasets(instances):
+    # C-GET sends on this same association: transcode to what it accepted.
+    accepted = _accepted_map(event.assoc.accepted_contexts)
+    for ds in _datasets(instances, accepted):
         if event.is_cancelled:
             yield CANCEL, None
             return
@@ -259,6 +361,8 @@ def handle_n_create(event):
     req = event.request
     sop_uid = req.AffectedSOPInstanceUID or worklist.generate_uid()
     attrs = event.attribute_list
+    if worklist.mpps_get(str(sop_uid)):
+        return DUPLICATE_SOP_INSTANCE, None  # PS3.7 10.1.5.1.6
     try:
         worklist.mpps_create(str(sop_uid), attrs, station_ae=_calling(event))
     except Exception:  # noqa: BLE001
@@ -365,6 +469,22 @@ def _refresh_allowlist(event) -> None:
 # ---------------------------------------------------------------------------
 # Server lifecycle
 # ---------------------------------------------------------------------------
+def _register_private_storage(uid: str) -> None:
+    """Tell pynetdicom a vendor-private UID is a Storage SOP class."""
+    from pynetdicom.service_class import StorageServiceClass
+    from pynetdicom.sop_class import register_uid, uid_to_service_class
+    try:
+        if uid_to_service_class(uid) is StorageServiceClass:
+            return
+    except Exception:  # noqa: BLE001
+        pass
+    keyword = "PrivateStorage_" + uid.replace(".", "_")
+    try:
+        register_uid(uid, keyword, StorageServiceClass)
+    except ValueError:
+        log.debug("private SOP class %s already registered", uid)
+
+
 class DimseServer:
     def __init__(self, *, ae_title: Optional[str] = None, bind: Optional[str] = None,
                  port: Optional[int] = None) -> None:
@@ -390,6 +510,7 @@ class DimseServer:
         t = config.network_timeout()
         ae.acse_timeout = ae.dimse_timeout = ae.network_timeout = t
         ae.maximum_associations = settings.env_int("PACS_MAX_ASSOCIATIONS", 32)
+        ae.require_called_aet = config.require_called_ae()
         ae.add_supported_context(Verification)
         for cx in AllStoragePresentationContexts:
             # scp_role=True lets a C-GET requestor act as Storage SCP on this
@@ -405,6 +526,14 @@ class DimseServer:
                     ModalityWorklistInformationFind, ModalityPerformedProcedureStep):
             ae.add_supported_context(sop)
         ae.add_supported_context(StorageCommitmentPushModel, scu_role=True, scp_role=True)
+        # Vendor-private storage SOP classes (e.g. scanner raw data) that some
+        # devices push alongside the images.
+        for uid in config.extra_sop_classes():
+            _register_private_storage(uid)
+            ae.add_supported_context(uid, ALL_TRANSFER_SYNTAXES, scu_role=True, scp_role=True)
+        if config.accept_any_storage():
+            from pynetdicom import _config as pyn_config
+            pyn_config.UNRESTRICTED_STORAGE_SERVICE = True
         handlers = [
             (evt.EVT_CONN_OPEN, _refresh_allowlist),
             (evt.EVT_C_ECHO, handle_echo),

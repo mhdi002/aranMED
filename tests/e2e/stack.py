@@ -123,6 +123,7 @@ def main() -> None:
 def seed(work: Path) -> None:
     from tests.functional.dicom_factory import make_instance, make_study, to_bytes
     from pacs import multipart
+    from pydicom.uid import generate_uid
 
     tok = httpx.post(f"{BASE}/api/auth/login",
                      data={"username": "admin", "password": ADMIN_PW}).json()["access_token"]
@@ -158,7 +159,22 @@ def seed(work: Path) -> None:
         "modality": "CT", "patient_name": "Karimi^Ali", "patient_id": "E2E-CT-1",
         "procedure_description": "CT ABDOMEN", "scheduled_start": "20261010T090000",
         "priority": "STAT"})
-    state = {"ct_uid": ct_uid, "mr_uid": mr_uid, "upload_file": str(upload_file),
+    # A study from mixed devices as they really send it: compressed colour
+    # ultrasound (JPEG baseline YBR), JPEG Lossless CT, a structured report
+    # and an encapsulated PDF.
+    from tests.functional import device_factory as DF
+    dev_uid = generate_uid()
+    dev = [DF.encode(DF.make_device("US", study_uid=dev_uid, patient_id="E2E-DEV-1",
+                                    patient_name="Moradi^Leila"), "jpeg_baseline"),
+           DF.encode(DF.make_device("CT", study_uid=dev_uid, patient_id="E2E-DEV-1",
+                                    patient_name="Moradi^Leila"), "jpeg_lossless"),
+           DF.make_device("SR", study_uid=dev_uid, patient_id="E2E-DEV-1", patient_name="Moradi^Leila"),
+           DF.make_device("PDF", study_uid=dev_uid, patient_id="E2E-DEV-1", patient_name="Moradi^Leila")]
+    bnd = multipart.boundary()
+    body = multipart.encode(((DF.to_bytes(d), "application/dicom") for d in dev), bnd)
+    httpx.post(f"{BASE}/api/dicom-web/studies", content=body, timeout=60,
+               headers={**H, "Content-Type": multipart.content_type(bnd, "application/dicom")}).raise_for_status()
+    state = {"ct_uid": ct_uid, "mr_uid": mr_uid, "dev_uid": dev_uid, "upload_file": str(upload_file),
              "upload_uid": up_uid, "admin_password": ADMIN_PW, "user_password": USER_PW,
              "backend": BASE}
     (ROOT / "frontend/e2e/.state.json").write_text(json.dumps(state, indent=2))

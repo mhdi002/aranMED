@@ -43,6 +43,13 @@ The receiver verifies the token, applies `peer_policy.json` and consent, and aud
 
 **Discovery and remote chart** (`interop/federation.py`). The patient is located at each peer by shared identifiers: the national id first, then any MRN that peer issued. If none match, a PDQm `$match` is tried, and only certain or probable results are accepted. A deterministic match cross-references the peer's identifiers into the local MPI, so imaging fetched later lands on the same person. The peer's records then arrive through `Patient/$everything`.
 
+**Lossless exchange.** Every EHR field travels, so the receiving hospital gets the same record. The FHIR mapping (`fhir_map.py`) carries:
+- medication dose, route, timing, interval and prescriber as structured `Dosage`;
+- encounter department and attending;
+- performers, report result links, notes and the row `data` column, in AranMed extensions where FHIR has no slot.
+
+`tests/test_fhir_map_roundtrip.py` checks every type round-trips field-for-field and validates as FHIR R4B.
+
 **Transfers** (`interop/transfers.py`). Each hospital keeps its own transfer row, and every state change is pushed to the other side:
 
 1. The sending hospital requests the transfer, and the patient is pre-registered at the receiving hospital.
@@ -50,7 +57,24 @@ The receiver verifies the token, applies `peer_policy.json` and consent, and aud
 3. The sending hospital marks the patient as departed.
 4. The receiving hospital records arrival, then completion.
 
-Re-sending a package is a no-op, because records de-duplicate on `(source_facility, source_id)`.
+Re-sending a package is a no-op, because records de-duplicate on `(source_facility, source_id)`. A failed transaction never rolls back rows that already existed.
+
+The package also keeps several things intact:
+- References inside the package (encounters, report results, document context) are `urn:uuid` links, so they resolve to the receiver's own rows.
+- Medications bring their **dose-change history**, which is replayed into the receiver's history.
+- The package always lands on the transfer's patient.
+- Another hospital's imaging orders stay as history; they are not placed on the receiver's worklist.
+
+Remote documents are read on demand (`/api/clinical/patients/{id}/remote-documents/{facility}/{doc}`). The holding hospital applies its consent rules and audits the read.
+
+`tests/functional/test_interhospital_records.py` runs four real hospitals and covers:
+- a full-record transfer to a new hospital, and to one where the patient already exists;
+- idempotent re-sends and failure paths;
+- a chain A→B→C with authorship kept;
+- a visiting patient seen live;
+- consent on records and images (wildcard, opt-in, ETREAT audited at both ends);
+- an MPI merge after a transfer;
+- the agent's tools across hospitals.
 
 **Operations.** `POST /api/interop/peers/test` checks that a peer is reachable, that its schema versions are compatible, that its OID matches, and that it accepts our token. The interop message log keeps every exchange.
 

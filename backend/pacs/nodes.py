@@ -26,9 +26,10 @@ from pacs import schema  # noqa: F401
 
 FIELDS = ("name", "kind", "ae_title", "host", "port", "base_url", "auth_env", "facility_oid",
           "issuer", "allow_store", "allow_query", "allow_retrieve", "is_move_destination",
-          "active", "federate")
+          "active", "federate", "tls", "tls_ca_env", "tls_cert_env", "tls_key_env", "prefer_cget",
+          "charset")
 _BOOL = ("allow_store", "allow_query", "allow_retrieve", "is_move_destination", "active",
-         "federate")
+         "federate", "tls", "prefer_cget")
 
 
 def _out(r) -> Optional[dict]:
@@ -105,6 +106,28 @@ def record_echo(node_id: str, ok: bool) -> None:
     with db.connect() as c:
         c.execute("UPDATE pacs_nodes SET last_echo_at=?, last_echo_ok=? WHERE id=?",
                   (db.now(), 1 if ok else 0, node_id))
+
+
+def tls_context(node: dict, *, server_side: bool = False):
+    """ssl.SSLContext for a node with ``tls`` on. Certificate and key paths
+    are named by env vars on the node (never stored in the database):
+    ``tls_ca_env`` (trust anchor), ``tls_cert_env`` + ``tls_key_env`` (our
+    client certificate, for mutual TLS)."""
+    if not node.get("tls"):
+        return None
+    import ssl
+    ctx = ssl.create_default_context(ssl.Purpose.SERVER_AUTH)
+    ca = os.environ.get(node.get("tls_ca_env") or "", "")
+    if ca:
+        ctx.load_verify_locations(ca)
+    cert = os.environ.get(node.get("tls_cert_env") or "", "")
+    key = os.environ.get(node.get("tls_key_env") or "", "")
+    if cert and key:
+        ctx.load_cert_chain(cert, key)
+    # DICOM peers are addressed by IP and AE title far more often than by a
+    # DNS name in their certificate; identity is the CA-signed certificate.
+    ctx.check_hostname = False
+    return ctx
 
 
 def auth_header(node: dict) -> dict[str, str]:

@@ -39,6 +39,19 @@ def _uid() -> str:
     return str(generate_uid(prefix=(root.rstrip(".") + ".") if root else None))
 
 
+def dicom_dt(value: Any) -> Optional[str]:
+    """Canonical DICOM date-time ``YYYYMMDD[HHMM[SS]]`` from ISO, HL7 or DICOM
+    input (``2026-10-02T09:00:00Z``, ``202610020900``, ``20261002T090000``)."""
+    if value in (None, ""):
+        return None
+    import re
+    s = str(value).strip()
+    s = re.sub(r"(Z|[+-]\d{2}:?\d{2})$", "", s)     # zone
+    s = s.split(".")[0]                                # fraction
+    digits = re.sub(r"\D", "", s)[:14]
+    return digits or None
+
+
 def generate_uid() -> str:
     """A new DICOM UID under ``DICOM_UID_ROOT`` (or pydicom's root)."""
     return _uid()
@@ -58,6 +71,8 @@ def create(data: dict[str, Any]) -> dict:
     d.setdefault("requested_procedure_id", "RP" + new_id()[:8].upper())
     if d.get("patient_birth_date"):
         d["patient_birth_date"] = (norm_date(d["patient_birth_date"]) or "").replace("-", "")
+    if d.get("scheduled_start"):
+        d["scheduled_start"] = dicom_dt(d["scheduled_start"])
     # Resolve / register the patient so the worklist is tied to the MPI.
     if not d.get("person_id") and (d.get("patient_id") or d.get("patient_name")):
         idents = []
@@ -88,6 +103,8 @@ def update(wid: str, changes: dict[str, Any]) -> Optional[dict]:
     if not cur:
         return None
     vals = {k: v for k, v in changes.items() if k in FIELDS and k != "accession"}
+    if vals.get("scheduled_start"):
+        vals["scheduled_start"] = dicom_dt(vals["scheduled_start"])
     if "status" in vals and vals["status"] not in STATUSES:
         raise ValueError(f"status must be one of {STATUSES}")
     if not vals:
@@ -109,7 +126,7 @@ def list_entries(*, status: Optional[str] = None, modality: Optional[str] = None
             params.append(val)
     if date:
         clauses.append("scheduled_start LIKE ?")
-        params.append(date.replace("-", "")[:8] + "%")
+        params.append((dicom_dt(date) or "")[:8] + "%")
     sql = "SELECT * FROM pacs_worklist"
     if clauses:
         sql += " WHERE " + " AND ".join(clauses)
@@ -121,8 +138,11 @@ def list_entries(*, status: Optional[str] = None, modality: Optional[str] = None
 # ---------------------------------------------------------------------------
 # MWL C-FIND
 # ---------------------------------------------------------------------------
-def mwl_query(identifier) -> list:
-    """Answer a Modality Worklist C-FIND identifier with matching datasets."""
+def mwl_query(identifier, *, charset: Optional[str] = None) -> list:
+    """Answer a Modality Worklist C-FIND identifier with matching datasets.
+
+    Responses are UTF-8 (ISO_IR 192) unless the querying node is configured
+    with another character set (older modalities: e.g. ``ISO_IR 100``)."""
     from pydicom.dataset import Dataset
 
     def val(ds, kw):
@@ -174,7 +194,7 @@ def mwl_query(identifier) -> list:
     for r in rows:
         r = dict(r)
         ds = Dataset()
-        ds.SpecificCharacterSet = "ISO_IR 192"
+        ds.SpecificCharacterSet = charset or "ISO_IR 192"
         ds.PatientName = r.get("patient_name") or ""
         ds.PatientID = r.get("patient_id") or ""
         ds.IssuerOfPatientID = r.get("issuer") or ""
@@ -222,6 +242,11 @@ def _ref_accession(ds) -> tuple[Optional[str], Optional[str]]:
         acc = str(seq[0].get("AccessionNumber") or "") or None
         study = str(seq[0].get("StudyInstanceUID") or "") or None
     return acc, study
+
+
+def mpps_get(sop_uid: str) -> Optional[dict]:
+    with db.connect() as c:
+        return row(c.execute("SELECT * FROM pacs_mpps WHERE sop_uid=?", (sop_uid,)).fetchone())
 
 
 def mpps_create(sop_uid: str, ds, station_ae: Optional[str] = None) -> dict:

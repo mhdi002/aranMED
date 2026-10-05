@@ -3,6 +3,14 @@
 # torch layer — the Dockerfile installs the same list in its own layer.
 cryptography>=43.0.0
 psycopg[binary]>=3.2
-pydicom>=2.4
+pydicom>=3.0
 pynetdicom>=2.1
+# Pixel codecs for everything devices send: JPEG baseline/extended/lossless
+# (libjpeg), JPEG 2000 + HTJ2K (openjpeg), JPEG-LS (CharLS), plus GDCM as a
+# second decoder. Without them compressed studies cannot be displayed.
+pylibjpeg>=2.0
+pylibjpeg-libjpeg>=2.1
+pylibjpeg-openjpeg>=2.3
+pyjpegls>=1.4
+python-gdcm>=3.0.24
 lxml>=5.0

@@ -89,6 +89,35 @@ def _read(data: bytes):
         raise IngestError(f"not a readable DICOM object: {e}") from e
 
 
+_TEXT_KEYS = ("PatientName", "PatientID", "ReferringPhysicianName", "StudyDescription",
+              "SeriesDescription", "InstitutionName", "PerformingPhysicianName", "BodyPartExamined")
+
+
+def _fix_charset(ds) -> None:
+    """Objects from older local devices often carry Persian/Arabic text with
+    no SpecificCharacterSet. Decode such values for the index as UTF-8, then
+    the configured legacy code page (PACS_FALLBACK_CHARSET, default cp1256).
+    The stored file is never modified."""
+    if "SpecificCharacterSet" in ds:
+        return
+    for kw in _TEXT_KEYS:
+        try:
+            elem = ds.get_item(kw)
+        except (KeyError, ValueError):
+            continue
+        v = getattr(elem, "value", None)
+        if not isinstance(v, (bytes, bytearray)) or all(b < 0x80 for b in v):
+            continue
+        text = None
+        for enc in ("utf-8", config.default_charset()):
+            try:
+                text = bytes(v).decode(enc)
+                break
+            except (UnicodeDecodeError, LookupError):
+                continue
+        setattr(ds, kw, (text if text is not None else bytes(v).decode("latin-1")).rstrip(" \x00"))
+
+
 def _issuer_system(issuer: Optional[str]) -> str:
     issuer = (issuer or "").strip() or config.default_issuer()
     if issuer.startswith(("urn:", "http://", "https://")):
@@ -127,6 +156,7 @@ def ingest(data, *, source: str = "api", file_meta=None,
         except Exception as e:  # noqa: BLE001
             raise IngestError(f"dataset cannot be encoded: {e}") from e
         ds = _read(raw)
+    _fix_charset(ds)
 
     study_uid = _s(ds, "StudyInstanceUID")
     series_uid = _s(ds, "SeriesInstanceUID")
@@ -348,6 +378,11 @@ def _clause(col: str, kind: str, value: str, params: list) -> Optional[str]:
     if kind == "pn":
         if "*" in value or "?" in value:
             params.append(_wild(value).lower())
+            if col == "s.patient_name":
+                # Also match on the folded name, so "علی*" finds "علي" (Arabic
+                # yeh/kaf vs Persian), diacritics and case are ignored.
+                params.append(_wild_norm(value))
+                return f"(LOWER({col}) LIKE ? OR s.patient_name_norm LIKE ?)"
             return f"LOWER({col}) LIKE ?"
         # Exact PN match is case-insensitive; also accept "Family Given" order.
         params.append(value.lower())
@@ -359,6 +394,21 @@ def _clause(col: str, kind: str, value: str, params: list) -> Optional[str]:
         return f"LOWER({col}) LIKE ?"
     params.append(value.replace("-", "") if kind == "range" else value)
     return f"{col} = ?"
+
+
+def _wild_norm(value: str) -> str:
+    """A DICOM wildcard (``*``/``?``) pattern in folded-name form for LIKE."""
+    out, buf = [], ""
+    for ch in value:
+        if ch in "*?":
+            out.append(norm_name(buf.replace("^", " ")) if buf.strip("^ ") else buf.replace("^", " "))
+            out.append("%" if ch == "*" else "_")
+            buf = ""
+        else:
+            buf += ch
+    if buf:
+        out.append(norm_name(buf.replace("^", " ")))
+    return "".join(out).replace(" ", "%")
 
 
 def _canon(filters: dict[str, Any]) -> dict[str, str]:
