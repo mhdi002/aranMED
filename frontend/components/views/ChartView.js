@@ -120,7 +120,12 @@ export default function ChartView() {
     try { await clinicalApi.add(id, kind, body, token); setAdding(null); await load(); } catch (e) { setErr(e.message); }
   }
   async function viewDoc(d) {
-    if (d.source?.held === "remote") { setDocOpen({ ...d, content: "(held at the source hospital — import via transfer to view locally)" }); return; }
+    if (d.source?.held === "remote") {
+      // Read on demand from the hospital that holds it (its consent rules apply).
+      try { setDocOpen(await clinicalApi.remoteDocument(id, d.source.via || d.source.facility_oid, d.remote_id, token)); }
+      catch (e) { setErr(e.message); }
+      return;
+    }
     try { setDocOpen(await clinicalApi.document(d.id, token)); } catch (e) { setErr(e.message); }
   }
   async function exportCda() {

@@ -152,6 +152,38 @@ def fetch_everything(f: dict, remote_id: str, principal: Optional[dict],
     return [e["resource"] for e in r.json().get("entry") or []]
 
 
+def fetch_document(person: dict, facility_oid: str, remote_doc_id: str, principal: Optional[dict],
+                   purpose: str = "TREAT") -> dict:
+    """Full content of one document held at a peer, read on demand.
+
+    The peer applies its own consent rules and audits the read; we only
+    accept the document if it belongs to the person matched at that peer.
+    """
+    f = facilities.get_by_oid(facility_oid)
+    if not f or f.get("is_local") or not f.get("fhir_base"):
+        raise LookupError("unknown peer facility")
+    match = _find_at_peer(f, person, principal, purpose)
+    if not match:
+        raise LookupError("patient not found at that facility")
+    with client(f, principal, purpose) as c:
+        r = c.get(f"/DocumentReference/{remote_doc_id}")
+    if r.status_code in (401, 403):
+        raise PermissionError(f"HTTP {r.status_code}: {r.text[:200]}")
+    if r.status_code != 200:
+        raise LookupError(f"document not available (HTTP {r.status_code})")
+    res = r.json()
+    if fhir_map._ref_id(res.get("subject"), "Patient") != match["remote_id"]:  # noqa: SLF001
+        raise LookupError("document belongs to another patient")
+    _, vals = fhir_map.from_fhir(res)
+    messages.log(direction="out", protocol="fhir", message_type="DocumentReference",
+                 peer=f["oid"], status="ok")
+    src = vals.get("source_facility") or f["oid"]
+    return {**vals, "id": f"{f['oid']}:{remote_doc_id}", "remote_id": remote_doc_id,
+            "person_id": person["id"],
+            "source": {"facility_oid": src, "facility": (facilities.get_by_oid(src) or {}).get("name", src),
+                       "held": "remote", "remote": True, "via": f["oid"]}}
+
+
 def _study_from_fhir(res: dict, f: dict) -> dict:
     started = (res.get("started") or "").replace("-", "")[:8]
     return {"StudyInstanceUID": res["id"], "StudyDate": started,

@@ -83,7 +83,9 @@ def test_adt_orders_results_documents_queries(mllp_server, client, users):
     send(mllp_server, msg("ORM^O01", "C7", "PID|1||H-9001^^^&2.25.1001&ISO^MR||X^Y",
                           "ORC|CA|PL-55|FL-55", "OBR|1|PL-55|FL-55|CTH^CT Head"))
     assert store.get("service_request", sr["id"])["status"] == "revoked"
-    assert client.get(f"/api/pacs/worklist", headers=doc).json()["items"][0]["status"] in ("cancelled", "scheduled")
+    cancelled = next(w for w in client.get("/api/pacs/worklist", headers=doc).json()["items"]
+                     if w["order_id"] == sr["id"])
+    assert cancelled["status"] == "cancelled"
 
     # ORU lab results with ranges and flags.
     ack = send(mllp_server, msg(

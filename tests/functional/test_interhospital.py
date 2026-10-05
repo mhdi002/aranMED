@@ -225,13 +225,12 @@ def test_patient_journey_across_hospitals(net):
         ["requested", "accepted", "in_transit", "arrived", "completed"]
     assert b.post(f"/api/transfers/{tb['id']}/arrive", role="doctor", json={}).status_code == 409
 
-    # Re-sending the package changes nothing at B (records de-duplicate).
-    tb_state = b.get(f"/api/transfers/{tb['id']}", role="doctor").json()
+    # Once completed, B refuses further packages for this transfer and nothing
+    # changes (re-sending while still open is covered in test_interhospital_records).
     r = a.post(f"/api/transfers/{t['id']}/resend-package", role="doctor")
-    assert r.status_code in (200, 502)  # B may refuse once completed; either way no duplicates
+    assert r.status_code == 502 and "not expected in state completed" in r.text
     again = b.get(f"/api/clinical/patients/{pb}/chart", role="doctor").json()
     assert {k: len(v) for k, v in again["sections"].items()} == counts
-    assert tb_state["status"] == "completed"
 
     # Both message logs recorded the exchange.
     assert any(m["protocol"] == "transfer" for m in a.get("/api/interop/messages").json()["messages"])

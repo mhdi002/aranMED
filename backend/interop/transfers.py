@@ -154,6 +154,13 @@ def _call(f: dict, method: str, path: str, *, practitioner: str = "system",
     raise TransferError(f"could not reach {f['name']}: {last}")
 
 
+def _dangling(reference: str, local: dict) -> bool:
+    """A reference to one of this hospital's own records that is not in the
+    package (e.g. a deleted encounter) would dangle at the receiver: drop it."""
+    rt, _, rid = reference.partition("/")
+    return bool(rid) and rt in ("Encounter", "Observation", "DocumentReference") and reference not in local
+
+
 # ---------------------------------------------------------------- sending side
 def request(person_id: str, to_oid: str, *, user: dict, urgency: str = "routine",
             reason: str = "", clinical_summary: str = "", transport_mode: str = "",
@@ -183,24 +190,50 @@ def request(person_id: str, to_oid: str, *, user: dict, urgency: str = "routine"
 
 
 def build_package(t: dict) -> dict:
-    """FHIR transaction Bundle with the whole local record + a summary note."""
+    """FHIR transaction Bundle with the whole local record + a summary note.
+
+    Every entry gets a ``urn:uuid`` fullUrl and references between records in
+    the package (encounter links, report results, document context) point at
+    those, so the receiver resolves them to its own new ids instead of keeping
+    dangling ids from this hospital. Medications carry their dose history.
+    """
     pid = t["person_id"]
     person = mpi.get(pid)
     entries = [{"fullUrl": f"urn:uuid:patient-{pid}", "resource": fhir_map.patient(person),
                 "request": {"method": "POST", "url": "Patient"}}]
     ref = f"urn:uuid:patient-{pid}"
-    n = 0
+    rows: list[tuple[str, dict]] = []
     for rtype in store.RESOURCES:
         if rtype == "consent":
             continue  # consents are local legal records; the receiver records its own
         for row in store.list_for(rtype, pid, limit=10000):
-            res = fhir_map.to_fhir(rtype, row)
-            for key in ("subject", "patient"):
-                if key in res:
-                    res[key] = {"reference": ref}
-            res.pop("encounter", None)
-            entries.append({"resource": res, "request": {"method": "POST", "url": res["resourceType"]}})
-            n += 1
+            rows.append((rtype, row))
+    local = {f"{fhir_map.fhir_type(rt, row)}/{row['id']}": f"urn:uuid:{rt}-{row['id']}" for rt, row in rows}
+
+    def relink(obj: Any) -> Any:
+        if isinstance(obj, dict):
+            return {k: (local.get(v, None) if k == "reference" and isinstance(v, str) and v in local
+                        else relink(v)) for k, v in obj.items()
+                    if not (k == "reference" and isinstance(v, str) and _dangling(v, local))}
+        if isinstance(obj, list):
+            return [x for x in (relink(i) for i in obj) if x != {}]
+        return obj
+
+    n = 0
+    for rtype, row in rows:
+        if rtype == "medication":
+            row = {**row, "_dose_history": store.prior_versions(rtype, row["id"])}
+        res = fhir_map.to_fhir(rtype, row)
+        for key in ("subject", "patient"):
+            if key in res:
+                res[key] = {"reference": ref}
+        res = relink(res)
+        for key in ("encounter", "context"):
+            if res.get(key) in ({}, None):
+                res.pop(key, None)
+        entries.append({"fullUrl": f"urn:uuid:{rtype}-{row['id']}", "resource": res,
+                        "request": {"method": "POST", "url": res["resourceType"]}})
+        n += 1
     c = chart_mod.build(pid)
     summary = (f"TRANSFER SUMMARY\nFrom: {settings.facility_name()} ({settings.facility_oid()})\n"
                f"Reason: {t.get('reason') or '-'}\nUrgency: {t.get('urgency') or '-'}\n"
@@ -297,6 +330,10 @@ def receive_status(remote_id: str, body: dict, peer: dict) -> dict:
     status = body.get("status")
     if status not in STATES:
         raise TransferError("bad status")
+    if status != t["status"] and status not in _NEXT.get(t["status"], set()):
+        raise TransferError(f"cannot go from {t['status']} to {status}")
+    if status == t["status"]:
+        return t  # duplicate notification (e.g. a retry) — nothing to do
     fields: dict[str, Any] = {}
     if body.get("eta"):
         fields["eta"] = body["eta"]
@@ -338,13 +375,26 @@ def receive_package(remote_id: str, bundle: dict, peer: dict, request) -> dict:
         meta = res.setdefault("meta", {})
         if not (meta.get("source") or "").startswith("urn:oid:"):
             meta["source"] = f"urn:oid:{peer['facility_oid']}#{res.get('id')}"
-    # The bundle's Patient must resolve to the person this transfer is for.
+    # The bundle's Patient IS the person this transfer is for: add its
+    # identifiers there and point every record at that person, rather than
+    # letting demographic matching decide (it could create a duplicate).
+    kept = []
     for e in bundle.get("entry") or []:
-        if (e.get("resource") or {}).get("resourceType") == "Patient":
-            demo, idents = fhir_map.patient_in(e["resource"])
+        res = e.get("resource") or {}
+        if res.get("resourceType") == "Patient":
+            demo, idents = fhir_map.patient_in(res)
             for i in idents:
                 mpi.add_identifier(t["person_id"], i["system"], i["value"], type_=i["type"],
                                    facility_oid=i.get("facility_oid"))
+            continue
+        kept.append(e)
+    me = {"reference": f"Patient/{t['person_id']}"}
+    for e in kept:
+        res = e["resource"]
+        for key in ("subject", "patient"):
+            if key in res:
+                res[key] = me
+    bundle = {**bundle, "entry": kept}
     resp = fhir_server.process_bundle(bundle, system, request)
     counts: dict[str, int] = {}
     for e in resp["entry"]:

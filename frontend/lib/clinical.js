@@ -16,6 +16,8 @@ export const clinicalApi = {
     apiFetch(`/api/clinical/resources/${type}/${rid}`, { method: "PATCH", body: J({ changes, version }) }, token),
   remove: (type, rid, token) => apiFetch(`/api/clinical/resources/${type}/${rid}`, { method: "DELETE" }, token),
   document: (docId, token) => apiFetch(`/api/clinical/documents/${docId}`, {}, token),
+  remoteDocument: (personId, facility, docId, token) =>
+    apiFetch(`/api/clinical/patients/${personId}/remote-documents/${encodeURIComponent(facility)}/${encodeURIComponent(docId)}`, {}, token),
   breakGlass: (id, reason, token) =>
     apiFetch(`/api/clinical/patients/${id}/break-glass`, { method: "POST", body: J({ reason }) }, token),
   ask: (id, question, includeRemote, token) =>

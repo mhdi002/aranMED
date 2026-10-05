@@ -33,6 +33,14 @@ CONSENT_SCOPE = "http://terminology.hl7.org/CodeSystem/consentscope"
 CONSENT_CAT = "urn:aranmed:consent-category"
 UCUM = "http://unitsofmeasure.org"
 LOINC = "http://loinc.org"
+# AranMed extensions: carry columns FHIR has no exact slot for, so a record
+# survives A -> B -> C without losing anything (other systems ignore them).
+EXT_BASE = "https://aranmed.org/fhir/StructureDefinition/"
+EXT_DATA = EXT_BASE + "row-data"
+EXT_DOSE = EXT_BASE + "dose-text"
+EXT_DOSE_HISTORY = EXT_BASE + "dose-history"
+EXT_PANEL = EXT_BASE + "panel-id"
+EXT_NOTE = EXT_BASE + "note"  # for resource types that have no Annotation slot
 DCM = "http://dicom.nema.org/resources/ontology/DCM"
 
 DOC_TYPES = {  # doc_type -> LOINC
@@ -87,6 +95,14 @@ def _fhir_datetime(v: Optional[str]) -> Optional[str]:
     if m:
         return f"{m.group(1)}T{m.group(2)}{m.group(3) or ':00'}{m.group(5) or 'Z'}"
     return None
+
+
+def _instant(v: Optional[str]) -> Optional[str]:
+    """FHIR instant (full date-time with zone); a bare date becomes midnight UTC."""
+    d = _fhir_datetime(v)
+    if not d:
+        return None
+    return d if "T" in d else (f"{d}T00:00:00Z" if len(d) == 10 else None)
 
 
 def _date_only(v: Optional[str]) -> Optional[str]:
@@ -155,6 +171,63 @@ def _clean(d: dict) -> dict:
     return {k: v for k, v in d.items() if v not in (None, [], {}, "")}
 
 
+def _ext(url: str, value: Any) -> Optional[dict]:
+    if value in (None, "", [], {}):
+        return None
+    if not isinstance(value, str):
+        import json
+        value = json.dumps(value, ensure_ascii=False, sort_keys=True)
+    return {"url": url, "valueString": value}
+
+
+def _ext_get(obj: Optional[dict], url: str, *, as_json: bool = False) -> Any:
+    for e in (obj or {}).get("extension") or []:
+        if e.get("url") == url:
+            v = e.get("valueString")
+            if as_json and v:
+                import json
+                try:
+                    return json.loads(v)
+                except ValueError:
+                    return None
+            return v
+    return None
+
+
+_NO_NOTE = {"Encounter", "DocumentReference", "DiagnosticReport", "Consent"}
+
+
+def _with_common_ext(res: dict, row: dict) -> dict:
+    exts = [e for e in (res.get("extension") or []) if e]
+    d = _ext(EXT_DATA, row.get("data") or None)
+    if d:
+        exts.append(d)
+    if res.get("resourceType") in _NO_NOTE and row.get("note"):
+        exts.append(_ext(EXT_NOTE, row["note"]))
+    res["extension"] = exts or None
+    return res
+
+
+_DOSE_RE = re.compile(r"^\s*([0-9]+(?:\.[0-9]+)?)\s*([A-Za-z%µ/\[\]]+)?\s*$")
+
+
+def _dose_quantity(dose: Optional[str]) -> Optional[dict]:
+    m = _DOSE_RE.match(dose or "")
+    if not m:
+        return None
+    q: dict[str, Any] = {"value": float(m.group(1))}
+    if m.group(2):
+        q.update({"unit": m.group(2), "system": UCUM, "code": m.group(2)})
+    return q
+
+
+def _strip_div(div: Optional[str]) -> Optional[str]:
+    if not div:
+        return None
+    t = re.sub(r"<[^>]+>", "", div)
+    return t.replace("&lt;", "<").replace("&gt;", ">").replace("&amp;", "&") or None
+
+
 # ---------------------------------------------------------------------------
 # Patient / Organization / Endpoint / ImagingStudy
 # ---------------------------------------------------------------------------
@@ -207,6 +280,15 @@ def patient_in(res: dict) -> tuple[dict, list[dict]]:
     if res.get("address"):
         a = res["address"][0]
         demo["address"] = a.get("text") or ", ".join(a.get("line") or []) or None
+    aliases = [{"family": n.get("family"), "given": " ".join(n.get("given") or []) or None}
+               for n in res.get("name") or [] if n.get("use") == "usual"]
+    if aliases:
+        demo["aliases"] = aliases
+    if res.get("deceasedBoolean") is not None:
+        demo["deceased"] = res["deceasedBoolean"]
+    lang = ((((res.get("communication") or [{}])[0]).get("language") or {}).get("coding") or [{}])[0].get("code")
+    if lang:
+        demo["language"] = lang
     idents = []
     for i in res.get("identifier") or []:
         if not (i.get("system") and i.get("value")):
@@ -281,7 +363,7 @@ def to_fhir(rtype: str, row: dict) -> dict:
     fn = _TO.get(rtype)
     if fn is None:
         raise ValueError(f"no FHIR mapping for {rtype}")
-    res = fn(row)
+    res = _with_common_ext(fn(row), row)
     res["id"] = row["id"]
     res["meta"] = _meta(row)
     return _clean(res)
@@ -295,8 +377,8 @@ def _enc(r: dict) -> dict:
             "period": _clean({"start": _fhir_datetime(r.get("start_at")),
                               "end": _fhir_datetime(r.get("end_at"))}) or None,
             "reasonCode": [{"text": r["reason"]}] if r.get("reason") else None,
-            "location": [{"location": {"display": r.get("location") or r.get("department")}}]
-            if (r.get("location") or r.get("department")) else None,
+            "location": [{"location": {"display": r["location"]}}] if r.get("location") else None,
+            "serviceType": {"text": r["department"]} if r.get("department") else None,
             "hospitalization": _clean({
                 "admitSource": {"text": r["admit_source"]} if r.get("admit_source") else None,
                 "dischargeDisposition": {"text": r["disposition"]} if r.get("disposition") else None}) or None,
@@ -347,10 +429,16 @@ def _dosage_text(r: dict) -> Optional[str]:
 
 
 def _med(r: dict) -> dict:
-    dosage = _clean({"text": _dosage_text(r),
+    timing = _clean({"code": {"text": r["frequency"]} if r.get("frequency") else None,
+                     "repeat": {"frequency": 1, "period": float(r["frequency_hours"]), "periodUnit": "h"}
+                     if r.get("frequency_hours") else None})
+    dq = _dose_quantity(r.get("dose"))
+    dosage = _clean({"extension": [_ext(EXT_DOSE, r["dose"])] if r.get("dose") else None,
+                     "text": _dosage_text(r),
                      "route": {"text": r["route"]} if r.get("route") else None,
-                     "timing": {"repeat": {"frequency": 1, "period": float(r["frequency_hours"]),
-                                           "periodUnit": "h"}} if r.get("frequency_hours") else None})
+                     "timing": timing or None,
+                     "doseAndRate": [{"doseQuantity": dq}] if dq else None})
+    hist = _ext(EXT_DOSE_HISTORY, r.get("_dose_history"))
     med = cc(r.get("code_system"), r.get("code"), r.get("display"), r.get("text")) or {"text": "unknown"}
     if r.get("kind") == "request":
         st = r.get("status") or "active"
@@ -361,7 +449,11 @@ def _med(r: dict) -> dict:
                 "authoredOn": _fhir_datetime(r.get("start_at")),
                 "requester": {"display": r["prescriber"]} if r.get("prescriber") else None,
                 "dosageInstruction": [dosage] if dosage else None,
+                "dispenseRequest": {"validityPeriod": _clean({"start": _fhir_datetime(r.get("start_at")),
+                                                              "end": _fhir_datetime(r.get("end_at"))})}
+                if r.get("end_at") else None,
                 "reasonCode": [{"text": r["indication"]}] if r.get("indication") else None,
+                "extension": [hist] if hist else None,
                 "note": _note(r)}
     st = r.get("status") or "active"
     return {"resourceType": "MedicationStatement",
@@ -371,7 +463,9 @@ def _med(r: dict) -> dict:
             "effectivePeriod": _clean({"start": _fhir_datetime(r.get("start_at")),
                                        "end": _fhir_datetime(r.get("end_at"))}) or None,
             "dosage": [dosage] if dosage else None,
+            "informationSource": {"display": r["prescriber"]} if r.get("prescriber") else None,
             "reasonCode": [{"text": r["indication"]}] if r.get("indication") else None,
+            "extension": [hist] if hist else None,
             "note": _note(r)}
 
 
@@ -383,7 +477,8 @@ def _obs(r: dict) -> dict:
         "subject": _subject(r),
         "encounter": {"reference": f"Encounter/{r['encounter_id']}"} if r.get("encounter_id") else None,
         "effectiveDateTime": _fhir_datetime(r.get("effective")),
-        "performer": None,
+        "performer": [{"display": r["performer"]}] if r.get("performer") else None,
+        "extension": [_ext(EXT_PANEL, r["panel_id"])] if r.get("panel_id") else None,
         "interpretation": [{"coding": [{"system": OBS_INTERP, "code": r["interpretation"]}]}]
         if r.get("interpretation") else None,
         "referenceRange": [_clean({"low": {"value": r["ref_low"], "unit": r.get("unit")} if r.get("ref_low") is not None else None,
@@ -482,7 +577,7 @@ def _dr(r: dict) -> dict:
             "subject": _subject(r),
             "encounter": {"reference": f"Encounter/{r['encounter_id']}"} if r.get("encounter_id") else None,
             "effectiveDateTime": _fhir_datetime(r.get("effective")),
-            "issued": _iso(r.get("updated_at")),
+            "issued": _instant(r.get("issued")) or _iso(r.get("updated_at")),
             "performer": [{"display": r["performer"]}] if r.get("performer") else None,
             "result": [{"reference": f"Observation/{i}"} for i in r.get("result_ids") or []] or None,
             "imagingStudy": [{"reference": f"ImagingStudy/{r['study_uid']}"}] if r.get("study_uid") else None,
@@ -536,6 +631,11 @@ def from_fhir(res: dict) -> tuple[str, dict[str, Any]]:
         v["encounter_id"] = _ref_id(enc, "Encounter")
     if res.get("note"):
         v["note"] = "\n".join(n.get("text") or "" for n in res["note"])
+    elif _ext_get(res, EXT_NOTE):
+        v["note"] = _ext_get(res, EXT_NOTE)
+    data = _ext_get(res, EXT_DATA, as_json=True)
+    if data:
+        v["data"] = data
     if rt == "Encounter":
         per = res.get("period") or {}
         v.update(status=res.get("status"), **{"class": (res.get("class") or {}).get("code")},
@@ -543,6 +643,9 @@ def from_fhir(res: dict) -> tuple[str, dict[str, Any]]:
                  reason=((res.get("reasonCode") or [{}])[0]).get("text"),
                  start_at=per.get("start"), end_at=per.get("end"),
                  location=(((res.get("location") or [{}])[0]).get("location") or {}).get("display"),
+                 department=(res.get("serviceType") or {}).get("text"),
+                 attending=(((res.get("participant") or [{}])[0]).get("individual") or {}).get("display"),
+                 text=_strip_div((res.get("text") or {}).get("div")),
                  priority=(res.get("priority") or {}).get("text") or _coding_code(res.get("priority")),
                  admit_source=((res.get("hospitalization") or {}).get("admitSource") or {}).get("text"),
                  disposition=((res.get("hospitalization") or {}).get("dischargeDisposition") or {}).get("text"))
@@ -565,13 +668,24 @@ def from_fhir(res: dict) -> tuple[str, dict[str, Any]]:
         dos = ((res.get("dosage") or res.get("dosageInstruction") or [{}])[0])
         rep = ((dos.get("timing") or {}).get("repeat") or {})
         per = res.get("effectivePeriod") or {}
+        dq = ((dos.get("doseAndRate") or [{}])[0]).get("doseQuantity") or {}
+        dose = _ext_get(dos, EXT_DOSE)
+        if not dose and dq.get("value") is not None:
+            dose = f"{dq['value']:g} {dq.get('unit') or ''}".strip()
+        timing = dos.get("timing") or {}
+        # Older peers only sent the combined dosage text; keep it as frequency.
+        freq = (timing.get("code") or {}).get("text") or (None if dose else dos.get("text"))
+        vp = (res.get("dispenseRequest") or {}).get("validityPeriod") or {}
         v.update(_cc_parts(res.get("medicationCodeableConcept")), status=res.get("status"),
                  kind="request" if rt == "MedicationRequest" else "statement",
-                 frequency=dos.get("text"), route=(dos.get("route") or {}).get("text"),
+                 dose=dose, frequency=freq, route=(dos.get("route") or {}).get("text"),
                  frequency_hours=rep.get("period") if rep.get("periodUnit") == "h" else None,
-                 start_at=per.get("start") or res.get("authoredOn"), end_at=per.get("end"),
-                 prescriber=(res.get("requester") or {}).get("display"),
+                 start_at=per.get("start") or res.get("authoredOn"), end_at=per.get("end") or vp.get("end"),
+                 prescriber=(res.get("requester") or res.get("informationSource") or {}).get("display"),
                  indication=((res.get("reasonCode") or [{}])[0]).get("text"))
+        hist = _ext_get(res, EXT_DOSE_HISTORY, as_json=True)
+        if hist:
+            v["_dose_history"] = hist
     elif rt == "Observation":
         q = res.get("valueQuantity") or {}
         rr = (res.get("referenceRange") or [{}])[0]
@@ -581,7 +695,9 @@ def from_fhir(res: dict) -> tuple[str, dict[str, Any]]:
                  value_text=res.get("valueString"),
                  ref_low=(rr.get("low") or {}).get("value"), ref_high=(rr.get("high") or {}).get("value"),
                  interpretation=_coding_code((res.get("interpretation") or [None])[0]),
-                 effective=res.get("effectiveDateTime"))
+                 effective=res.get("effectiveDateTime"),
+                 performer=((res.get("performer") or [{}])[0]).get("display"),
+                 panel_id=_ext_get(res, EXT_PANEL))
         comps = res.get("component") or []
         if comps and v.get("value_num") is None and len(comps) == 2:
             vals = [str(int((c.get("valueQuantity") or {}).get("value", 0))) for c in comps]
@@ -598,6 +714,7 @@ def from_fhir(res: dict) -> tuple[str, dict[str, Any]]:
                  occurrence=res.get("occurrenceDateTime") or res.get("occurrenceString"),
                  lot=res.get("lotNumber"), site=(res.get("site") or {}).get("text"),
                  route=(res.get("route") or {}).get("text"),
+                 performer=(((res.get("performer") or [{}])[0]).get("actor") or {}).get("display"),
                  dose_number=((res.get("protocolApplied") or [{}])[0]).get("doseNumberString"))
     elif rt == "DocumentReference":
         att = ((res.get("content") or [{}])[0]).get("attachment") or {}
@@ -629,6 +746,7 @@ def from_fhir(res: dict) -> tuple[str, dict[str, Any]]:
                  effective=res.get("effectiveDateTime"), issued=res.get("issued"),
                  conclusion=res.get("conclusion"), study_uid=study,
                  performer=((res.get("performer") or [{}])[0]).get("display"),
+                 result_ids=[x for x in (_ref_id(r_, "Observation") for r_ in res.get("result") or []) if x] or None,
                  text=base64.b64decode(pf["data"]).decode("utf-8", errors="replace") if pf.get("data") else None)
     elif rt == "Consent":
         prov = res.get("provision") or {}

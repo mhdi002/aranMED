@@ -66,44 +66,86 @@ def _audit(p: dict, action: str, resource: str, request: Request, **detail) -> N
                  detail={"kind": p.get("kind"), "purpose": p.get("purpose"), **detail} or None)
 
 
+def _person_of_studies(uids: list[str]) -> dict[str, Optional[str]]:
+    if not uids:
+        return {}
+    import db
+    with db.connect() as c:
+        rows = c.execute(f"SELECT study_uid, person_id FROM pacs_studies WHERE study_uid IN "
+                         f"({', '.join('?' for _ in uids)})", tuple(uids)).fetchall()
+    return {r["study_uid"]: r["person_id"] for r in rows}
+
+
+def _peer_allowed(p: dict, study_uids: list[str], request: Request) -> set[str]:
+    """Studies a peer hospital may see: the patient's sharing consent at this
+    hospital applies to images exactly as it does to the record (ETREAT
+    overrides a refusal and is audited as such)."""
+    if p.get("kind") != "peer":
+        return set(study_uids)
+    from ehr import access
+    allowed: set[str] = set()
+    for uid, person in _person_of_studies(sorted(set(study_uids))).items():
+        if not person:
+            allowed.add(uid)
+            continue
+        ok, why = access.peer_read_decision(person, p["facility_oid"], p.get("purpose") or "TREAT")
+        if ok:
+            allowed.add(uid)
+            if why == "emergency override":
+                _audit(p, "pacs.consent.override", f"study:{uid}", request, why=why)
+        else:
+            _audit(p, "pacs.consent.deny", f"study:{uid}", request, why=why)
+            audit.record("pacs.access", **pr.actor(p), resource=f"study:{uid}", outcome="deny",
+                         client_ip=request.client.host if request.client else None,
+                         detail={"why": why, "purpose": p.get("purpose")})
+    return allowed
+
+
+def _gate(p: dict, rows: list[dict], request: Request, key: str = "StudyInstanceUID") -> list[dict]:
+    if p.get("kind") != "peer" or not rows:
+        return rows
+    ok = _peer_allowed(p, [x[key] for x in rows if x.get(key)], request)
+    return [x for x in rows if x.get(key) in ok]
+
+
 def make_router() -> APIRouter:
     r = APIRouter(prefix=config.dicomweb_prefix(), tags=["dicomweb"])
     read = Depends(pr.require("pacs.read"))
     write = Depends(pr.require("pacs.write"))
 
     # ------------------------------------------------------------------ QIDO
-    def _qido_studies(request: Request, extra: Optional[dict] = None):
+    def _qido_studies(request: Request, p: dict, extra: Optional[dict] = None):
         filters, limit, offset, inc = _filters(request)
         filters.update(extra or {})
         keys = dicomjson.requested_keys(dicomjson.STUDY_RETURN, inc)
         base = _base(request)
-        return [dicomjson.to_json(s, keys, f"{base}/studies/{s['StudyInstanceUID']}")
-                for s in index.query_studies(filters, limit=limit, offset=offset)]
+        rows = _gate(p, index.query_studies(filters, limit=limit, offset=offset), request)
+        return [dicomjson.to_json(s, keys, f"{base}/studies/{s['StudyInstanceUID']}") for s in rows]
 
     @r.get("/studies")
     def qido_studies(request: Request, p: dict = read):
-        out = _qido_studies(request)
+        out = _qido_studies(request, p)
         _audit(p, "pacs.qido", "studies", request, results=len(out))
         return _json(out)
 
-    def _qido_series(request: Request, extra: dict):
+    def _qido_series(request: Request, extra: dict, p: dict):
         filters, limit, offset, inc = _filters(request)
         filters.update(extra)
         keys = dicomjson.requested_keys(dicomjson.SERIES_RETURN, inc)
         base = _base(request)
         return [dicomjson.to_json(
             s, keys, f"{base}/studies/{s['StudyInstanceUID']}/series/{s['SeriesInstanceUID']}")
-            for s in index.query_series(filters, limit=limit, offset=offset)]
+            for s in _gate(p, index.query_series(filters, limit=limit, offset=offset), request)]
 
     @r.get("/series")
     def qido_all_series(request: Request, p: dict = read):
-        return _json(_qido_series(request, {}))
+        return _json(_qido_series(request, {}, p))
 
     @r.get("/studies/{study}/series")
     def qido_series(study: str, request: Request, p: dict = read):
-        return _json(_qido_series(request, {"StudyInstanceUID": study}))
+        return _json(_qido_series(request, {"StudyInstanceUID": study}, p))
 
-    def _qido_instances(request: Request, extra: dict):
+    def _qido_instances(request: Request, extra: dict, p: dict):
         filters, limit, offset, inc = _filters(request)
         filters.update(extra)
         keys = dicomjson.requested_keys(dicomjson.INSTANCE_RETURN, inc)
@@ -111,24 +153,26 @@ def make_router() -> APIRouter:
         return [dicomjson.to_json(
             i, keys, f"{base}/studies/{i['StudyInstanceUID']}/series/{i['SeriesInstanceUID']}"
                      f"/instances/{i['SOPInstanceUID']}")
-            for i in index.query_instances(filters, limit=limit, offset=offset)]
+            for i in _gate(p, index.query_instances(filters, limit=limit, offset=offset), request)]
 
     @r.get("/instances")
     def qido_all_instances(request: Request, p: dict = read):
-        return _json(_qido_instances(request, {}))
+        return _json(_qido_instances(request, {}, p))
 
     @r.get("/studies/{study}/instances")
     def qido_study_instances(study: str, request: Request, p: dict = read):
-        return _json(_qido_instances(request, {"StudyInstanceUID": study}))
+        return _json(_qido_instances(request, {"StudyInstanceUID": study}, p))
 
     @r.get("/studies/{study}/series/{series}/instances")
     def qido_series_instances(study: str, series: str, request: Request, p: dict = read):
         return _json(_qido_instances(request, {"StudyInstanceUID": study,
-                                               "SeriesInstanceUID": series}))
+                                               "SeriesInstanceUID": series}, p))
 
     # ------------------------------------------------------------------ WADO
-    def _instances(study: str, series: Optional[str] = None,
+    def _instances(p: dict, request: Request, study: str, series: Optional[str] = None,
                    sop: Optional[str] = None) -> list[dict]:
+        if study not in _peer_allowed(p, [study], request):
+            raise HTTPException(403, "the patient has not consented to sharing images with your facility")
         rows = index.instance_paths(study_uid=study, series_uid=series,
                                     sop_uids=[sop] if sop else None)
         if not rows:
@@ -143,20 +187,20 @@ def make_router() -> APIRouter:
 
     @r.get("/studies/{study}")
     def wado_study(study: str, request: Request, p: dict = read):
-        rows = _instances(study)
+        rows = _instances(p, request, study)
         _audit(p, "pacs.wado.retrieve", f"study:{study}", request, instances=len(rows))
         return _multipart_dicom(rows)
 
     @r.get("/studies/{study}/series/{series}")
     def wado_series(study: str, series: str, request: Request, p: dict = read):
-        rows = _instances(study, series)
+        rows = _instances(p, request, study, series)
         _audit(p, "pacs.wado.retrieve", f"study:{study}", request, series=series)
         return _multipart_dicom(rows)
 
     @r.get("/studies/{study}/series/{series}/instances/{sop}")
     def wado_instance(study: str, series: str, sop: str, request: Request,
                             p: dict = read):
-        rows = _instances(study, series, sop)
+        rows = _instances(p, request, study, series, sop)
         accept = request.headers.get("accept", "")
         if "application/dicom" in accept and "multipart" not in accept:
             return Response(get_storage().get(rows[0]["path"]), media_type="application/dicom")
@@ -181,25 +225,25 @@ def make_router() -> APIRouter:
 
     @r.get("/studies/{study}/metadata")
     def meta_study(study: str, request: Request, p: dict = read):
-        rows = _instances(study)
+        rows = _instances(p, request, study)
         _audit(p, "pacs.wado.metadata", f"study:{study}", request)
         return _json(_metadata(rows, request))
 
     @r.get("/studies/{study}/series/{series}/metadata")
     def meta_series(study: str, series: str, request: Request, p: dict = read):
-        rows = _instances(study, series)
+        rows = _instances(p, request, study, series)
         _audit(p, "pacs.wado.metadata", f"study:{study}", request, series=series)
         return _json(_metadata(rows, request))
 
     @r.get("/studies/{study}/series/{series}/instances/{sop}/metadata")
     def meta_instance(study: str, series: str, sop: str, request: Request,
                             p: dict = read):
-        return _json(_metadata(_instances(study, series, sop), request))
+        return _json(_metadata(_instances(p, request, study, series, sop), request))
 
     @r.get("/studies/{study}/series/{series}/instances/{sop}/frames/{frames}")
     def wado_frames(study: str, series: str, sop: str, frames: str, request: Request,
                           p: dict = read):
-        x = _instances(study, series, sop)[0]
+        x = _instances(p, request, study, series, sop)[0]
         ds = render.load(get_storage().get(x["path"]))
         try:
             numbers = [int(f) for f in frames.split(",") if f.strip()]
@@ -217,7 +261,7 @@ def make_router() -> APIRouter:
 
     @r.get("/studies/{study}/series/{series}/instances/{sop}/bulk/{tag}")
     def bulk(study: str, series: str, sop: str, tag: str, request: Request, p: dict = read):
-        x = _instances(study, series, sop)[0]
+        x = _instances(p, request, study, series, sop)[0]
         ds = render.load(get_storage().get(x["path"]))
         try:
             elem = ds[int(tag, 16)]
@@ -252,12 +296,12 @@ def make_router() -> APIRouter:
     @r.get("/studies/{study}/series/{series}/instances/{sop}/rendered")
     def rendered_instance(study: str, series: str, sop: str, request: Request,
                                 p: dict = read):
-        return _rendered(_instances(study, series, sop)[0], 1, request)
+        return _rendered(_instances(p, request, study, series, sop)[0], 1, request)
 
     @r.get("/studies/{study}/series/{series}/instances/{sop}/frames/{frame}/rendered")
     def rendered_frame(study: str, series: str, sop: str, frame: int,
                              request: Request, p: dict = read):
-        return _rendered(_instances(study, series, sop)[0], frame, request)
+        return _rendered(_instances(p, request, study, series, sop)[0], frame, request)
 
     def _thumb(rows: list[dict], request: Request) -> Response:
         imgs = [x for x in rows if x.get("rows_")]
@@ -270,16 +314,16 @@ def make_router() -> APIRouter:
 
     @r.get("/studies/{study}/thumbnail")
     def thumb_study(study: str, request: Request, p: dict = read):
-        return _thumb(_instances(study), request)
+        return _thumb(_instances(p, request, study), request)
 
     @r.get("/studies/{study}/series/{series}/thumbnail")
     def thumb_series(study: str, series: str, request: Request, p: dict = read):
-        return _thumb(_instances(study, series), request)
+        return _thumb(_instances(p, request, study, series), request)
 
     @r.get("/studies/{study}/series/{series}/instances/{sop}/thumbnail")
     def thumb_instance(study: str, series: str, sop: str, request: Request,
                              p: dict = read):
-        return _thumb(_instances(study, series, sop), request)
+        return _thumb(_instances(p, request, study, series, sop), request)
 
     # ------------------------------------------------------------------ STOW
     async def _stow(request: Request, p: dict, study: Optional[str]) -> Response:
@@ -349,7 +393,7 @@ def make_router() -> APIRouter:
         q = request.query_params
         if q.get("requestType") != "WADO":
             raise HTTPException(400, "requestType must be WADO")
-        rows = _instances(q.get("studyUID", ""), q.get("seriesUID") or None,
+        rows = _instances(p, request, q.get("studyUID", ""), q.get("seriesUID") or None,
                           q.get("objectUID") or None)
         x = rows[0]
         ctype = q.get("contentType", "image/jpeg")

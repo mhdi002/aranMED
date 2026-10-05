@@ -335,10 +335,16 @@ def create(resource_type: str, res: dict, p: dict, request: Request,
     _check_person(p, values["person_id"], request, "fhir.write")
     if p.get("kind") == "peer":
         values.setdefault("source_facility", p["facility_oid"])
+    prior = values.pop("_dose_history", None)
     row = store.create(rtype, values, actor=p.get("username"), rid=rid)
+    if prior:
+        if store.import_history(rtype, row["id"], prior, actor=p.get("username")):
+            row = store.get(rtype, row["id"]) or row
+    existed = bool(row.get("_deduplicated"))
     audit.record("fhir.create", **pr.actor(p), resource=f"person:{row['person_id']}",
-                 detail={"type": resource_type, "id": row["id"], "kind": p.get("kind")})
-    return fhir_map.to_fhir(rtype, row), 201
+                 detail={"type": resource_type, "id": row["id"], "kind": p.get("kind"),
+                         "deduplicated": existed})
+    return fhir_map.to_fhir(rtype, row), 200 if existed else 201
 
 
 def update(resource_type: str, rid: str, res: dict, p: dict, request: Request,
@@ -421,7 +427,8 @@ def process_bundle(bundle: dict, p: dict, request: Request) -> dict:
                     out, status = create(res.get("resourceType") or url.split("/")[0], res, p, request)
                     if e.get("fullUrl"):
                         mapping[e["fullUrl"]] = f"{out['resourceType']}/{out['id']}"
-                    if out["resourceType"] != "Patient":
+                    if out["resourceType"] != "Patient" and status == 201:
+                        # only rows this transaction really created are rolled back
                         created.append((fhir_map.FHIR_TO_TYPE[out["resourceType"]], out["id"]))
                 elif method == "PUT":
                     rt, rid = url.split("/")[:2]

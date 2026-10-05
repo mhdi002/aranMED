@@ -141,9 +141,13 @@ def create(rtype: str, values: dict[str, Any], *, actor: Optional[str] = None,
             ex = c.execute(f"SELECT id FROM {spec['table']} WHERE source_facility=? AND source_id=?",
                            (vals["source_facility"], vals["source_id"])).fetchone()
         if ex:
-            return update(rtype, ex["id"], {k: v for k, v in vals.items()
-                                            if k not in ("source_facility", "source_id")},
-                          actor=actor, deleted=False)
+            out = update(rtype, ex["id"], {k: v for k, v in vals.items()
+                                           if k not in ("source_facility", "source_id")},
+                         actor=actor, deleted=False)
+            # Callers (e.g. a FHIR transaction) must know this row pre-existed,
+            # so a rollback never deletes a record that was only refreshed.
+            out["_deduplicated"] = True
+            return out
     rid = rid or new_id()
     vals.setdefault("source_id", rid)
     enc = _encode(rtype, vals)
@@ -210,6 +214,56 @@ def history(rtype: str, rid: str) -> list[dict]:
         out.append(_decode(rtype, snap) if snap else None)
     cur = get(rtype, rid, include_deleted=True)
     return [x for x in out if x] + ([cur] if cur else [])
+
+
+HISTORY_FIELDS = {
+    "medication": ("dose", "route", "frequency", "frequency_hours", "status", "start_at", "end_at",
+                   "prescriber", "indication"),
+}
+
+
+def prior_versions(rtype: str, rid: str) -> list[dict]:
+    """Earlier versions of a row (oldest first), reduced to the clinically
+    meaningful fields — what a transfer carries so the receiving hospital
+    sees the full dose history, not just today's dose."""
+    fields = HISTORY_FIELDS.get(rtype)
+    if not fields:
+        return []
+    out = []
+    for snap in history(rtype, rid)[:-1]:
+        out.append({"version": int(snap.get("version") or 0),
+                    "changed_at": snap.get("updated_at"),
+                    "source_facility": snap.get("source_facility"),
+                    **{k: snap.get(k) for k in fields}})
+    return out
+
+
+def import_history(rtype: str, rid: str, versions: list[dict], *, actor: Optional[str] = None) -> int:
+    """Write *versions* (from :func:`prior_versions` at another hospital) as
+    history snapshots under row *rid*, once. The current row becomes the
+    latest version, so ``history()`` reads the same at both hospitals."""
+    fields = HISTORY_FIELDS.get(rtype)
+    if not fields or not versions:
+        return 0
+    spec = _spec(rtype)
+    with db.connect() as c:
+        if c.execute("SELECT 1 FROM ehr_history WHERE resource=? AND resource_id=? LIMIT 1",
+                     (rtype, rid)).fetchone():
+            return 0
+        cur = c.execute(f"SELECT * FROM {spec['table']} WHERE id=?", (rid,)).fetchone()
+        if not cur:
+            return 0
+        base = dict(cur)
+        ordered = sorted(versions, key=lambda v: v.get("version") or 0)
+        for n, v in enumerate(ordered, start=1):
+            snap = {**base, **{k: v.get(k) for k in fields}, "version": n,
+                    "updated_at": v.get("changed_at") or base.get("updated_at")}
+            c.execute("INSERT INTO ehr_history(id, resource, resource_id, version, snapshot, "
+                      "changed_by, changed_at) VALUES (?,?,?,?,?,?,?)",
+                      (new_id(), rtype, rid, n, jdump(snap), actor or "import",
+                       v.get("changed_at") or db.now()))
+        c.execute(f"UPDATE {spec['table']} SET version=? WHERE id=?", (len(ordered) + 1, rid))
+    return len(ordered)
 
 
 def list_for(rtype: str, person_id: str, *, filters: Optional[dict[str, Any]] = None,

@@ -100,6 +100,10 @@ def get_chart(person_id: str, request: Request, include_remote: bool = False,
         raise HTTPException(400, "purpose must be TREAT or ETREAT")
     if purpose == "ETREAT" and not pr.allows(p, "clinical.breakglass"):
         raise HTTPException(403, "emergency access requires clinical.breakglass")
+    if purpose == "ETREAT":
+        # The holding hospital audits the override; we record the declaration.
+        audit.record("clinical.emergency.declared", **pr.actor(p), resource=f"person:{person['id']}",
+                     client_ip=_ip(request), detail={"purpose": "ETREAT", "include_remote": include_remote})
     c = chart_mod.build(person["id"], principal={**p, "chart_purpose": purpose},
                         include_remote=include_remote and p.get("kind") == "user")
     c["access"] = {"basis": why, "restricted": access.is_restricted(person["id"]),
@@ -250,6 +254,25 @@ def resource_history(rtype: str, rid: str, request: Request, p: dict = READ) -> 
         raise HTTPException(404, "not found")
     guard(cur["person_id"], p, request, f"clinical.{t}.history")
     return {"versions": store.history(t, rid)}
+
+
+@router.get("/patients/{person_id}/remote-documents/{facility_oid}/{doc_id}")
+def get_remote_document(person_id: str, facility_oid: str, doc_id: str, request: Request,
+                        purpose: str = "TREAT", p: dict = READ) -> dict:
+    """Read a document that lives at another hospital (content on demand)."""
+    person = _person_or_404(person_id)
+    guard(person["id"], p, request, "clinical.document.remote_read")
+    if p.get("kind") != "user":
+        raise HTTPException(403, "only local users may read remote documents")
+    if purpose == "ETREAT" and not pr.allows(p, "clinical.breakglass"):
+        raise HTTPException(403, "emergency access requires clinical.breakglass")
+    from interop import federation
+    try:
+        return federation.fetch_document(mpi.get(person["id"]), facility_oid, doc_id, p, purpose)
+    except PermissionError as e:
+        raise HTTPException(403, str(e)) from e
+    except LookupError as e:
+        raise HTTPException(404, str(e)) from e
 
 
 @router.get("/documents/{doc_id}")

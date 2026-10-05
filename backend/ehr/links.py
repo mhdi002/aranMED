@@ -44,11 +44,23 @@ def _on_report(rep: dict) -> None:
     }, actor=rep.get("author"))
 
 
+def _from_peer_hospital(item: dict) -> bool:
+    """Orders authored at another hospital (arriving in a transfer package)
+    belong to that hospital's worklist, not ours — they stay as history."""
+    src = item.get("source_facility")
+    if not src or src == settings.facility_oid():
+        return False
+    from clinicaldb import facilities
+    f = facilities.get_by_oid(src)
+    return bool(f and not f.get("is_local") and (f.get("kind") or "hospital") != "his")
+
+
 def _on_resource(rtype: str, item: dict, action: str) -> None:
     if rtype == "service_request" and action == "create":
         from pacs import worklist
         if (item.get("category") or "").lower() == "imaging" and item.get("status") == "active" \
-                and not (item.get("accession") and worklist.get(item["accession"])):
+                and not (item.get("accession") and worklist.get(item["accession"])) \
+                and not _from_peer_hospital(item):
             from clinicaldb import mpi
             person = mpi.get(item["person_id"]) or {}
             demo = person.get("demographics") or {}
