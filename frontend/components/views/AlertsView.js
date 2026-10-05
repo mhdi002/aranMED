@@ -91,7 +91,7 @@ export default function AlertsView() {
           </select>
           <div className="toolbar">
             <button className="btn" disabled={!pid || busy === "check"}
-                    onClick={doCheck}>
+                    onClick={doCheck} data-testid="alerts-check">
               {busy === "check" ? <span className="spinner" /> : null}
               {t("alerts.check")}
             </button>

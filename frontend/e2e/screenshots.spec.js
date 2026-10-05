@@ -1,17 +1,22 @@
-// Documentation screenshots: one full-page PNG per screen of the app, taken
-// against the same seeded two-hospital stack the E2E journeys use.
+// Documentation screenshots: one PNG per screen of the app, taken against
+// the same seeded two-hospital stack the E2E journeys use, in either UI
+// language (Persian renders right-to-left).
 //
-//   E2E_SCREENSHOTS=1 npx playwright test screenshots
+//   E2E_SCREENSHOTS=1 SCREENSHOT_LANG=en npx playwright test screenshots
+//   E2E_SCREENSHOTS=1 SCREENSHOT_LANG=fa npx playwright test screenshots
 //
-// Output goes to docs/screenshots/ (override with SCREENSHOT_DIR) and is what
-// docs/USER_GUIDE.md embeds. Skipped in normal E2E runs. Run this spec on its
-// own so the seed is fresh (pending transfer, inbound ambulance, …).
+// Output: docs/screenshots/<lang>/<key>.png (override with SCREENSHOT_DIR).
+// docs/USER_GUIDE.md and the DOCX guides (scripts/docs/build_docx.py) embed
+// these by key. Skipped in normal E2E runs; run on its own so the seed is
+// fresh (pending transfer, inbound ambulance, …). Selectors never depend on
+// UI text, so both languages take the same path through the app.
 const fs = require("fs");
 const path = require("path");
 const { test, expect } = require("@playwright/test");
 const { state } = require("./helpers");
 
-const OUT = process.env.SCREENSHOT_DIR || path.join(__dirname, "..", "..", "docs", "screenshots");
+const LANG = process.env.SCREENSHOT_LANG === "fa" ? "fa" : "en";
+const OUT = process.env.SCREENSHOT_DIR || path.join(__dirname, "..", "..", "docs", "screenshots", LANG);
 
 test.describe.configure({ mode: "serial" });
 test.skip(!process.env.E2E_SCREENSHOTS, "set E2E_SCREENSHOTS=1 to regenerate documentation screenshots");
@@ -24,7 +29,7 @@ const USERS = {
 };
 
 /** Sign in via the API and preload token, language and theme before any page script runs. */
-async function as(page, request, who, { lang = "en", theme = "light" } = {}) {
+async function as(page, request, who, { theme = "light" } = {}) {
   const [username, password] = USERS[who]();
   const r = await request.post(`${state().backend}/api/auth/login`, { form: { username, password } });
   expect(r.ok()).toBeTruthy();
@@ -33,13 +38,14 @@ async function as(page, request, who, { lang = "en", theme = "light" } = {}) {
     window.localStorage.setItem("asr.token", t);
     window.localStorage.setItem("asr.lang", l);
     window.localStorage.setItem("theme", th);
-  }, [token, lang, theme]);
+  }, [token, LANG, theme]);
   return token;
 }
 
 async function snap(page, name) {
   await page.waitForLoadState("networkidle").catch(() => {});
   await page.waitForTimeout(400); // let transitions and charts settle
+  if (LANG === "fa") await expect(page.locator("html")).toHaveAttribute("dir", "rtl");
   // Grow the viewport to the content height rather than using fullPage, so
   // 100vh elements (sidebar, viewer) fill the whole capture.
   const size = page.viewportSize();
@@ -57,59 +63,40 @@ async function open(page, url, ready) {
   await expect(page.locator(ready).first()).toBeVisible();
 }
 
-// --------------------------------------------------------------------------
-// Sign-in
-// --------------------------------------------------------------------------
+// ------------------------------------------------------------------ sign-in
 test("sign-in", async ({ page }) => {
   await page.goto("/login");
-  await page.evaluate(() => localStorage.setItem("asr.lang", "en"));
+  await page.evaluate((l) => localStorage.setItem("asr.lang", l), LANG);
   await page.reload();
   await expect(page.locator(".role-card").first()).toBeVisible();
   await snap(page, "01-login-role");
-  await page.locator(".role-card", { hasText: "Doctor" }).click();
+  await page.locator('[data-role="doctor"]').click();
   await expect(page.getByTestId("admin-creates")).toBeVisible();
   await snap(page, "02-login-credentials");
 });
 
-// --------------------------------------------------------------------------
-// Reporting workspace (dictation, vision chat, reports, templates)
-// --------------------------------------------------------------------------
+// ------------------------------------------------------------------ reporting workspace
 test("reporting workspace", async ({ page, request }) => {
   await as(page, request, "doctor");
-  // Dictation: a typed transcript drafted into a structured report and saved.
-  await open(page, "/dictate", "textarea");
+  await open(page, "/dictate", "textarea[dir=auto]");
   await page.locator("textarea[dir=auto]").fill(
     "CT chest without contrast. Patchy consolidation in the right lower lobe. No pleural effusion. No pneumothorax.");
-  await page.getByRole("button", { name: "Generate report from transcript" }).click();
+  await page.getByTestId("dictate-generate").click();
   await expect(page.getByText("E2E-REPORT").first()).toBeVisible({ timeout: 30_000 });
-  await page.getByTitle("Save to Reports").click();
+  await page.getByTestId("save-report").click();
   await snap(page, "10-dictate");
-  for (const [name, url] of [["11-radiology", "/radiology"], ["12-reports", "/reports"]]) {
-    await open(page, url, "main, .main, .content");
-    await expect(page.locator(".sidebar")).toBeVisible();
-    await snap(page, name);
-  }
+  await open(page, "/radiology", ".sidebar");
+  await snap(page, "11-radiology");
+  await open(page, "/reports", ".sidebar");
+  await expect(page.getByText("E2E-REPORT").first()).toBeVisible();
+  await snap(page, "12-reports");
   await open(page, "/templates", "main button.nav-item");
   await page.locator("main button.nav-item", { hasText: "Chest sonography" }).click();
   await expect(page.locator("main .report:not(.empty)")).toBeVisible();
   await snap(page, "13-templates");
 });
 
-test("legacy EHR, alerts", async ({ page, request }) => {
-  await as(page, request, "doctor");
-  await open(page, "/ehr?tab=intake", ".list-row");
-  await page.locator(".list-row", { hasText: "Maryam Ahmadi" }).getByRole("button").first().click();
-  await expect(page.getByText("Azithromycin").first()).toBeVisible();
-  await snap(page, "14-ehr");
-  await open(page, "/ehr?tab=alerts", ".sidebar");
-  await page.getByRole("button", { name: "Check medications" }).click();
-  await expect(page.getByText("Metformin").first()).toBeVisible({ timeout: 20_000 });
-  await snap(page, "15-alerts");
-});
-
-// --------------------------------------------------------------------------
-// PACS
-// --------------------------------------------------------------------------
+// ------------------------------------------------------------------ PACS
 test("pacs browser", async ({ page, request }) => {
   await as(page, request, "doctor");
   await open(page, "/pacs", '[data-testid="study-table"] tbody tr');
@@ -118,7 +105,7 @@ test("pacs browser", async ({ page, request }) => {
   await snap(page, "20-pacs-browser");
 });
 
-test("pacs viewer with measurement and AI read", async ({ page, request }) => {
+test("pacs viewer with measurement, AI read and report", async ({ page, request }) => {
   const st = state();
   await as(page, request, "rad");
   await page.goto(`/pacs/viewer?study=${st.ct_uid}`);
@@ -131,16 +118,14 @@ test("pacs viewer with measurement and AI read", async ({ page, request }) => {
   await page.mouse.move(box.x + box.width * 0.62, box.y + box.height * 0.55, { steps: 8 });
   await page.mouse.up();
   await page.locator('[data-tab="measure"]').click();
-  await expect(page.getByTestId("measurements")).toContainText("Length");
+  await expect(page.getByTestId("measurements")).toContainText(/\d+(\.\d)?\s*mm/);
   await snap(page, "21-pacs-viewer");
-
   await page.locator('[data-layout="1x2"]').click();
   await expect(page.getByTestId("viewport-1")).toHaveAttribute("data-loaded", "true", { timeout: 60_000 });
   await page.locator('[data-tab="ai"]').click();
   await page.getByTestId("ai-analyze").click();
   await expect(page.getByTestId("ai-result")).toContainText("E2E-REPORT", { timeout: 60_000 });
   await snap(page, "22-pacs-viewer-ai");
-
   await page.locator('[data-tab="report"]').click();
   await expect(page.getByTestId("report-editor").locator("textarea")).toHaveValue(/E2E-REPORT/);
   await snap(page, "23-pacs-viewer-report");
@@ -151,38 +136,48 @@ test("pacs worklist, upload, nodes", async ({ page, request }) => {
   await as(page, request, "admin");
   await open(page, "/pacs/worklist", '[data-testid="worklist-table"]');
   const row = page.getByTestId("worklist-table").locator("tr", { hasText: "CT ABDOMEN" });
-  await row.getByRole("button", { name: "Start" }).click();   // MPPS in progress
+  await row.getByTestId("wl-start").click();   // MPPS in progress
   await expect(row).toContainText("in_progress");
   await snap(page, "24-pacs-worklist");
-
   await open(page, "/pacs/upload", '[data-testid="upload-start"]');
   await page.getByTestId("upload-input").setInputFiles(st.upload_file);
   await page.getByTestId("upload-start").click();
   await expect(page.getByTestId("upload-result")).toContainText("CR CHEST PA", { timeout: 30_000 });
   await snap(page, "25-pacs-upload");
-
   await open(page, "/pacs/nodes", '[data-testid="nodes-table"] tbody tr');
-  await page.getByTestId("nodes-table").getByRole("button", { name: /echo/i }).first().click();
+  await page.getByTestId("nodes-table").getByTestId("node-echo").first().click();
   await expect(page.getByTestId("nodes-table").locator(".pill.ok").first()).toBeVisible({ timeout: 20_000 });
   await snap(page, "26-pacs-nodes");
 });
 
-// --------------------------------------------------------------------------
-// EHR, cross-hospital records, transfers, EMS, interop
-// --------------------------------------------------------------------------
-test("patient search and registration", async ({ page, request }) => {
+test("pacs devices: compressed colour US, JPEG Lossless CT, SR and PDF", async ({ page, request }) => {
+  const st = state();
+  await as(page, request, "rad");
+  await page.goto(`/pacs/viewer?study=${st.dev_uid}`);
+  await expect(page.getByTestId("viewport-0")).toHaveAttribute("data-loaded", "true", { timeout: 60_000 });
+  await page.locator('[data-layout="1x2"]').click();
+  await expect(page.getByTestId("viewport-1")).toHaveAttribute("data-loaded", "true", { timeout: 60_000 });
+  await expect(page.getByTestId("study-objects")).toBeVisible();
+  await snap(page, "27-pacs-devices");
+  await page.getByTestId("study-objects").locator('[data-object-kind="sr"]').click();
+  await expect(page.getByTestId("sr-text")).toContainText("Pneumonia");
+  await snap(page, "28-pacs-objects-sr");
+});
+
+// ------------------------------------------------------------------ EHR section
+test("EHR: patients and registration", async ({ page, request }) => {
   await as(page, request, "doctor");
   await page.goto("/ehr?tab=patients");
   await page.locator("input[name=q]").fill("Farahani");
-  await page.getByRole("button", { name: "Search", exact: true }).click();
+  await page.getByTestId("patient-search").click();
   await expect(page.getByTestId("patient-results")).toContainText("Reza Farahani");
-  await snap(page, "30-clinical-search");
+  await snap(page, "30-ehr-patients");
   await page.getByTestId("register-open").click();
   await expect(page.getByRole("dialog")).toBeVisible();
-  await snap(page, "31-clinical-register");
+  await snap(page, "31-ehr-register");
 });
 
-test("unified chart tabs", async ({ page, request }) => {
+test("EHR: unified chart tabs", async ({ page, request }) => {
   const st = state();
   await as(page, request, "doctor");
   await page.goto(`/ehr/chart?id=${st.local_person}`);
@@ -201,42 +196,45 @@ test("unified chart tabs", async ({ page, request }) => {
     await snap(page, name);
   }
   await page.locator('[data-tab="orders"]').click();
-  await page.getByRole("button", { name: "+ Order imaging" }).click();
+  await page.getByTestId("order-imaging").click();
   const form = page.getByTestId("add-service-requests");
   await form.locator("input[name=display]").fill("CT Coronary Angiography");
   await form.locator("select").nth(2).selectOption("CT");
-  await form.getByRole("button", { name: "Save" }).click();
-  await expect(page.getByTestId("orders")).toContainText(/ACC \S+/);
+  await form.locator("button[type=submit]").click();
+  await expect(page.getByTestId("orders")).toContainText(/ACC\S*/);
   await snap(page, "37-chart-orders");
-
-  const rest = page.locator("[data-tab]").filter({ hasNotText: /^$/ });
-  const seen = new Set(["summary", "results", "imaging", "documents", "orders"]);
-  for (const tab of await rest.evaluateAll((els) => els.map((e) => e.getAttribute("data-tab")))) {
-    if (seen.has(tab)) continue;
-    seen.add(tab);
+  for (const tab of ["encounters", "medications", "timeline", "access"]) {
     await page.locator(`[data-tab="${tab}"]`).click();
     await snap(page, `38-chart-${tab}`);
   }
 });
 
-test("restricted record (break the glass)", async ({ page, request }) => {
+test("EHR: restricted record (break the glass)", async ({ page, request }) => {
   await as(page, request, "doctor");
   await page.goto(`/ehr/chart?id=${state().vip_person}`);
-  await expect(page.getByTestId("restricted")).toContainText("Restricted record");
+  await expect(page.getByTestId("restricted")).toBeVisible();
   await snap(page, "39-chart-restricted");
 });
 
-test("transfers, EMS, interop", async ({ page, request }) => {
+test("EHR: transfers, EMS, medication alerts, text intake", async ({ page, request }) => {
   await as(page, request, "doctor");
   await page.goto("/ehr?tab=transfers");
   await expect(page.getByTestId("transfer-requested")).toContainText("E2E Peer Hospital");
-  await snap(page, "40-transfers");
+  await snap(page, "40-ehr-transfers");
   await page.goto("/ehr?tab=ems");
   await expect(page.getByTestId("ems-board")).toContainText("MEDIC-21");
-  await snap(page, "41-ems");
+  await snap(page, "41-ehr-ems");
+  await page.goto("/ehr?tab=alerts");
+  await page.getByTestId("alerts-check").click();
+  await expect(page.getByText("Metformin").first()).toBeVisible({ timeout: 20_000 });
+  await snap(page, "42-ehr-alerts");
+  await open(page, "/ehr?tab=intake", ".list-row");
+  await page.locator(".list-row", { hasText: "Maryam Ahmadi" }).getByRole("button").first().click();
+  await expect(page.getByText("Azithromycin").first()).toBeVisible();
+  await snap(page, "43-ehr-intake");
 });
 
-test("interop admin", async ({ page, request }) => {
+test("interoperability admin", async ({ page, request }) => {
   await as(page, request, "admin");
   await page.goto("/interop");
   await expect(page.getByTestId("interop-status")).toContainText("E2E General Hospital");
@@ -244,12 +242,10 @@ test("interop admin", async ({ page, request }) => {
   await expect(page.getByTestId("test-result-2.25.901").locator(".pill.ok")).toHaveCount(3, { timeout: 30_000 });
   await page.getByTestId("hl7-send").click();
   await expect(page.getByTestId("hl7-ack")).toContainText("MSA|AA");
-  await snap(page, "42-interop");
+  await snap(page, "45-interop");
 });
 
-// --------------------------------------------------------------------------
-// Education, model consoles, settings
-// --------------------------------------------------------------------------
+// ------------------------------------------------------------------ education, models, settings
 test("education, models, settings", async ({ page, request }) => {
   await as(page, request, "admin");
   for (const [name, url] of [["50-education", "/education"], ["51-asr", "/asr"],
@@ -262,24 +258,7 @@ test("education, models, settings", async ({ page, request }) => {
   await snap(page, "54-settings-users");
 });
 
-// --------------------------------------------------------------------------
-// Persian (RTL) and dark theme
-// --------------------------------------------------------------------------
-test("persian rtl", async ({ page, request }) => {
-  const st = state();
-  await as(page, request, "doctor", { lang: "fa" });
-  await page.goto("/pacs");
-  await expect(page.locator("html")).toHaveAttribute("dir", "rtl");
-  await expect(page.getByTestId("study-table").locator("tbody tr").first()).toBeVisible();
-  await snap(page, "60-fa-pacs");
-  await page.goto(`/ehr/chart?id=${st.local_person}`);
-  await expect(page.locator('[data-tab="summary"]')).toHaveText("خلاصه");
-  await snap(page, "61-fa-chart");
-  await page.goto("/ehr?tab=ems");
-  await expect(page.getByTestId("ems-board")).toContainText("MEDIC-21");
-  await snap(page, "62-fa-ems");
-});
-
+// ------------------------------------------------------------------ dark theme
 test("dark theme", async ({ page, request }) => {
   const st = state();
   await as(page, request, "rad", { theme: "dark" });

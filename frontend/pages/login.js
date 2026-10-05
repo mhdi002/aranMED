@@ -105,7 +105,7 @@ export default function LoginPage() {
               <p className="muted role-hint">{t("auth.pickRoleSub")}</p>
               <div className="role-grid">
                 {ROLE_OPTIONS.map(({ id, icon: Ico, descKey }) => (
-                  <button key={id} type="button"
+                  <button key={id} type="button" data-role={id}
                           className={`role-card ${role === id ? "selected" : ""}`}
                           onClick={() => pickRole(id)}>
                     <span className="role-ico"><Ico size={22} /></span>

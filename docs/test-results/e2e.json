@@ -1,0 +1,1459 @@
+{
+  "config": {
+    "configFile": "/home/user/aranMED/frontend/playwright.config.js",
+    "rootDir": "/home/user/aranMED/frontend/e2e",
+    "forbidOnly": false,
+    "fullyParallel": false,
+    "globalSetup": null,
+    "globalTeardown": null,
+    "globalTimeout": 0,
+    "grep": {},
+    "grepInvert": null,
+    "maxFailures": 0,
+    "metadata": {
+      "actualWorkers": 1
+    },
+    "preserveOutput": "always",
+    "reporter": [
+      [
+        "list"
+      ],
+      [
+        "json"
+      ]
+    ],
+    "reportSlowTests": {
+      "max": 5,
+      "threshold": 300000
+    },
+    "quiet": false,
+    "projects": [
+      {
+        "outputDir": "/home/user/aranMED/frontend/test-results",
+        "repeatEach": 1,
+        "retries": 0,
+        "metadata": {
+          "actualWorkers": 1
+        },
+        "id": "",
+        "name": "",
+        "testDir": "/home/user/aranMED/frontend/e2e",
+        "testIgnore": [],
+        "testMatch": [
+          "**/*.@(spec|test).?(c|m)[jt]s?(x)"
+        ],
+        "timeout": 90000
+      }
+    ],
+    "shard": null,
+    "updateSnapshots": "missing",
+    "updateSourceMethod": "patch",
+    "version": "1.56.1",
+    "workers": 1,
+    "webServer": {
+      "command": "../.venv/bin/python ../tests/e2e/stack.py",
+      "url": "http://127.0.0.1:3100/login",
+      "timeout": 240000,
+      "reuseExistingServer": false,
+      "stdout": "pipe",
+      "stderr": "pipe"
+    }
+  },
+  "suites": [
+    {
+      "title": "clinical.spec.js",
+      "file": "clinical.spec.js",
+      "column": 0,
+      "line": 0,
+      "specs": [
+        {
+          "title": "find a patient and open the unified chart",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 90000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "",
+              "projectName": "",
+              "results": [
+                {
+                  "workerIndex": 0,
+                  "parallelIndex": 0,
+                  "status": "passed",
+                  "duration": 756,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-10-05T04:06:43.841Z",
+                  "annotations": [],
+                  "attachments": []
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "6b044303322d11bf3338-b4e4ad0b2dd8ae0c3481",
+          "file": "clinical.spec.js",
+          "line": 8,
+          "column": 1
+        },
+        {
+          "title": "records from the peer hospital appear with their source; imaging is retrieved on demand",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 90000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "",
+              "projectName": "",
+              "results": [
+                {
+                  "workerIndex": 0,
+                  "parallelIndex": 0,
+                  "status": "passed",
+                  "duration": 2270,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-10-05T04:06:44.757Z",
+                  "annotations": [],
+                  "attachments": []
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "6b044303322d11bf3338-2c63b6888ba4cf989e6a",
+          "file": "clinical.spec.js",
+          "line": 24,
+          "column": 1
+        },
+        {
+          "title": "results trend, documents, adding data and CCD export",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 90000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "",
+              "projectName": "",
+              "results": [
+                {
+                  "workerIndex": 0,
+                  "parallelIndex": 0,
+                  "status": "passed",
+                  "duration": 1002,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-10-05T04:06:47.042Z",
+                  "annotations": [],
+                  "attachments": []
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "6b044303322d11bf3338-cabf45731220c2a9c099",
+          "file": "clinical.spec.js",
+          "line": 44,
+          "column": 1
+        },
+        {
+          "title": "imaging order from the chart lands on the worklist",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 90000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "",
+              "projectName": "",
+              "results": [
+                {
+                  "workerIndex": 0,
+                  "parallelIndex": 0,
+                  "status": "passed",
+                  "duration": 758,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-10-05T04:06:48.058Z",
+                  "annotations": [],
+                  "attachments": []
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "6b044303322d11bf3338-f9bda6e7f3c00b080391",
+          "file": "clinical.spec.js",
+          "line": 71,
+          "column": 1
+        },
+        {
+          "title": "restricted record requires break-the-glass",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 90000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "",
+              "projectName": "",
+              "results": [
+                {
+                  "workerIndex": 0,
+                  "parallelIndex": 0,
+                  "status": "passed",
+                  "duration": 622,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-10-05T04:06:48.826Z",
+                  "annotations": [],
+                  "attachments": []
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "6b044303322d11bf3338-d9f94e45176a1981439c",
+          "file": "clinical.spec.js",
+          "line": 86,
+          "column": 1
+        },
+        {
+          "title": "register a new patient",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 90000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "",
+              "projectName": "",
+              "results": [
+                {
+                  "workerIndex": 0,
+                  "parallelIndex": 0,
+                  "status": "passed",
+                  "duration": 602,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-10-05T04:06:49.459Z",
+                  "annotations": [],
+                  "attachments": []
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "6b044303322d11bf3338-e0b8348ba9f81112d234",
+          "file": "clinical.spec.js",
+          "line": 98,
+          "column": 1
+        },
+        {
+          "title": "incoming transfer: accept, package arrives, arrive and complete",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 90000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "",
+              "projectName": "",
+              "results": [
+                {
+                  "workerIndex": 0,
+                  "parallelIndex": 0,
+                  "status": "passed",
+                  "duration": 11684,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-10-05T04:06:50.072Z",
+                  "annotations": [],
+                  "attachments": []
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "6b044303322d11bf3338-b0563eca5292b705b8d7",
+          "file": "clinical.spec.js",
+          "line": 111,
+          "column": 1
+        },
+        {
+          "title": "EMS board: inbound critical patient through handover",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 90000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "",
+              "projectName": "",
+              "results": [
+                {
+                  "workerIndex": 0,
+                  "parallelIndex": 0,
+                  "status": "passed",
+                  "duration": 782,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-10-05T04:07:01.769Z",
+                  "annotations": [],
+                  "attachments": []
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "6b044303322d11bf3338-4e0495ba70107958095c",
+          "file": "clinical.spec.js",
+          "line": 127,
+          "column": 1
+        },
+        {
+          "title": "interop admin: peer test, HL7 message, message log",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 90000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "",
+              "projectName": "",
+              "results": [
+                {
+                  "workerIndex": 0,
+                  "parallelIndex": 0,
+                  "status": "passed",
+                  "duration": 1068,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-10-05T04:07:02.565Z",
+                  "annotations": [],
+                  "attachments": []
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "6b044303322d11bf3338-419e4ed2f36c412f2331",
+          "file": "clinical.spec.js",
+          "line": 142,
+          "column": 1
+        },
+        {
+          "title": "Persian chart renders RTL",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 90000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "",
+              "projectName": "",
+              "results": [
+                {
+                  "workerIndex": 0,
+                  "parallelIndex": 0,
+                  "status": "passed",
+                  "duration": 491,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-10-05T04:07:03.644Z",
+                  "annotations": [],
+                  "attachments": []
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "6b044303322d11bf3338-b5e5feb36ea8dfc155c8",
+          "file": "clinical.spec.js",
+          "line": 156,
+          "column": 1
+        }
+      ]
+    },
+    {
+      "title": "ehr_hub.spec.js",
+      "file": "ehr_hub.spec.js",
+      "column": 0,
+      "line": 0,
+      "specs": [
+        {
+          "title": "one EHR entry in the sidebar opens the hub; each tab shows its screen",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 90000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "",
+              "projectName": "",
+              "results": [
+                {
+                  "workerIndex": 0,
+                  "parallelIndex": 0,
+                  "status": "passed",
+                  "duration": 1544,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-10-05T04:07:04.153Z",
+                  "annotations": [],
+                  "attachments": []
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "4380d2b5b5f698738d00-f16e93afedf73536bda0",
+          "file": "ehr_hub.spec.js",
+          "line": 7,
+          "column": 1
+        },
+        {
+          "title": "old patient URLs redirect into the EHR section",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 90000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "",
+              "projectName": "",
+              "results": [
+                {
+                  "workerIndex": 0,
+                  "parallelIndex": 0,
+                  "status": "passed",
+                  "duration": 779,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-10-05T04:07:05.709Z",
+                  "annotations": [],
+                  "attachments": []
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "4380d2b5b5f698738d00-bd38814cce9284ae93c7",
+          "file": "ehr_hub.spec.js",
+          "line": 43,
+          "column": 1
+        },
+        {
+          "title": "tabs follow the role: a radiologist sees patients and transfers only",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 90000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "",
+              "projectName": "",
+              "results": [
+                {
+                  "workerIndex": 0,
+                  "parallelIndex": 0,
+                  "status": "passed",
+                  "duration": 400,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-10-05T04:07:06.500Z",
+                  "annotations": [],
+                  "attachments": []
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "4380d2b5b5f698738d00-c65c0f2b7d749ca86e09",
+          "file": "ehr_hub.spec.js",
+          "line": 56,
+          "column": 1
+        },
+        {
+          "title": "Persian: EHR hub is right-to-left with translated title and tabs",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 90000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "",
+              "projectName": "",
+              "results": [
+                {
+                  "workerIndex": 0,
+                  "parallelIndex": 0,
+                  "status": "passed",
+                  "duration": 488,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-10-05T04:07:06.915Z",
+                  "annotations": [],
+                  "attachments": []
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "4380d2b5b5f698738d00-5cbbddd9fae25424340f",
+          "file": "ehr_hub.spec.js",
+          "line": 66,
+          "column": 1
+        }
+      ]
+    },
+    {
+      "title": "pacs.spec.js",
+      "file": "pacs.spec.js",
+      "column": 0,
+      "line": 0,
+      "specs": [
+        {
+          "title": "UI sign-in lands a doctor in the app with Imaging in the nav",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 90000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "",
+              "projectName": "",
+              "results": [
+                {
+                  "workerIndex": 0,
+                  "parallelIndex": 0,
+                  "status": "passed",
+                  "duration": 2387,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-10-05T04:07:07.421Z",
+                  "annotations": [],
+                  "attachments": []
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "51a170f7d6a3d3f07950-6d1aeb78c65bb42183f5",
+          "file": "pacs.spec.js",
+          "line": 7,
+          "column": 1
+        },
+        {
+          "title": "study browser: stats, filters, details panel",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 90000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "",
+              "projectName": "",
+              "results": [
+                {
+                  "workerIndex": 0,
+                  "parallelIndex": 0,
+                  "status": "passed",
+                  "duration": 924,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-10-05T04:07:09.818Z",
+                  "annotations": [],
+                  "attachments": []
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "51a170f7d6a3d3f07950-05bee020235e55b62ca3",
+          "file": "pacs.spec.js",
+          "line": 21,
+          "column": 1
+        },
+        {
+          "title": "viewer renders real pixels; W/L presets, scrolling and measurements work",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 90000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "",
+              "projectName": "",
+              "results": [
+                {
+                  "workerIndex": 0,
+                  "parallelIndex": 0,
+                  "status": "passed",
+                  "duration": 1912,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-10-05T04:07:10.753Z",
+                  "annotations": [],
+                  "attachments": []
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "51a170f7d6a3d3f07950-b6b1f29036cfa0ccd79e",
+          "file": "pacs.spec.js",
+          "line": 54,
+          "column": 1
+        },
+        {
+          "title": "AI draft read then radiologist sign-off from the viewer",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 90000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "",
+              "projectName": "",
+              "results": [
+                {
+                  "workerIndex": 0,
+                  "parallelIndex": 0,
+                  "status": "passed",
+                  "duration": 1627,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-10-05T04:07:12.680Z",
+                  "annotations": [],
+                  "attachments": []
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "51a170f7d6a3d3f07950-9bc60b7c3dd537f4e0e6",
+          "file": "pacs.spec.js",
+          "line": 99,
+          "column": 1
+        },
+        {
+          "title": "import a DICOM file and open it",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 90000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "",
+              "projectName": "",
+              "results": [
+                {
+                  "workerIndex": 0,
+                  "parallelIndex": 0,
+                  "status": "passed",
+                  "duration": 1527,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-10-05T04:07:14.317Z",
+                  "annotations": [],
+                  "attachments": []
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "51a170f7d6a3d3f07950-e72d4143b5927b960bc7",
+          "file": "pacs.spec.js",
+          "line": 118,
+          "column": 1
+        },
+        {
+          "title": "worklist: seeded STAT order and scheduling a new one",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 90000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "",
+              "projectName": "",
+              "results": [
+                {
+                  "workerIndex": 0,
+                  "parallelIndex": 0,
+                  "status": "passed",
+                  "duration": 814,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-10-05T04:07:15.855Z",
+                  "annotations": [],
+                  "attachments": []
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "51a170f7d6a3d3f07950-eb732ce77d6e71506d1c",
+          "file": "pacs.spec.js",
+          "line": 132,
+          "column": 1
+        },
+        {
+          "title": "admin: DICOM nodes with a live C-ECHO; doctors cannot see the page",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 90000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "",
+              "projectName": "",
+              "results": [
+                {
+                  "workerIndex": 0,
+                  "parallelIndex": 0,
+                  "status": "passed",
+                  "duration": 1568,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-10-05T04:07:16.681Z",
+                  "annotations": [],
+                  "attachments": []
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "51a170f7d6a3d3f07950-d64bb5785cd56bfc8c91",
+          "file": "pacs.spec.js",
+          "line": 151,
+          "column": 1
+        },
+        {
+          "title": "Persian UI switches to RTL with translated imaging nav",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 90000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "",
+              "projectName": "",
+              "results": [
+                {
+                  "workerIndex": 0,
+                  "parallelIndex": 0,
+                  "status": "passed",
+                  "duration": 579,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-10-05T04:07:18.260Z",
+                  "annotations": [],
+                  "attachments": []
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "51a170f7d6a3d3f07950-f0fc1a714143063930bc",
+          "file": "pacs.spec.js",
+          "line": 177,
+          "column": 1
+        },
+        {
+          "title": "devices as they send it: compressed colour US, JPEG Lossless CT, SR and PDF",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 90000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "",
+              "projectName": "",
+              "results": [
+                {
+                  "workerIndex": 0,
+                  "parallelIndex": 0,
+                  "status": "passed",
+                  "duration": 1377,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-10-05T04:07:18.854Z",
+                  "annotations": [],
+                  "attachments": []
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "51a170f7d6a3d3f07950-555b55d0742db05b618e",
+          "file": "pacs.spec.js",
+          "line": 187,
+          "column": 1
+        }
+      ]
+    },
+    {
+      "title": "screenshots.spec.js",
+      "file": "screenshots.spec.js",
+      "column": 0,
+      "line": 0,
+      "specs": [
+        {
+          "title": "sign-in",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 90000,
+              "annotations": [
+                {
+                  "type": "skip",
+                  "description": "set E2E_SCREENSHOTS=1 to regenerate documentation screenshots",
+                  "location": {
+                    "file": "/home/user/aranMED/frontend/e2e/screenshots.spec.js",
+                    "line": 22,
+                    "column": 6
+                  }
+                }
+              ],
+              "expectedStatus": "skipped",
+              "projectId": "",
+              "projectName": "",
+              "results": [
+                {
+                  "workerIndex": -1,
+                  "parallelIndex": -1,
+                  "status": "skipped",
+                  "duration": 0,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-10-05T04:07:20.243Z",
+                  "annotations": [],
+                  "attachments": []
+                }
+              ],
+              "status": "skipped"
+            }
+          ],
+          "id": "53bacfe0c91763a7148e-81e4666abc70b215f933",
+          "file": "screenshots.spec.js",
+          "line": 67,
+          "column": 1
+        },
+        {
+          "title": "reporting workspace",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 90000,
+              "annotations": [
+                {
+                  "type": "skip",
+                  "description": "set E2E_SCREENSHOTS=1 to regenerate documentation screenshots",
+                  "location": {
+                    "file": "/home/user/aranMED/frontend/e2e/screenshots.spec.js",
+                    "line": 22,
+                    "column": 6
+                  }
+                }
+              ],
+              "expectedStatus": "skipped",
+              "projectId": "",
+              "projectName": "",
+              "results": [
+                {
+                  "workerIndex": -1,
+                  "parallelIndex": -1,
+                  "status": "skipped",
+                  "duration": 0,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-10-05T04:07:20.244Z",
+                  "annotations": [],
+                  "attachments": []
+                }
+              ],
+              "status": "skipped"
+            }
+          ],
+          "id": "53bacfe0c91763a7148e-458b4bc4b41fb4f7887b",
+          "file": "screenshots.spec.js",
+          "line": 79,
+          "column": 1
+        },
+        {
+          "title": "pacs browser",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 90000,
+              "annotations": [
+                {
+                  "type": "skip",
+                  "description": "set E2E_SCREENSHOTS=1 to regenerate documentation screenshots",
+                  "location": {
+                    "file": "/home/user/aranMED/frontend/e2e/screenshots.spec.js",
+                    "line": 22,
+                    "column": 6
+                  }
+                }
+              ],
+              "expectedStatus": "skipped",
+              "projectId": "",
+              "projectName": "",
+              "results": [
+                {
+                  "workerIndex": -1,
+                  "parallelIndex": -1,
+                  "status": "skipped",
+                  "duration": 0,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-10-05T04:07:20.244Z",
+                  "annotations": [],
+                  "attachments": []
+                }
+              ],
+              "status": "skipped"
+            }
+          ],
+          "id": "53bacfe0c91763a7148e-c5e032b26de8f254a1d9",
+          "file": "screenshots.spec.js",
+          "line": 100,
+          "column": 1
+        },
+        {
+          "title": "pacs viewer with measurement, AI read and report",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 90000,
+              "annotations": [
+                {
+                  "type": "skip",
+                  "description": "set E2E_SCREENSHOTS=1 to regenerate documentation screenshots",
+                  "location": {
+                    "file": "/home/user/aranMED/frontend/e2e/screenshots.spec.js",
+                    "line": 22,
+                    "column": 6
+                  }
+                }
+              ],
+              "expectedStatus": "skipped",
+              "projectId": "",
+              "projectName": "",
+              "results": [
+                {
+                  "workerIndex": -1,
+                  "parallelIndex": -1,
+                  "status": "skipped",
+                  "duration": 0,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-10-05T04:07:20.244Z",
+                  "annotations": [],
+                  "attachments": []
+                }
+              ],
+              "status": "skipped"
+            }
+          ],
+          "id": "53bacfe0c91763a7148e-6b9bf8034609e1219290",
+          "file": "screenshots.spec.js",
+          "line": 108,
+          "column": 1
+        },
+        {
+          "title": "pacs worklist, upload, nodes",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 90000,
+              "annotations": [
+                {
+                  "type": "skip",
+                  "description": "set E2E_SCREENSHOTS=1 to regenerate documentation screenshots",
+                  "location": {
+                    "file": "/home/user/aranMED/frontend/e2e/screenshots.spec.js",
+                    "line": 22,
+                    "column": 6
+                  }
+                }
+              ],
+              "expectedStatus": "skipped",
+              "projectId": "",
+              "projectName": "",
+              "results": [
+                {
+                  "workerIndex": -1,
+                  "parallelIndex": -1,
+                  "status": "skipped",
+                  "duration": 0,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-10-05T04:07:20.244Z",
+                  "annotations": [],
+                  "attachments": []
+                }
+              ],
+              "status": "skipped"
+            }
+          ],
+          "id": "53bacfe0c91763a7148e-ca6afec9f1f3c0c30218",
+          "file": "screenshots.spec.js",
+          "line": 134,
+          "column": 1
+        },
+        {
+          "title": "pacs devices: compressed colour US, JPEG Lossless CT, SR and PDF",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 90000,
+              "annotations": [
+                {
+                  "type": "skip",
+                  "description": "set E2E_SCREENSHOTS=1 to regenerate documentation screenshots",
+                  "location": {
+                    "file": "/home/user/aranMED/frontend/e2e/screenshots.spec.js",
+                    "line": 22,
+                    "column": 6
+                  }
+                }
+              ],
+              "expectedStatus": "skipped",
+              "projectId": "",
+              "projectName": "",
+              "results": [
+                {
+                  "workerIndex": -1,
+                  "parallelIndex": -1,
+                  "status": "skipped",
+                  "duration": 0,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-10-05T04:07:20.244Z",
+                  "annotations": [],
+                  "attachments": []
+                }
+              ],
+              "status": "skipped"
+            }
+          ],
+          "id": "53bacfe0c91763a7148e-fa4a1aa4f97418f12bf5",
+          "file": "screenshots.spec.js",
+          "line": 153,
+          "column": 1
+        },
+        {
+          "title": "EHR: patients and registration",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 90000,
+              "annotations": [
+                {
+                  "type": "skip",
+                  "description": "set E2E_SCREENSHOTS=1 to regenerate documentation screenshots",
+                  "location": {
+                    "file": "/home/user/aranMED/frontend/e2e/screenshots.spec.js",
+                    "line": 22,
+                    "column": 6
+                  }
+                }
+              ],
+              "expectedStatus": "skipped",
+              "projectId": "",
+              "projectName": "",
+              "results": [
+                {
+                  "workerIndex": -1,
+                  "parallelIndex": -1,
+                  "status": "skipped",
+                  "duration": 0,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-10-05T04:07:20.244Z",
+                  "annotations": [],
+                  "attachments": []
+                }
+              ],
+              "status": "skipped"
+            }
+          ],
+          "id": "53bacfe0c91763a7148e-1cd38388bc8c8e00ed75",
+          "file": "screenshots.spec.js",
+          "line": 168,
+          "column": 1
+        },
+        {
+          "title": "EHR: unified chart tabs",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 90000,
+              "annotations": [
+                {
+                  "type": "skip",
+                  "description": "set E2E_SCREENSHOTS=1 to regenerate documentation screenshots",
+                  "location": {
+                    "file": "/home/user/aranMED/frontend/e2e/screenshots.spec.js",
+                    "line": 22,
+                    "column": 6
+                  }
+                }
+              ],
+              "expectedStatus": "skipped",
+              "projectId": "",
+              "projectName": "",
+              "results": [
+                {
+                  "workerIndex": -1,
+                  "parallelIndex": -1,
+                  "status": "skipped",
+                  "duration": 0,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-10-05T04:07:20.244Z",
+                  "annotations": [],
+                  "attachments": []
+                }
+              ],
+              "status": "skipped"
+            }
+          ],
+          "id": "53bacfe0c91763a7148e-b666f02cbf972f3fdf44",
+          "file": "screenshots.spec.js",
+          "line": 180,
+          "column": 1
+        },
+        {
+          "title": "EHR: restricted record (break the glass)",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 90000,
+              "annotations": [
+                {
+                  "type": "skip",
+                  "description": "set E2E_SCREENSHOTS=1 to regenerate documentation screenshots",
+                  "location": {
+                    "file": "/home/user/aranMED/frontend/e2e/screenshots.spec.js",
+                    "line": 22,
+                    "column": 6
+                  }
+                }
+              ],
+              "expectedStatus": "skipped",
+              "projectId": "",
+              "projectName": "",
+              "results": [
+                {
+                  "workerIndex": -1,
+                  "parallelIndex": -1,
+                  "status": "skipped",
+                  "duration": 0,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-10-05T04:07:20.244Z",
+                  "annotations": [],
+                  "attachments": []
+                }
+              ],
+              "status": "skipped"
+            }
+          ],
+          "id": "53bacfe0c91763a7148e-90e604a5f4e600653b80",
+          "file": "screenshots.spec.js",
+          "line": 212,
+          "column": 1
+        },
+        {
+          "title": "EHR: transfers, EMS, medication alerts, text intake",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 90000,
+              "annotations": [
+                {
+                  "type": "skip",
+                  "description": "set E2E_SCREENSHOTS=1 to regenerate documentation screenshots",
+                  "location": {
+                    "file": "/home/user/aranMED/frontend/e2e/screenshots.spec.js",
+                    "line": 22,
+                    "column": 6
+                  }
+                }
+              ],
+              "expectedStatus": "skipped",
+              "projectId": "",
+              "projectName": "",
+              "results": [
+                {
+                  "workerIndex": -1,
+                  "parallelIndex": -1,
+                  "status": "skipped",
+                  "duration": 0,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-10-05T04:07:20.244Z",
+                  "annotations": [],
+                  "attachments": []
+                }
+              ],
+              "status": "skipped"
+            }
+          ],
+          "id": "53bacfe0c91763a7148e-5fd5bd26bbff5635c3b1",
+          "file": "screenshots.spec.js",
+          "line": 219,
+          "column": 1
+        },
+        {
+          "title": "interoperability admin",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 90000,
+              "annotations": [
+                {
+                  "type": "skip",
+                  "description": "set E2E_SCREENSHOTS=1 to regenerate documentation screenshots",
+                  "location": {
+                    "file": "/home/user/aranMED/frontend/e2e/screenshots.spec.js",
+                    "line": 22,
+                    "column": 6
+                  }
+                }
+              ],
+              "expectedStatus": "skipped",
+              "projectId": "",
+              "projectName": "",
+              "results": [
+                {
+                  "workerIndex": -1,
+                  "parallelIndex": -1,
+                  "status": "skipped",
+                  "duration": 0,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-10-05T04:07:20.244Z",
+                  "annotations": [],
+                  "attachments": []
+                }
+              ],
+              "status": "skipped"
+            }
+          ],
+          "id": "53bacfe0c91763a7148e-d6990d3e0e701f93a1ef",
+          "file": "screenshots.spec.js",
+          "line": 237,
+          "column": 1
+        },
+        {
+          "title": "education, models, settings",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 90000,
+              "annotations": [
+                {
+                  "type": "skip",
+                  "description": "set E2E_SCREENSHOTS=1 to regenerate documentation screenshots",
+                  "location": {
+                    "file": "/home/user/aranMED/frontend/e2e/screenshots.spec.js",
+                    "line": 22,
+                    "column": 6
+                  }
+                }
+              ],
+              "expectedStatus": "skipped",
+              "projectId": "",
+              "projectName": "",
+              "results": [
+                {
+                  "workerIndex": -1,
+                  "parallelIndex": -1,
+                  "status": "skipped",
+                  "duration": 0,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-10-05T04:07:20.244Z",
+                  "annotations": [],
+                  "attachments": []
+                }
+              ],
+              "status": "skipped"
+            }
+          ],
+          "id": "53bacfe0c91763a7148e-12de674d13bac876c80b",
+          "file": "screenshots.spec.js",
+          "line": 249,
+          "column": 1
+        },
+        {
+          "title": "dark theme",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 90000,
+              "annotations": [
+                {
+                  "type": "skip",
+                  "description": "set E2E_SCREENSHOTS=1 to regenerate documentation screenshots",
+                  "location": {
+                    "file": "/home/user/aranMED/frontend/e2e/screenshots.spec.js",
+                    "line": 22,
+                    "column": 6
+                  }
+                }
+              ],
+              "expectedStatus": "skipped",
+              "projectId": "",
+              "projectName": "",
+              "results": [
+                {
+                  "workerIndex": -1,
+                  "parallelIndex": -1,
+                  "status": "skipped",
+                  "duration": 0,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-10-05T04:07:20.244Z",
+                  "annotations": [],
+                  "attachments": []
+                }
+              ],
+              "status": "skipped"
+            }
+          ],
+          "id": "53bacfe0c91763a7148e-75e36493aec41b59a2ff",
+          "file": "screenshots.spec.js",
+          "line": 262,
+          "column": 1
+        }
+      ]
+    }
+  ],
+  "errors": [],
+  "stats": {
+    "startTime": "2026-10-05T04:06:37.206Z",
+    "duration": 43186.811,
+    "expected": 23,
+    "skipped": 13,
+    "unexpected": 0,
+    "flaky": 0
+  }
+}

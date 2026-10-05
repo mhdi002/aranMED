@@ -94,7 +94,7 @@ export default function PacsWorklistView() {
                     <td>{w.priority && <Badge tone="err">{w.priority}</Badge>}</td>
                     <td><Badge tone={STATUS_TONE[w.status] || "muted"}>{w.status}</Badge></td>
                     <td className="nowrap">
-                      {w.status === "scheduled" && <Button variant="ghost" onClick={() => setStatus(w.id, "in_progress")}>{t("wl.start")}</Button>}
+                      {w.status === "scheduled" && <Button variant="ghost" onClick={() => setStatus(w.id, "in_progress")} data-testid="wl-start">{t("wl.start")}</Button>}
                       {w.status === "in_progress" && <Button variant="ghost" onClick={() => setStatus(w.id, "completed")}>{t("wl.complete")}</Button>}
                       {["scheduled", "in_progress"].includes(w.status) &&
                         <Button variant="ghost" onClick={() => setStatus(w.id, "cancelled")}>{t("wl.cancel")}</Button>}

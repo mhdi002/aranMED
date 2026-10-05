@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { useT } from "../lib/i18n";
 
 const Sun = () => (
   <svg width="16" height="16" viewBox="0 0 24 24" fill="none"
@@ -15,6 +16,7 @@ const Moon = () => (
 );
 
 export default function ThemeToggle() {
+  const { t } = useT();
   const [theme, setTheme] = useState("light");
 
   useEffect(() => {
@@ -42,7 +44,7 @@ export default function ThemeToggle() {
       title={theme === "dark" ? "Switch to light theme" : "Switch to dark theme"}
     >
       {theme === "dark" ? <Sun /> : <Moon />}
-      <span>{theme === "dark" ? "Light" : "Dark"}</span>
+      <span>{theme === "dark" ? t("topbar.light") : t("topbar.dark")}</span>
     </button>
   );
 }

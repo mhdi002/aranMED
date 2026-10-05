@@ -2,16 +2,18 @@
 
 This guide covers every screen in AranMed: the radiology AI workbench, the PACS, the EHR, the links between hospitals, and administration. It also explains how to install, configure, connect and test a hospital.
 
+**Complete illustrated guides with each section's screenshots and its tests:** [English (DOCX)](AranMed_Guide_EN.docx) · [فارسی (DOCX)](AranMed_Guide_FA.docx). Screenshots: [`screenshots/en/`](screenshots/en/) and [`screenshots/fa/`](screenshots/fa/) (Persian, right-to-left). Test reports: [`test-results/`](test-results/).
+
 All screenshots in this guide were taken automatically from a running two-hospital stack (`frontend/e2e/screenshots.spec.js`). See [§9](#9-testing-and-regenerating-the-screenshots) to regenerate them. All patient data in them is synthetic.
 
 **Contents**
 
 1. [Quick start](#1-quick-start)
 2. [Signing in, roles and accounts](#2-signing-in-roles-and-accounts)
-3. [Reporting workspace](#3-reporting-workspace): dictation, vision chat, reports, templates, EHR, alerts
-4. [Imaging (PACS)](#4-imaging-pacs): archive, viewer, worklist, import, DICOM nodes
-5. [Clinical (EHR)](#5-clinical-ehr): patients, unified chart, break-the-glass
-6. [Between hospitals](#6-between-hospitals): transfers, EMS, interoperability
+3. [Reporting workspace](#3-reporting-workspace): dictation, vision chat, reports, templates
+4. [Imaging (PACS)](#4-imaging-pacs): archive, viewer, devices and objects, worklist, import, DICOM nodes
+5. [The EHR section](#5-the-ehr-section): patients, chart, break-the-glass, transfers, EMS, medication alerts, text intake
+6. [Between hospitals](#6-between-hospitals): shared records, consent, interoperability
 7. [Education, models and settings](#7-education-models-and-settings)
 8. [Language and theme](#8-language-and-theme)
 9. [Testing and regenerating the screenshots](#9-testing-and-regenerating-the-screenshots)
@@ -78,7 +80,7 @@ Sign in as this administrator and create the clinical accounts under **Settings 
 
 ## 2. Signing in, roles and accounts
 
-![Role picker](screenshots/01-login-role.png)
+![Role picker](screenshots/en/01-login-role.png)
 
 Pick the role that matches your work. Each role gets its own workspace and navigation:
 
@@ -92,7 +94,7 @@ Pick the role that matches your work. Each role gets its own workspace and navig
 
 The permissions behind each role live in `backend/data/rbac.json`. Edit that file, not Python, to change who can do what.
 
-![Sign-in](screenshots/02-login-credentials.png)
+![Sign-in](screenshots/en/02-login-credentials.png)
 
 **Who can create an account.** Visitors can register themselves only for the roles listed in `SELF_REGISTER_ROLES`, which defaults to `student`.
 
@@ -112,7 +114,7 @@ Sign-in is protected in three ways:
 
 ### Dictation workbench (`/dictate`)
 
-![Dictation](screenshots/10-dictate.png)
+![Dictation](screenshots/en/10-dictate.png)
 
 1. **Capture.** Record from the microphone or upload an audio file. Persian, English or a mix of both is transcribed by the ASR model.
 2. **Transcript & report.** Edit the transcript, then choose **Generate report from transcript**. The core LLM, with MedicalRAG naming rules, drafts a structured report in the institutional template. AranMed picks the template automatically unless you choose one.
@@ -122,34 +124,19 @@ Sign-in is protected in three ways:
 
 ### Radiology vision chat (`/radiology`)
 
-![Vision chat](screenshots/11-radiology.png)
+![Vision chat](screenshots/en/11-radiology.png)
 
 Ask knowledge questions, which are answered by MedicalRAG with a radiology focus. You can also attach an image for the local vision model to describe. Quick prompts on the right cover common reads. The model is a drafting assistant, never the only basis for a diagnosis.
 
 ### Saved reports (`/reports`) and templates (`/templates`)
 
-![Saved reports](screenshots/12-reports.png)
+![Saved reports](screenshots/en/12-reports.png)
 
 Saved reports are kept in this browser.
 
-![Templates](screenshots/13-templates.png)
+![Templates](screenshots/en/13-templates.png)
 
 The template browser lists all 56 institutional templates (`backend/data/templates/`). Click a template to preview its normal-report text.
-
-### EHR from free text (`/ehr`) and medication alerts (`/alerts`)
-
-![EHR](screenshots/14-ehr.png)
-
-Paste raw patient information in Persian or English. The core LLM turns it into a structured record: problems, allergies, medications with dosing intervals, and vitals. From the record you can:
-
-- record a dose given (**Record dose**);
-- ask questions about the record (MedicalRAG).
-
-Every saved record is also copied into the relational EHR and the Master Patient Index, so it appears in **Patients** too.
-
-![Medication alerts](screenshots/15-alerts.png)
-
-**Check medications** works out which doses are due or were never given. **Send alert** notifies the responsible clinician by email or SMS.
 
 ---
 
@@ -157,7 +144,7 @@ Every saved record is also copied into the relational EHR and the Master Patient
 
 ### Imaging archive (`/pacs`)
 
-![PACS archive](screenshots/20-pacs-browser.png)
+![PACS archive](screenshots/en/20-pacs-browser.png)
 
 - **Top row:** studies, images, storage used, worklist size, and the state of the DICOM listener (AE title and port).
 - **Filters:** patient name (wildcards allowed), ID/MRN, accession, modality, date range and status.
@@ -168,7 +155,7 @@ Every saved record is also copied into the relational EHR and the Master Patient
 
 ### Image viewer (`/pacs/viewer`)
 
-![Viewer with a length measurement](screenshots/21-pacs-viewer.png)
+![Viewer with a length measurement](screenshots/en/21-pacs-viewer.png)
 
 The viewer is built on Cornerstone3D.
 
@@ -194,17 +181,27 @@ The viewer is built on Cornerstone3D.
 
 **Measurements:** Length, Angle, Ellipse and Rectangle ROI with statistics, and Probe in HU. All of them are listed in the **Measurements** tab.
 
-![AI assistant draft](screenshots/22-pacs-viewer-ai.png)
+![AI assistant draft](screenshots/en/22-pacs-viewer-ai.png)
 
 **AI assistant.** **Analyze with AranMed** renders key images, sends them to the vision model, and structures a draft report in the template for that modality and body part. **Ask about this study** answers questions with the study and the patient's earlier studies in context. AI output is always a draft.
 
-![Report sign-off](screenshots/23-pacs-viewer-report.png)
+![Report sign-off](screenshots/en/23-pacs-viewer-report.png)
 
 **Report.** The draft opens in the editor. Save it as a draft, mark it *preliminary*, or **Sign final**. A final report is written to the EHR as a DiagnosticReport and marks the study *reported*. Later changes become *amended* versions.
 
+### Devices and objects
+
+![Compressed colour ultrasound beside a JPEG Lossless CT](screenshots/en/27-pacs-devices.png)
+
+The archive accepts every storage SOP class and transfer syntax real devices send — JPEG baseline/extended/lossless, JPEG-LS, JPEG 2000, RLE, Deflate, Big Endian; colour (RGB, YBR, palette); multi-frame and Enhanced objects; 1-bit segmentations and 32-bit dose grids. Series that cannot be shown as images (structured reports, encapsulated PDF, video, RT plans, ECG) are listed under **Objects** in the study.
+
+![Structured report shown as text](screenshots/en/28-pacs-objects-sr.png)
+
+Workstations that cannot take a compressed syntax receive a transcoded copy with the same SOP Instance UID (C-MOVE, C-GET and outgoing C-STORE). See [`core/PACS_v1.md`](core/PACS_v1.md) §3 for the full list.
+
 ### Modality worklist (`/pacs/worklist`)
 
-![Worklist](screenshots/24-pacs-worklist.png)
+![Worklist](screenshots/en/24-pacs-worklist.png)
 
 Scheduled procedures come from three places:
 
@@ -216,13 +213,13 @@ Modalities pull the list with DICOM MWL C-FIND. **Start** and **Complete** (or t
 
 ### Import studies (`/pacs/upload`)
 
-![Import](screenshots/25-pacs-upload.png)
+![Import](screenshots/en/25-pacs-upload.png)
 
 Drop DICOM files or ZIP archives, for example from a patient's CD or USB stick. Every image is indexed and matched to the Master Patient Index. The result shows how many images were stored, already present, or rejected, with an **Open viewer** link for each study.
 
 ### DICOM nodes & federation (`/pacs/nodes`, admin only)
 
-![DICOM nodes](screenshots/26-pacs-nodes.png)
+![DICOM nodes](screenshots/en/26-pacs-nodes.png)
 
 - **This PACS:** the local AE title, port, listener state and allow-list mode.
 - **DICOM nodes:** modalities, other PACS (DIMSE), DICOMweb archives and Orthanc servers. Each node has these settings:
@@ -237,26 +234,38 @@ Drop DICOM files or ZIP archives, for example from a patient's CD or USB stick. 
 
 ---
 
-## 5. Clinical (EHR)
+## 5. The EHR section
 
-### Patients (`/clinical`)
+Everything about a patient lives in one place. The **EHR** entry in the sidebar opens the EHR section (`/ehr`), with one tab per area:
 
-![Patient search](screenshots/30-clinical-search.png)
+| Tab | Address | Who sees it |
+|---|---|---|
+| Patients | `/ehr` | doctors, residents, radiologists, admins |
+| Transfers | `/ehr?tab=transfers` | doctors, residents, radiologists, admins |
+| EMS inbound | `/ehr?tab=ems` | doctors, residents, admins |
+| Medication alerts | `/ehr?tab=alerts` | doctors, admins |
+| Text intake | `/ehr?tab=intake` | doctors, residents, admins |
+
+The patient chart opens inside the same section (`/ehr/chart?id=…`); **← EHR** returns to the tabs. Old addresses (`/clinical`, `/clinical/chart`, `/transfers`, `/ems`, `/alerts`) redirect here, so bookmarks keep working.
+
+### Patients (`/ehr`)
+
+![Patient search](screenshots/en/30-ehr-patients.png)
 
 There is one record per person across this hospital and the network. Search by name, MRN, national ID or birth date. Tick **Include other hospitals** to also run IHE PDQm matching against peer hospitals.
 
-![Register patient](screenshots/31-clinical-register.png)
+![Register patient](screenshots/en/31-ehr-register.png)
 
 **Register patient** creates the identity in the Master Patient Index. A confident match to an existing person links to that person rather than creating a new one. A weaker match creates the new person and puts the pair in the identity review queue ([§6](#interoperability-interop-admin-only)).
 
-### Unified patient chart (`/clinical/chart`)
+### Unified patient chart (`/ehr/chart`)
 
-![Chart summary](screenshots/32-chart-summary.png)
+![Chart summary](screenshots/en/32-chart-summary.png)
 
 - **Header:** identifiers (national ID and every MRN), **Records from other hospitals**, **Export CCD** (C-CDA R2.1) and **Transfer patient**.
 - **Summary:** allergies, active problems, active medications, latest vitals and abnormal results, the last encounter, the number of imaging studies, and **Ask about this patient**. The question is answered by the agent with the whole chart in context.
 
-![Chart including a peer hospital's records](screenshots/33-chart-with-peer-records.png)
+![Chart including a peer hospital's records](screenshots/en/33-chart-with-peer-records.png)
 
 Tick **Records from other hospitals** to fetch the patient's records live from peer hospitals. AranMed matches the patient by national ID or MRN, falling back to a PDQm match.
 
@@ -280,18 +289,18 @@ In the screenshot, the contrast allergy and the clopidogrel prescription are hel
 | Timeline | Everything in date order, with its source |
 | Consent & access | Consents (restricted, deny-sharing, permit-sharing), how access was granted, and the patient's transfers |
 
-![Results](screenshots/34-chart-results.png)
-![Imaging](screenshots/35-chart-imaging.png)
-![Documents](screenshots/36-chart-documents.png)
-![Orders](screenshots/37-chart-orders.png)
-![Encounters](screenshots/38-chart-encounters.png)
-![Medications](screenshots/38-chart-medications.png)
-![Timeline](screenshots/38-chart-timeline.png)
-![Consent & access](screenshots/38-chart-access.png)
+![Results](screenshots/en/34-chart-results.png)
+![Imaging](screenshots/en/35-chart-imaging.png)
+![Documents](screenshots/en/36-chart-documents.png)
+![Orders](screenshots/en/37-chart-orders.png)
+![Encounters](screenshots/en/38-chart-encounters.png)
+![Medications](screenshots/en/38-chart-medications.png)
+![Timeline](screenshots/en/38-chart-timeline.png)
+![Consent & access](screenshots/en/38-chart-access.png)
 
 ### Restricted records (break-the-glass)
 
-![Restricted record](screenshots/39-chart-restricted.png)
+![Restricted record](screenshots/en/39-chart-restricted.png)
 
 A record with a *restricted* consent stays hidden until a clinician with `clinical.breakglass` does three things:
 
@@ -301,13 +310,9 @@ A record with a *restricted* consent stays hidden until a clinician with `clinic
 
 The grant and the reason are audited and reviewed. The AI agent can report that break-the-glass is needed, but it can never break the glass itself.
 
----
+### Transfers (`/ehr?tab=transfers`)
 
-## 6. Between hospitals
-
-### Inter-hospital transfers (`/transfers`)
-
-![Transfers](screenshots/40-transfers.png)
+![Transfers](screenshots/en/40-ehr-transfers.png)
 
 Each transfer appears as a card in **Incoming** or **Outgoing**. A card shows the patient, the two hospitals, the urgency, the reason, a clinical summary, the transport and a status bar. Each hospital keeps its own copy of the transfer and pushes every change to the other:
 
@@ -317,9 +322,9 @@ Each transfer appears as a card in **Incoming** or **Outgoing**. A card shows th
 
 Sending the package again never creates duplicates.
 
-### EMS inbound (`/ems`)
+### EMS inbound (`/ehr?tab=ems`)
 
-![EMS board](screenshots/41-ems.png)
+![EMS board](screenshots/en/41-ehr-ems.png)
 
 Ambulances post pre-arrival reports as NEMSIS v3.5 (XML or JSON) or as FHIR bundles to `POST /api/ems/notify`. Each report creates:
 
@@ -332,9 +337,36 @@ Ambulances post pre-arrival reports as NEMSIS v3.5 (XML or JSON) or as FHIR bund
 
 The ED moves each card through **Acknowledge → Arrived → Handed over**.
 
+### Text intake (`/ehr?tab=intake`) and medication alerts (`/ehr?tab=alerts`)
+
+![EHR](screenshots/en/43-ehr-intake.png)
+
+Paste raw patient information in Persian or English. The core LLM turns it into a structured record: problems, allergies, medications with dosing intervals, and vitals. From the record you can:
+
+- record a dose given (**Record dose**);
+- ask questions about the record (MedicalRAG).
+
+Every saved record is also copied into the relational EHR and the Master Patient Index, so it appears in **Patients** too.
+
+![Medication alerts](screenshots/en/42-ehr-alerts.png)
+
+**Check medications** works out which doses are due or were never given. **Send alert** notifies the responsible clinician by email or SMS.
+
+---
+
+## 6. Between hospitals
+
+Every AranMed hospital runs the same database schema and exchanges data over FHIR R4, DICOMweb/DICOM and HL7 v2, signed with short-lived peer tokens.
+
+- **Visiting patient:** tick **Records from other hospitals** in the chart. The patient's records at peer hospitals are fetched live, each with a source badge, and documents and images are retrieved on demand.
+- **Transfer:** the whole record moves — every resource type and field, including medication dose, route, frequency, interval and the history of dose changes — plus the images byte-for-byte. The receiving hospital keeps the original author of every record, links encounters correctly and never duplicates on a re-send. See [Transfers](#transfers-ehrtabtransfers).
+- **Consent** governs records and images alike (DICOMweb and DIMSE); emergency access (ETREAT) is audited at both hospitals.
+
+These guarantees are tested by real hospital processes talking to each other on SQLite, on PostgreSQL and on a mixed network (`tests/functional/test_interhospital_records.py`).
+
 ### Interoperability (`/interop`, admin only)
 
-![Interoperability](screenshots/42-interop.png)
+![Interoperability](screenshots/en/45-interop.png)
 
 - **Status:** this facility, the FHIR base, the DICOM listener, the HL7 MLLP listener and the schema versions. Peers compare schema versions before exchanging data.
 - **Peer facilities:** add or update peers, each with an OID, endpoints, trust level and the name of the env var holding the shared secret.
@@ -349,17 +381,17 @@ The ED moves each card through **Acknowledge → Arrived → Handed over**.
 
 ## 7. Education, models and settings
 
-![Education tutor](screenshots/50-education.png)
+![Education tutor](screenshots/en/50-education.png)
 
 The **education tutor** generates multiple-choice questions, case studies, mock exams and explanations of concepts by topic and difficulty. Generated sets can be saved.
 
-![Speech model](screenshots/51-asr.png)
-![Language model](screenshots/52-llm.png)
-![Vision model](screenshots/53-vision.png)
+![Speech model](screenshots/en/51-asr.png)
+![Language model](screenshots/en/52-llm.png)
+![Vision model](screenshots/en/53-vision.png)
 
 The **model consoles** (admin only) show which model serves each role (speech, core LLM, vision), with its provider, status and warm-up state. These all come from the model registry (`backend/models.yaml`), not from code.
 
-![Settings and user management](screenshots/54-settings-users.png)
+![Settings and user management](screenshots/en/54-settings-users.png)
 
 **Settings:**
 
@@ -376,11 +408,11 @@ Admins also see **Users**: every account with its role and MFA state, and a form
 
 Use **EN / FA** in the top bar to switch between English and Persian. In Persian the whole interface switches to right-to-left, including navigation, tables, the chart and the EMS board. **Dark / Light** switches the theme. Both choices are remembered in the browser.
 
-![Persian — PACS](screenshots/60-fa-pacs.png)
-![Persian — chart](screenshots/61-fa-chart.png)
-![Persian — EMS](screenshots/62-fa-ems.png)
-![Dark — viewer](screenshots/70-dark-viewer.png)
-![Dark — chart](screenshots/71-dark-chart.png)
+![Persian — PACS](screenshots/fa/20-pacs-browser.png)
+![Persian — chart](screenshots/fa/32-chart-summary.png)
+![Persian — EMS](screenshots/fa/41-ehr-ems.png)
+![Dark — viewer](screenshots/en/70-dark-viewer.png)
+![Dark — chart](screenshots/en/71-dark-chart.png)
 
 ---
 
@@ -391,7 +423,10 @@ pytest                                   # whole Python suite: unit + functional
 DATABASE_URL=postgresql://user@host:5432/db pytest --ignore=tests/medrag   # backend on Postgres
 cd frontend && npm run build
 npm run test:e2e                         # browser journeys against a seeded two-hospital stack
-E2E_SCREENSHOTS=1 npx playwright test screenshots   # regenerate docs/screenshots/*.png
+HOSPITAL_PG_DSN_BASE=postgresql://user@host:5432 HOSPITAL_PG_OIDS=2.25.702,2.25.602 \
+  pytest tests/functional/test_interhospital*.py   # mixed network: those hospitals on Postgres, others on SQLite
+for l in en fa; do E2E_SCREENSHOTS=1 SCREENSHOT_LANG=$l npx playwright test screenshots; done   # docs/screenshots/<lang>/
+node ../scripts/docs/build_docx.js       # docs/AranMed_Guide_EN.docx and _FA.docx from screenshots + test-results
 ```
 
 - **Functional tests** (`tests/functional/`) start real hospital processes and talk to them over real DICOM (DIMSE), DICOMweb, FHIR, HL7 MLLP and peer-token federation.

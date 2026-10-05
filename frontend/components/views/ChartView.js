@@ -320,7 +320,7 @@ export default function ChartView() {
       )}
 
       {tab === "orders" && (
-        <Card><CardHead title={t("ch.tab.orders")} right={canWrite && <Button variant="ghost" onClick={() => setAdding("service-requests")}>+ {t("ch.order")}</Button>} />
+        <Card><CardHead title={t("ch.tab.orders")} right={canWrite && <Button variant="ghost" onClick={() => setAdding("service-requests")} data-testid="order-imaging">+ {t("ch.order")}</Button>} />
           {adding === "service-requests" && <AddForm kind="service-requests" onSave={add} t={t} />}
           <ul className="mini-list" data-testid="orders">{(sections.service_request || []).map((o) => (
             <li key={o.id}><Badge tone="info">{o.category}</Badge> <b dir="auto">{o.display || o.text}</b> <Badge tone={o.priority === "stat" ? "err" : "muted"}>{o.priority || "routine"}</Badge> <Badge>{o.status}</Badge> {o.accession && <span className="mono small">ACC {o.accession}</span>} <Src s={o.source} t={t} /></li>))}</ul>

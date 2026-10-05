@@ -286,7 +286,7 @@ export default function DictateView({ initialTemplates, initialHealth, userRole 
                       placeholder="ASR output appears here. Mixed Persian + English is supported." />
           </Field>
           <Toolbar>
-            <Button onClick={doReport} disabled={!!busy}>
+            <Button onClick={doReport} disabled={!!busy} data-testid="dictate-generate">
               <Document size={14} /> Generate report from transcript
             </Button>
           </Toolbar>
@@ -301,7 +301,7 @@ export default function DictateView({ initialTemplates, initialHealth, userRole 
             title="Structured report"
             right={report && (
               <div className="row" style={{ marginLeft: "auto" }}>
-                <Button variant="ghost" iconOnly title="Save to Reports"
+                <Button variant="ghost" iconOnly title="Save to Reports" data-testid="save-report"
                         onClick={() => {
                           const list = JSON.parse(localStorage.getItem("asr.reports") || "[]");
                           list.unshift({ ts: Date.now(), template_id: templateId, report });

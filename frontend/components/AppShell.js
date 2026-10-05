@@ -70,7 +70,7 @@ export default function AppShell({ children, title }) {
               <div className="user-chip" title={user.username}>
                 <User size={14} />
                 <span className="muted">{user.username}</span>
-                <span className="role-badge">{ROLE_LABELS[userRole] || userRole}</span>
+                <span className="role-badge">{t(`auth.role.${userRole}`) !== `auth.role.${userRole}` ? t(`auth.role.${userRole}`) : (ROLE_LABELS[userRole] || userRole)}</span>
                 <button className="btn ghost icon-only" title={t("nav.logout")}
                         onClick={logout}><LogOut size={14} /></button>
               </div>

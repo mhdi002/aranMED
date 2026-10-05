@@ -33,7 +33,7 @@ Beside the radiology AI stack, AranMed is a complete clinical platform that hosp
 - **PACS** — DICOM archive with DIMSE (modalities, other PACS), DICOMweb, worklist/MPPS, a Cornerstone3D viewer and AI draft reads. See [`docs/core/PACS_v1.md`](docs/core/PACS_v1.md).
 - **EHR + interop** — Master Patient Index, relational FHIR-aligned EHR linked to the PACS, FHIR R4 server, HL7 v2 (MLLP), C-CDA, EMS (NEMSIS), cross-hospital chart, transfers, consent and break-the-glass. See [`docs/core/EHR_INTEROP_v1.md`](docs/core/EHR_INTEROP_v1.md) and [`docs/core/CLINICAL_DB_SCHEMA_v1.md`](docs/core/CLINICAL_DB_SCHEMA_v1.md).
 
-**User guide with screenshots of every page:** [`docs/USER_GUIDE.md`](docs/USER_GUIDE.md).
+**User guide with screenshots of every page:** [`docs/USER_GUIDE.md`](docs/USER_GUIDE.md). Complete illustrated guides with each section's screenshots and its test results: [English](docs/AranMed_Guide_EN.docx) · [فارسی (RTL)](docs/AranMed_Guide_FA.docx).
 
 Tests:
 
@@ -41,9 +41,11 @@ Tests:
 pip install -r requirements-dev.txt
 pytest                                   # unit + functional (real DICOM, HTTP, MLLP, two hospital processes)
 DATABASE_URL=postgresql://… pytest --ignore=tests/medrag   # backend suite on Postgres
-HOSPITAL_PG_DSN_BASE=postgresql://user@host:port pytest tests/functional/test_interhospital.py   # hospitals on Postgres
+HOSPITAL_PG_DSN_BASE=postgresql://user@host:port pytest tests/functional/test_interhospital*.py   # hospitals on Postgres
+HOSPITAL_PG_DSN_BASE=… HOSPITAL_PG_OIDS=2.25.702,2.25.602 pytest tests/functional/test_interhospital*.py   # mixed: listed hospitals on Postgres, others SQLite
 cd frontend && npm run build && npm run test:e2e   # browser E2E against a seeded two-hospital stack
-E2E_SCREENSHOTS=1 npx playwright test screenshots  # regenerate docs/screenshots/
+for l in en fa; do E2E_SCREENSHOTS=1 SCREENSHOT_LANG=$l npx playwright test screenshots; done  # docs/screenshots/<lang>/
+node ../scripts/docs/build_docx.js   # rebuild the EN/FA DOCX guides from screenshots and docs/test-results/
 ```
 
 ## Architecture

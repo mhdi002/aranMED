@@ -55,7 +55,7 @@ export default function ClinicalSearchView() {
             <label><input type="checkbox" checked={network} onChange={(e) => setNetwork(e.target.checked)} name="network" /> {t("cl.network")}</label>
           </div>
           <div className="filter-actions">
-            <Button type="submit" loading={busy}>{t("cl.search")}</Button>
+            <Button type="submit" loading={busy} data-testid="patient-search">{t("cl.search")}</Button>
             <Button type="button" variant="ghost" onClick={() => setOpen(true)} data-testid="register-open">{t("cl.new")}</Button>
           </div>
         </form>

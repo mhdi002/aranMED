@@ -105,7 +105,7 @@ export default function PacsNodesView() {
                     {n.is_move_destination && "move-dest "}{n.federate && <Badge tone="ok">network</Badge>}
                   </td>
                   <td className="nowrap">
-                    <Button variant="ghost" onClick={() => doEcho(n.id)}>{t("nodes.echo")}</Button>
+                    <Button variant="ghost" onClick={() => doEcho(n.id)} data-testid="node-echo">{t("nodes.echo")}</Button>
                     {echo[n.id] && <Badge tone={echo[n.id] === "ok" ? "ok" : echo[n.id] === "fail" ? "err" : "muted"}>{echo[n.id]}</Badge>}
                     <Button variant="ghost" onClick={() => startEdit(n)}>✎</Button>
                     <Button variant="ghost" onClick={() => remove(n.id)}>✕</Button>
