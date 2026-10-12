@@ -3,7 +3,6 @@ from __future__ import annotations
 
 import hashlib
 import re
-from pathlib import Path
 
 HEADING_RE = re.compile(
     r"(?m)^\s*(?:"

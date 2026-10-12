@@ -1,7 +1,6 @@
 """Functional: C-CDA export/import and EMS pre-arrival notifications."""
 from __future__ import annotations
 
-import os
 
 from lxml import etree
 

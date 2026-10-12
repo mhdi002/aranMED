@@ -99,7 +99,7 @@ async def triage_with_medrag(text: str) -> list[dict[str, Any]]:
     if not _use_medrag() or not (text or "").strip():
         return []
     try:
-        from integrations.medrag_client import MedragError, get_medrag_client
+        from integrations.medrag_client import get_medrag_client
     except Exception:  # noqa: BLE001
         return []
     try:

@@ -1,7 +1,6 @@
 """Registry / memory-governor tests."""
 from __future__ import annotations
 
-import asyncio
 import textwrap
 from pathlib import Path
 

@@ -2,7 +2,6 @@
 from __future__ import annotations
 
 import logging
-from typing import Any
 
 from .base import Tool, ToolContext, ToolResult, tool
 
@@ -43,7 +42,7 @@ class GetTemplateTool(Tool):
     async def run(self, ctx: ToolContext, template_id: str) -> ToolResult:
         try:
             body = ctx.templates.get_template(template_id)
-        except FileNotFoundError as e:
+        except FileNotFoundError:
             return ToolResult(content="", error=f"unknown template: {template_id}")
         ctx.state["template_id"] = template_id
         ctx.state["template_body"] = body

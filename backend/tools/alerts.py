@@ -25,7 +25,6 @@ import smtplib
 import time
 from datetime import datetime, timezone
 from email.mime.text import MIMEText
-from typing import Any
 
 from .base import Tool, ToolContext, ToolResult, tool
 from .ehr import load_record, save_record

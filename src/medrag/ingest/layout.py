@@ -9,7 +9,7 @@ def classify_columns(blocks, page_width):
     margin = page_width * COLUMN_MARGIN_RATIO
     full, left, right = [], [], []
     for b in blocks:
-        x0, y0, x1, y1 = b[0], b[1], b[2], b[3]
+        x0, x1 = b[0], b[2]
         width = x1 - x0
         if width > page_width * FULL_WIDTH_RATIO:
             full.append(b)

@@ -33,7 +33,7 @@ import sqlite3
 import threading
 import time
 from pathlib import Path
-from typing import Any, Iterator
+from typing import Any
 
 log = logging.getLogger("db")
 

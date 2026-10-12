@@ -11,7 +11,7 @@ import logging
 import threading
 from typing import Optional
 
-from .base import ChatMessage, ToolCall, VisionProvider
+from .base import ChatMessage, VisionProvider
 
 log = logging.getLogger("provider.hf_vision")
 

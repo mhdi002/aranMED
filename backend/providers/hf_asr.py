@@ -134,7 +134,6 @@ class HFASRProvider(ASRProvider):
 
     async def _load(self) -> None:
         import anyio
-        import torch
         from transformers import AutoModelForSpeechSeq2Seq, AutoProcessor
 
         dev = _resolve_device(self.device_pref)
@@ -225,7 +224,6 @@ class HFASRProvider(ASRProvider):
         return gen
 
     def _to_device(self, features):
-        import torch
 
         out = {}
         for key, value in features.items():

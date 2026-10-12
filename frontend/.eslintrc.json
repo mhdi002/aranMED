@@ -1,0 +1,14 @@
+{
+  "root": true,
+  "extends": ["next/core-web-vitals", "plugin:jsx-a11y/recommended"],
+  "plugins": ["jsx-a11y"],
+  "ignorePatterns": [".next/", "node_modules/", "test-results/", "playwright-report/"],
+  "rules": {
+    "@next/next/no-img-element": "off",
+    "jsx-a11y/no-autofocus": ["warn", { "ignoreNonDOM": true }]
+  },
+  "overrides": [
+    { "files": ["e2e/**/*.js", "server.js", "next.config.js", "playwright.config.js"],
+      "env": { "node": true } }
+  ]
+}

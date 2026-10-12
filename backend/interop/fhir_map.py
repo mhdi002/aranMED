@@ -18,7 +18,7 @@ import re
 import time
 from typing import Any, Optional
 
-from clinicaldb import facilities, mpi, settings
+from clinicaldb import settings
 
 V2_0203 = "http://terminology.hl7.org/CodeSystem/v2-0203"
 ACT_CODE = "http://terminology.hl7.org/CodeSystem/v3-ActCode"

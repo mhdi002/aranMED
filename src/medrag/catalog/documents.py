@@ -8,14 +8,12 @@ vectors in Qdrant.
 from __future__ import annotations
 
 import hashlib
-import json
 import sqlite3
 from datetime import datetime, timezone
 from pathlib import Path
 
-from pathlib import Path
 
-from medrag.config import CATALOG_DB, MANIFEST, OCR_OUT, TEXT_OUT
+from medrag.config import OCR_OUT, TEXT_OUT
 
 
 def _backfill_book_ids(conn: sqlite3.Connection):

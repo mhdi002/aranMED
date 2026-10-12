@@ -1,4 +1,4 @@
-# ASR-Agent — server deployment
+# AranMed — deployment, development and tests
 # Usage:
 #   make deploy            # full automated deployment (see deploy.sh) — start here
 #   make install           # venv, deps, models, verify (bare-metal)
@@ -7,6 +7,7 @@
 #   make verify            # pre-flight checks
 #   make docker-install    # Docker build + model cache
 #   make docker-run        # docker compose up -d
+#   make test / test-pg / test-mixed / e2e / lint / fmt / docs   (development)
 
 SHELL := /bin/bash
 ROOT := $(CURDIR)
@@ -20,7 +21,12 @@ FRONTEND_PORT ?= 3000
 TORCH_INDEX ?= https://download.pytorch.org/whl/cu128
 OLLAMA_MODEL ?=
 
-.PHONY: deploy install run stop verify clean docker-install docker-run docker-stop docker-logs help
+.PHONY: deploy install run stop verify clean docker-install docker-run docker-stop docker-logs help \
+        test test-pg test-mixed e2e lint fmt docs dev-deps
+
+# Development: a PostgreSQL server for test-pg/test-mixed (no database name).
+PG_DSN ?= postgresql://postgres@127.0.0.1:5432
+E2E_CHROMIUM ?=
 
 help:
 	@echo "Targets:"
@@ -28,6 +34,12 @@ help:
 	@echo "                       (pass flags via ARGS, e.g. make deploy ARGS=\"--with-ollama --with-vllm\")"
 	@echo "  make install         Install Python/Node deps + download models + verify (bare-metal)"
 	@echo "  make run             Start backend (:$(PORT)) and frontend (:$(FRONTEND_PORT)) (bare-metal)"
+	@echo "  make test            Full Python suite on SQLite, with coverage"
+	@echo "  make test-pg         Backend suite on PostgreSQL (PG_DSN=postgresql://user@host:port)"
+	@echo "  make test-mixed      Hospitals split across SQLite and PostgreSQL"
+	@echo "  make e2e             Build the frontend and run the Playwright suite (incl. accessibility)"
+	@echo "  make lint / fmt      ruff + ESLint / ruff --fix"
+	@echo "  make docs            Screenshots (EN, FA), test reports and the DOCX guides"
 	@echo "  make stop            Stop backend and frontend (bare-metal)"
 	@echo "  make verify          Run deployment checks (add VERIFY_FULL=1 for GPU load test)"
 	@echo "  make docker-install  Build images and cache Whisper in volume"
@@ -99,3 +111,39 @@ docker-stop:
 
 docker-logs:
 	docker compose logs -f backend frontend
+
+
+# ── Development ────────────────────────────────────────────────────────────
+dev-deps: venv
+	$(PIP) install -r requirements-dev.txt
+	cd frontend && npm ci
+
+test:
+	$(PY) -m pytest --cov --cov-report=term
+
+test-pg:
+	DATABASE_URL=$(PG_DSN)/aranmed_test $(PY) -m pytest --ignore=tests/medrag
+
+test-mixed:
+	HOSPITAL_PG_DSN_BASE=$(PG_DSN) HOSPITAL_PG_OIDS=2.25.702,2.25.602 \
+	  $(PY) -m pytest tests/functional/test_interhospital.py tests/functional/test_interhospital_records.py
+
+e2e:
+	cd frontend && npm run build && E2E_CHROMIUM=$(E2E_CHROMIUM) npx playwright test
+
+lint:
+	$(VENV)/bin/ruff check backend tests src scripts/docs
+	cd frontend && npm run lint
+
+fmt:
+	$(VENV)/bin/ruff check --fix backend tests src scripts/docs
+
+docs:
+	$(PY) -m pytest -q --junitxml=docs/test-results/pytest-sqlite.xml
+	cd frontend && npm run build && \
+	  PLAYWRIGHT_JSON_OUTPUT_NAME=../docs/test-results/e2e.json E2E_CHROMIUM=$(E2E_CHROMIUM) \
+	    npx playwright test --reporter=list,json && \
+	  for l in en fa; do E2E_SCREENSHOTS=1 SCREENSHOT_LANG=$$l E2E_CHROMIUM=$(E2E_CHROMIUM) \
+	    npx playwright test screenshots; done
+	node scripts/docs/build_docx.js
+	node scripts/docs/build_tech_doc_fa.js

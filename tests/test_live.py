@@ -19,7 +19,6 @@ Required services per test (each guarded with its own skip):
 """
 from __future__ import annotations
 
-import asyncio
 import os
 import sys
 from pathlib import Path

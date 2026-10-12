@@ -23,7 +23,6 @@ re-sent package de-duplicates instead of doubling the chart.
 """
 from __future__ import annotations
 
-import json
 import logging
 import threading
 import time

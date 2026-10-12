@@ -42,6 +42,8 @@ export default function Modal({ open, title, children, onClose, actions, wide = 
   if (!open) return null;
 
   return (
+    // Backdrop click is a pointer convenience; keyboard users close with Escape.
+    // eslint-disable-next-line jsx-a11y/no-static-element-interactions
     <div
       className="modal-backdrop"
       onMouseDown={(e) => { if (e.target === e.currentTarget) onClose?.(); }}

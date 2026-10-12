@@ -35,12 +35,14 @@ function McqRunner({ questions }) {
       <h3>{q.stem}</h3>
       <ul className="mcq-options">
         {options.map((o, k) => (
-          <li key={k}
-              className={`opt ${picked === k ? "picked" : ""} ${
-                shown && k === correct ? "correct" : ""
-              } ${shown && picked === k && k !== correct ? "wrong" : ""}`}
-              onClick={() => !shown && setPicked(k)}>
-            <b>{String.fromCharCode(65 + k)}.</b> {o}
+          <li key={k}>
+            <button type="button" aria-pressed={picked === k} disabled={shown && picked !== k && k !== correct}
+                    className={`opt ${picked === k ? "picked" : ""} ${
+                      shown && k === correct ? "correct" : ""
+                    } ${shown && picked === k && k !== correct ? "wrong" : ""}`}
+                    onClick={() => !shown && setPicked(k)}>
+              <b>{String.fromCharCode(65 + k)}.</b> {o}
+            </button>
           </li>
         ))}
       </ul>
@@ -95,7 +97,7 @@ export default function EducationView() {
   const [result, setResult] = useState(null);
   const [saved, setSaved] = useState([]);
 
-  useEffect(() => { loadSaved(); }, [token]);
+  useEffect(() => { loadSaved(); }, [token]); // eslint-disable-line react-hooks/exhaustive-deps
 
   async function loadSaved() {
     if (!token) return;

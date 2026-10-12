@@ -560,7 +560,7 @@ async def report(req: ReportIn, user: Optional[dict] = Depends(ai_user)) -> Repo
         tpl = templates_mod.get_template(template_id)
         meta = templates_mod.get_template_meta(template_id)
     except (FileNotFoundError, ValueError):
-        raise HTTPException(404, "template not found")
+        raise HTTPException(404, "template not found") from None
     from tools.builtin import _STRUCTURE_SYS  # type: ignore[attr-defined]
     from clinical_safety import enrich_report_payload
     import report_rules as rules_mod

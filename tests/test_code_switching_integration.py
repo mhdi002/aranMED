@@ -6,7 +6,6 @@ code-switching support between Persian and English.
 """
 from __future__ import annotations
 
-import pytest
 
 
 def test_code_switching_config_documentation():

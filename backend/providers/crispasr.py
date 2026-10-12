@@ -1,7 +1,6 @@
 """CrispASR (GGUF) ASR provider."""
 from __future__ import annotations
 
-import io
 import json
 import logging
 import os
@@ -141,7 +140,7 @@ class CrispASRProvider(ASRProvider):
         except subprocess.TimeoutExpired:
             log.error("CrispASR timed out after 60 seconds")
             return ""
-        except Exception as e:
+        except Exception:
             log.exception("Unexpected error in CrispASR provider")
             return ""
         finally:

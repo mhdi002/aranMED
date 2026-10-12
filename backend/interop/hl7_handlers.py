@@ -279,11 +279,9 @@ def handle_oru(msg: hl7v2.Hl7Message) -> dict:
     person = _person(msg)
     fac = _sending_authority(msg)
     out = {"person_id": person, "observations": 0, "reports": 0}
-    current_obr: Optional[list[str]] = None
     groups: list[tuple[list[str], list[list[str]]]] = []
     for seg in msg.segments:
         if seg[0] == "OBR":
-            current_obr = seg
             groups.append((seg, []))
         elif seg[0] == "OBX":
             if not groups:

@@ -121,7 +121,7 @@ def main() -> None:
 
 
 def seed(work: Path) -> None:
-    from tests.functional.dicom_factory import make_instance, make_study, to_bytes
+    from tests.functional.dicom_factory import make_study, to_bytes
     from pacs import multipart
     from pydicom.uid import generate_uid
 

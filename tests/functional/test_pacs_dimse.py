@@ -7,13 +7,12 @@ statuses and the resulting index/storage state.
 """
 from __future__ import annotations
 
-import threading
 import time
 
 import pytest
 from pydicom.dataset import Dataset
 from pydicom.uid import generate_uid
-from pynetdicom import AE, AllStoragePresentationContexts, StoragePresentationContexts, build_role, evt
+from pynetdicom import AE, AllStoragePresentationContexts, build_role, evt
 from pynetdicom.sop_class import (ModalityPerformedProcedureStep,
                                   ModalityWorklistInformationFind,
                                   PatientRootQueryRetrieveInformationModelFind,

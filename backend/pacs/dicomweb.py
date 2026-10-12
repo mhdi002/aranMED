@@ -53,7 +53,7 @@ def _filters(request: Request) -> tuple[dict, int, int, list[str]]:
         limit = int(request.query_params.get("limit", "100"))
         offset = int(request.query_params.get("offset", "0"))
     except ValueError:
-        raise HTTPException(400, "limit/offset must be integers")
+        raise HTTPException(400, "limit/offset must be integers") from None
     return filters, max(1, min(limit, 5000)), max(0, offset), \
         request.query_params.getlist("includefield")
 
@@ -355,7 +355,7 @@ def make_router() -> APIRouter:
             c, wd = w.split(",")[:2]
             return float(c), float(wd)
         except ValueError:
-            raise HTTPException(400, "window must be center,width[,function]")
+            raise HTTPException(400, "window must be center,width[,function]") from None
 
     def _rendered(x: dict, frame: int, request: Request, max_size: int = 2048) -> Response:
         accept = request.headers.get("accept", "")

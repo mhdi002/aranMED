@@ -368,6 +368,9 @@ export default function Viewer({ studyUid, series, token, onMeasurements, initia
           const o = overlay[i] || {};
           const s = seriesByUid[assign[i % Math.max(1, assign.length)]];
           return (
+            // Pointer selects the viewport; keyboard users switch viewports with
+            // the series picker and drive the stack with the global shortcuts.
+            // eslint-disable-next-line jsx-a11y/no-static-element-interactions
             <div key={`${layout}-${i}`} className={`vp-wrap ${active === i ? "active" : ""}`}
                  onMouseDown={() => setActive(i)} onContextMenu={(e) => e.preventDefault()}>
               <div ref={(el) => { elRefs.current[i] = el; }} className="vp" data-testid={`viewport-${i}`} />

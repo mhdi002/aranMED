@@ -17,7 +17,6 @@ import json
 from dataclasses import asdict, dataclass
 from functools import lru_cache
 from pathlib import Path
-from typing import Any
 
 from .matcher import match_condition
 

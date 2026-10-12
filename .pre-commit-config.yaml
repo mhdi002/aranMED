@@ -1,0 +1,33 @@
+# pre-commit install   — then these run on every commit (pre-commit run -a for all files).
+repos:
+  - repo: https://github.com/astral-sh/ruff-pre-commit
+    rev: v0.6.9
+    hooks:
+      - id: ruff
+        args: [--fix]
+        files: ^(backend|tests|src|scripts/docs)/.*\.py$
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v4.6.0
+    hooks:
+      - id: end-of-file-fixer
+        exclude: ^(docs/screenshots|docs/test-results|eval|models)/
+      - id: trailing-whitespace
+        exclude: ^(docs/screenshots|docs/test-results|eval|models)/|\.md$
+      - id: check-yaml
+        args: [--allow-multiple-documents]
+      - id: check-json
+        exclude: ^frontend/(tsconfig|jsconfig)\.json$
+      - id: check-merge-conflict
+      - id: detect-private-key
+        exclude: ^tests/
+      - id: check-added-large-files
+        args: [--maxkb=2048]
+        exclude: ^(docs/screenshots|docs/.*\.docx|eval/ocr_samples|models)/
+  - repo: local
+    hooks:
+      - id: eslint
+        name: eslint (frontend)
+        entry: bash -c 'cd frontend && npx next lint'
+        language: system
+        files: ^frontend/.*\.js$
+        pass_filenames: false

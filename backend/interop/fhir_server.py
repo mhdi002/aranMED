@@ -204,7 +204,7 @@ def _date_filter(values: list[str], col: str, rows: list[dict]) -> list[dict]:
             if v.startswith(pfx):
                 op, d = pfx, v[2:]
                 break
-        def ok(r: dict) -> bool:
+        def ok(r: dict, d: str = d, op: str = op) -> bool:
             x = str(r.get(col) or "")[:len(d)]
             if not x:
                 return False

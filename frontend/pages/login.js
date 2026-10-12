@@ -139,7 +139,10 @@ export default function LoginPage() {
               <form onSubmit={submit} className="auth-form">
                 <label className="lbl" htmlFor="login-username">{t("auth.username")}</label>
                 <input className="input" id="login-username" value={username} required minLength={3}
-                       autoComplete="username" onChange={(e) => setUsername(e.target.value)} autoFocus />
+                       autoComplete="username" onChange={(e) => setUsername(e.target.value)}
+                       // The sign-in form is the only thing on the page.
+                       // eslint-disable-next-line jsx-a11y/no-autofocus
+                       autoFocus />
 
                 <label className="lbl" htmlFor="login-password">{t("auth.password")}</label>
                 <input className="input" id="login-password" type="password" value={password}
@@ -150,7 +153,10 @@ export default function LoginPage() {
                 {mode === "login" && needCode && <>
                   <label className="lbl" htmlFor="login-code">{t("auth.mfaCode")}</label>
                   <input className="input" id="login-code" value={code} inputMode="numeric"
-                         autoComplete="one-time-code" onChange={(e) => setCode(e.target.value.trim())} autoFocus />
+                         autoComplete="one-time-code" onChange={(e) => setCode(e.target.value.trim())}
+                         // Appears in answer to "code required": move the user to it.
+                         // eslint-disable-next-line jsx-a11y/no-autofocus
+                         autoFocus />
                 </>}
 
                 {mode === "register" && <>

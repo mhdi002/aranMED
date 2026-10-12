@@ -24,13 +24,12 @@ import base64
 import hashlib
 import hmac
 import json
-import os
 import secrets
 import time
 from pathlib import Path
 from typing import Any, Optional
 
-from fastapi import Depends, HTTPException, Request, status
+from fastapi import HTTPException, Request, status
 
 import audit
 import auth

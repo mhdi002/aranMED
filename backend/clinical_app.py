@@ -55,7 +55,7 @@ def mount(app: FastAPI) -> None:
 
     async def _startup() -> None:
         from clinicaldb import facilities
-        from pacs import dimse, jobs
+        from pacs import jobs
         loc = facilities.seed_local()
         n = facilities.seed_peers_from_file()
         log.info("facility %s (%s) ready; %d peer(s) seeded", loc["name"], loc["oid"], n)

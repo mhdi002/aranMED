@@ -17,7 +17,6 @@ import asyncio
 import io
 import os
 import sys
-import wave
 from pathlib import Path
 
 import httpx

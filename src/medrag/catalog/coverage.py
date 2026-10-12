@@ -1,7 +1,6 @@
 """Map exam specialties to EN library coverage for OCR deduplication."""
 from __future__ import annotations
 
-from pathlib import Path
 
 from medrag.config import LIBRARY_DIR
 

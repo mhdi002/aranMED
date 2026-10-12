@@ -36,7 +36,6 @@ from __future__ import annotations
 
 import datetime
 import io
-import os
 import zipfile
 
 import numpy as np
@@ -44,9 +43,8 @@ import pydicom
 import pytest
 from pydicom.dataset import Dataset
 from pydicom.uid import ExplicitVRLittleEndian, ImplicitVRLittleEndian, generate_uid
-from pynetdicom import AE, ALL_TRANSFER_SYNTAXES, AllStoragePresentationContexts, build_role, evt
-from pynetdicom.sop_class import (ModalityPerformedProcedureStep, ModalityWorklistInformationFind,
-                                  StudyRootQueryRetrieveInformationModelFind,
+from pynetdicom import AE, AllStoragePresentationContexts, build_role, evt
+from pynetdicom.sop_class import (ModalityPerformedProcedureStep, StudyRootQueryRetrieveInformationModelFind,
                                   StudyRootQueryRetrieveInformationModelGet,
                                   StudyRootQueryRetrieveInformationModelMove, Verification)
 

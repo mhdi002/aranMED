@@ -1,0 +1,15 @@
+[run]
+source = backend
+omit =
+    backend/tests/*
+    backend/providers/hf_*
+    backend/providers/triton_asr.py
+    backend/providers/llamacpp.py
+    backend/providers/lid_segment*.py
+    backend/providers/codeswitch*.py
+branch = true
+
+[report]
+skip_empty = true
+show_missing = false
+precision = 1

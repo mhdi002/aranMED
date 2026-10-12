@@ -238,6 +238,8 @@ export default function DictateView({ userRole }) {
                    tabIndex={-1} aria-label={t("dictate.uploadAudio")} />
           </div>
 
+          {/* Playback of the user's own dictation; there is no caption track. */}
+          {/* eslint-disable-next-line jsx-a11y/media-has-caption */}
           {audioUrl && <audio controls src={audioUrl} aria-label={t("dictate.audioReady")} />}
 
           <Field label={t("dictate.langHint")} hint={t("common.optional")}>

@@ -28,7 +28,7 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
-dev = ["pytest>=7.0"]
+dev = ["pytest>=8.0"]
 
 [project.scripts]
 medrag-query = "medrag.interfaces.cli:main"
@@ -38,6 +38,18 @@ medrag-pipeline = "medrag.run_pipeline:main"
 [tool.setuptools.packages.find]
 where = ["src"]
 
-[tool.pytest.ini_options]
-testpaths = ["tests"]
-pythonpath = ["src"]
+# pytest is configured in pytest.ini (one place).
+
+[tool.ruff]
+line-length = 110
+target-version = "py310"
+extend-exclude = ["scripts/archive", "frontend", "models", "reports", ".venv", "eval"]
+
+[tool.ruff.lint]
+# Errors that are bugs, not style: pyflakes, syntax, and bugbear's
+# correctness rules. FastAPI's Depends()/File() defaults are idiomatic (B008).
+select = ["E9", "F", "B"]
+ignore = ["B008", "B905", "B007"]
+
+[tool.ruff.lint.per-file-ignores]
+"tests/**" = ["B011", "B017"]

@@ -38,15 +38,15 @@ export default function TemplatesView() {
 
       {items === null ? <Spinner /> : items.length === 0 ? <EmptyState>{t("templates.none")}</EmptyState> : (
         <div className="tpl-grid" style={{ display: "grid", gridTemplateColumns: "minmax(0, 240px) 1fr", gap: 14 }}>
-          <div style={{ display: "flex", flexDirection: "column", gap: 6 }} role="list" aria-label={t("templates.title")}>
+          <nav style={{ display: "flex", flexDirection: "column", gap: 6 }} aria-label={t("templates.title")}>
             {items.map((tpl) => (
-              <button key={tpl.id} role="listitem" className={`nav-item ${active === tpl.id ? "active" : ""}`}
+              <button key={tpl.id} className={`nav-item ${active === tpl.id ? "active" : ""}`}
                       aria-current={active === tpl.id ? "true" : undefined}
                       onClick={() => open(tpl.id)} style={{ width: "100%" }}>
                 {tpl.name}
               </button>
             ))}
-          </div>
+          </nav>
           <div className={`report ${body ? "" : "empty"}`} aria-live="polite" aria-busy={loadingBody}>
             {loadingBody ? <Spinner /> : (body || t("templates.pick"))}
           </div>

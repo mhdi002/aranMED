@@ -12,7 +12,7 @@ from __future__ import annotations
 import abc
 import logging
 from dataclasses import dataclass, field
-from typing import Any, Callable
+from typing import Any
 
 log = logging.getLogger("tools")
 

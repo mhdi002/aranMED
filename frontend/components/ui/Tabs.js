@@ -27,7 +27,7 @@ export default function Tabs({ tabs, value, onChange, label, children, className
 
   return (
     <>
-      <div className={className || "tabs"} role="tablist" aria-label={label} onKeyDown={onKey}>
+      <div className={className || "tabs"} role="tablist" aria-label={label}>
         {tabs.map((t) => {
           const selected = t.id === value;
           return (
@@ -41,6 +41,7 @@ export default function Tabs({ tabs, value, onChange, label, children, className
               tabIndex={selected ? 0 : -1}
               className={`tab ${selected ? "active" : ""}`}
               onClick={() => onChange(t.id)}
+              onKeyDown={onKey}
               data-testid={t.testId}
               {...(tabAttr ? { [tabAttr]: t.id } : {})}
             >

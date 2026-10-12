@@ -62,6 +62,8 @@ export default function StudyObjects({ studyUid, objects, token, t }) {
           <iframe title="document" src={open.href} style={{ width: "100%", height: "70vh", border: 0 }} data-testid="pdf-frame" />
         )}
         {open?.o.kind === "video" && open.href && (
+          // DICOM video objects carry no caption track to offer.
+          // eslint-disable-next-line jsx-a11y/media-has-caption
           <video controls src={open.href} style={{ width: "100%" }} data-testid="video-player" />
         )}
       </Modal>

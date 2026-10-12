@@ -1,7 +1,6 @@
 """Test code-switching support in ASR providers."""
 from __future__ import annotations
 
-import pytest
 
 from providers.crispasr import CrispASRProvider
 from providers.omniasr import OmniASRProvider

@@ -9,13 +9,11 @@ Tests that explicitly want to hit the real services are marked
 """
 from __future__ import annotations
 
-import asyncio
 import io
 import os
 import sys
 import wave
 from pathlib import Path
-from typing import Any, Optional
 
 import pytest
 

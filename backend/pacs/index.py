@@ -18,7 +18,7 @@ from typing import Any, Callable, Iterable, Optional
 
 import db
 from clinicaldb import mpi, settings
-from clinicaldb.util import new_id, norm_name, row
+from clinicaldb.util import norm_name, row
 from pacs import config, schema  # noqa: F401  (schema registers tables)
 from pacs.storage import get_storage, valid_uid
 

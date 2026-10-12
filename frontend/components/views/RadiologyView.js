@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { apiFetch } from "../../lib/api";
 import { useAuth } from "../../lib/auth";
 import { useT } from "../../lib/i18n";
-import { Image, Send, Trash, XRay, Sparkle, Copy } from "../icons";
+import { Image as ImageIcon, Send, Trash, XRay, Sparkle, Copy } from "../icons";
 import CriticalAlertsBanner from "../CriticalAlertsBanner";
 import { Button, useToast } from "../ui";
 
@@ -202,7 +202,7 @@ export default function RadiologyView() {
           <div className="composer">
             <button type="button" className="upload-btn" title={t("rad.attach")} aria-label={t("rad.attach")}
                     onClick={() => fileRef.current?.click()}>
-              <Image size={16} />
+              <ImageIcon size={16} />
             </button>
             <input ref={fileRef} type="file" accept="image/*" multiple onChange={pickFiles}
                    className="sr-only" tabIndex={-1} aria-label={t("rad.attach")} />

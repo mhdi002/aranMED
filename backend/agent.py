@@ -13,10 +13,9 @@ which is parsed transparently by their ``.chat()`` implementations.
 from __future__ import annotations
 
 import asyncio
-import json
 import logging
 from dataclasses import dataclass, field
-from typing import Any, Optional
+from typing import Optional
 
 import prompts
 import templates as templates_mod
