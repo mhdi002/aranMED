@@ -2,6 +2,8 @@
 
 This guide covers every screen in AranMed: the radiology AI workbench, the PACS, the EHR, the links between hospitals, and administration. It also explains how to install, configure, connect and test a hospital.
 
+**Persian technical document** (why the project exists, how it works, strengths, what is implemented, what needs improving, roadmap): [سند فنی (DOCX)](سند%20فنی.docx).
+
 **Complete illustrated guides with each section's screenshots and its tests:** [English (DOCX)](AranMed_Guide_EN.docx) · [فارسی (DOCX)](AranMed_Guide_FA.docx). Screenshots: [`screenshots/en/`](screenshots/en/) and [`screenshots/fa/`](screenshots/fa/) (Persian, right-to-left). Test reports: [`test-results/`](test-results/).
 
 All screenshots in this guide were taken automatically from a running two-hospital stack (`frontend/e2e/screenshots.spec.js`). See [§9](#9-testing-and-regenerating-the-screenshots) to regenerate them. All patient data in them is synthetic.
