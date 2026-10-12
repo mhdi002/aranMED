@@ -2,8 +2,7 @@ import Head from "next/head";
 import { useRouter } from "next/router";
 import { useEffect, useState } from "react";
 import { useAuth } from "../lib/auth";
-import { fetchWithTimeout } from "../lib/api";
-import { apiUrl } from "../lib/config";
+import { apiFetch } from "../lib/api";
 import { useT } from "../lib/i18n";
 import { XRay, Stethoscope, GradCap, Brain, User } from "../components/icons";
 
@@ -26,12 +25,13 @@ export default function LoginPage() {
   const [role, setRole] = useState("");
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState("");
+  const [code, setCode] = useState("");
+  const [needCode, setNeedCode] = useState(false);
   // Roles a visitor may register as themselves; others are created by an admin.
   const [selfRoles, setSelfRoles] = useState(["student"]);
 
   useEffect(() => {
-    fetchWithTimeout(apiUrl("/api/auth/register-policy"), {}, 8000)
-      .then((r) => (r.ok ? r.json() : null))
+    apiFetch("/api/auth/register-policy", { timeoutMs: 8000 })
       .then((j) => { if (j && Array.isArray(j.self_register_roles)) setSelfRoles(j.self_register_roles); })
       .catch(() => {});
   }, []);
@@ -42,14 +42,15 @@ export default function LoginPage() {
 
   // Restore last chosen role so returning users skip a click.
   useEffect(() => {
-    if (typeof window === "undefined") return;
-    const saved = window.localStorage.getItem("asr.role");
-    if (saved && ROLE_OPTIONS.some((r) => r.id === saved)) setRole(saved);
+    try {
+      const saved = window.localStorage.getItem("asr.role");
+      if (saved && ROLE_OPTIONS.some((r) => r.id === saved)) setRole(saved);
+    } catch (_) { /* private mode */ }
   }, []);
 
   function pickRole(id) {
     setRole(id);
-    if (typeof window !== "undefined") window.localStorage.setItem("asr.role", id);
+    try { window.localStorage.setItem("asr.role", id); } catch (_) { /* private mode */ }
     setStep("credentials");
   }
 
@@ -57,11 +58,17 @@ export default function LoginPage() {
     e.preventDefault();
     setErr(""); setBusy(true);
     try {
-      if (mode === "login") await login(username, password);
+      if (mode === "login") await login(username, password, code || undefined);
       else await register({ username, password, email: email || null, role: role || selfRoles[0] });
       router.replace("/");
     } catch (e) {
-      setErr(e.message || t("auth.error"));
+      // Accounts with MFA answer 401 "multi-factor code required" until a code is sent.
+      if (mode === "login" && /multi-factor/i.test(e.message || "") && !code) {
+        setNeedCode(true);
+        setErr(t("auth.mfaNeeded"));
+      } else {
+        setErr(e.status === 429 ? t("auth.locked") : (e.message || t("auth.error")));
+      }
     } finally { setBusy(false); }
   }
 
@@ -88,16 +95,17 @@ export default function LoginPage() {
             </div>
             <div>
               <h1>aranmed</h1>
-              <p className="muted">Bilingual Radiology AI Workbench</p>
+              <p className="muted">{t("auth.tagline")}</p>
             </div>
           </div>
 
-          <div className="auth-lang">
-            <button className={`btn-pill ${lang === "en" ? "active" : ""}`}
-                    onClick={() => setLang("en")}>EN</button>
-            <button className={`btn-pill ${lang === "fa" ? "active" : ""}`}
-                    onClick={() => setLang("fa")}>FA</button>
+          <div className="auth-lang" role="group" aria-label={t("topbar.lang")}>
+            <button className={`btn-pill ${lang === "en" ? "active" : ""}`} aria-pressed={lang === "en"}
+                    lang="en" onClick={() => setLang("en")}>EN</button>
+            <button className={`btn-pill ${lang === "fa" ? "active" : ""}`} aria-pressed={lang === "fa"}
+                    lang="fa" onClick={() => setLang("fa")}>FA</button>
           </div>
+          {router.query.expired && <div className="err" role="status">{t("auth.expired")}</div>}
 
           {step === "role" ? (
             <>
@@ -129,24 +137,31 @@ export default function LoginPage() {
               <h2>{mode === "login" ? t("auth.signIn") : t("auth.register")}</h2>
 
               <form onSubmit={submit} className="auth-form">
-                <label className="lbl">{t("auth.username")}</label>
-                <input className="input" value={username} required minLength={3}
-                       onChange={(e) => setUsername(e.target.value)} autoFocus />
+                <label className="lbl" htmlFor="login-username">{t("auth.username")}</label>
+                <input className="input" id="login-username" value={username} required minLength={3}
+                       autoComplete="username" onChange={(e) => setUsername(e.target.value)} autoFocus />
 
-                <label className="lbl">{t("auth.password")}</label>
-                <input className="input" type="password" value={password}
+                <label className="lbl" htmlFor="login-password">{t("auth.password")}</label>
+                <input className="input" id="login-password" type="password" value={password}
                        required minLength={mode === "register" ? 6 : 1}
+                       autoComplete={mode === "register" ? "new-password" : "current-password"}
                        onChange={(e) => setPassword(e.target.value)} />
 
-                {mode === "register" && <>
-                  <label className="lbl">{t("auth.email")}</label>
-                  <input className="input" type="email" value={email}
-                         onChange={(e) => setEmail(e.target.value)} />
+                {mode === "login" && needCode && <>
+                  <label className="lbl" htmlFor="login-code">{t("auth.mfaCode")}</label>
+                  <input className="input" id="login-code" value={code} inputMode="numeric"
+                         autoComplete="one-time-code" onChange={(e) => setCode(e.target.value.trim())} autoFocus />
                 </>}
 
-                {err && <div className="err">{err}</div>}
+                {mode === "register" && <>
+                  <label className="lbl" htmlFor="login-email">{t("auth.email")}</label>
+                  <input className="input" id="login-email" type="email" value={email}
+                         autoComplete="email" onChange={(e) => setEmail(e.target.value)} />
+                </>}
 
-                <button className="btn primary big" type="submit" disabled={busy}>
+                {err && <div className="err" role="alert">{err}</div>}
+
+                <button className="btn primary big" type="submit" disabled={busy} aria-busy={busy}>
                   {busy ? <span className="spinner" />
                         : (mode === "login" ? t("auth.signIn") : t("auth.register"))}
                 </button>

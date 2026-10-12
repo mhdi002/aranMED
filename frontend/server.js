@@ -22,6 +22,9 @@ if (!BACKEND) {
 const apiProxy = createProxyMiddleware({
   target: BACKEND,
   changeOrigin: true,
+  // X-Forwarded-For/-Proto so the API sees the real client (login lockouts,
+  // audit); the backend trusts it from FORWARDED_ALLOW_IPS only.
+  xfwd: true,
   logLevel: "warn",
   proxyTimeout: SERVER_TIMEOUT,
   timeout: SERVER_TIMEOUT,

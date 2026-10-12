@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useTheme } from "../lib/theme";
 import { useT } from "../lib/i18n";
 
 const Sun = () => (
@@ -17,31 +17,14 @@ const Moon = () => (
 
 export default function ThemeToggle() {
   const { t } = useT();
-  const [theme, setTheme] = useState("light");
-
-  useEffect(() => {
-    const stored = typeof window !== "undefined"
-      ? localStorage.getItem("theme")
-      : null;
-    const initial = stored
-      || (window.matchMedia?.("(prefers-color-scheme: dark)").matches ? "dark" : "light");
-    apply(initial);
-  }, []);
-
-  function apply(next) {
-    setTheme(next);
-    if (typeof document !== "undefined") {
-      document.documentElement.setAttribute("data-theme", next);
-      localStorage.setItem("theme", next);
-    }
-  }
-
+  const { theme, setTheme } = useTheme();
+  const next = theme === "dark" ? "light" : "dark";
   return (
     <button
       className="theme-toggle"
-      onClick={() => apply(theme === "dark" ? "light" : "dark")}
-      aria-label="Toggle theme"
-      title={theme === "dark" ? "Switch to light theme" : "Switch to dark theme"}
+      onClick={() => setTheme(next)}
+      aria-label={t(next === "dark" ? "topbar.toDark" : "topbar.toLight")}
+      aria-pressed={theme === "dark"}
     >
       {theme === "dark" ? <Sun /> : <Moon />}
       <span>{theme === "dark" ? t("topbar.light") : t("topbar.dark")}</span>

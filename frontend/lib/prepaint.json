@@ -1,0 +1,4 @@
+{
+  "_comment": "Inline pre-paint script (pages/_document.js); next.config.js allows it in the CSP by hash.",
+  "script": "(function(){try{var d=document.documentElement;var l=localStorage.getItem(\"asr.lang\");if(l===\"fa\"){d.lang=\"fa\";d.dir=\"rtl\";}var t=localStorage.getItem(\"theme\");if(!t&&window.matchMedia&&window.matchMedia(\"(prefers-color-scheme: dark)\").matches)t=\"dark\";if(t)d.setAttribute(\"data-theme\",t);}catch(e){}})();"
+}

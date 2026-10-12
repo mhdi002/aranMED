@@ -17,20 +17,20 @@
   /* ---- color: text ---- */
   --text: #14181f;
   --text-soft: #4b5563;
-  --muted: #8890a0;
+  --muted: #5d6575;           /* ≥5.2:1 on --bg and --surface-2 (WCAG AA) */
   --on-accent: #ffffff;
 
   /* ---- color: brand + status ---- */
-  --accent: #0f9d94;          /* medical teal */
+  --accent: #0b7b74;          /* medical teal; white text 5.1:1 */
   --accent-2: #2f6fed;        /* clinical blue */
   --accent-soft: #e5f5f3;
-  --accent-strong: #0b7b74;
+  --accent-strong: #0a6f69;
 
-  --ok: #1a9e6f;
+  --ok: #11704e;
   --ok-soft: #e4f6ee;
   --warn: #b76e00;
   --warn-soft: #fdf1de;
-  --danger: #d1373f;
+  --danger: #b42a33;
   --danger-soft: #fbe9ea;
 
   /* ---- elevation: one soft shadow scale, used sparingly ---- */
@@ -82,7 +82,7 @@ html[data-theme="dark"] {
 
   --text: #eef1f6;
   --text-soft: #b7c0cf;
-  --muted: #737f92;
+  --muted: #8a95a8;           /* 5.9:1 on dark --surface */
 
   --accent: #2dd4c6;
   --accent-2: #6693ff;

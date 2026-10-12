@@ -17,6 +17,8 @@ export default function ClinicalSearchView() {
   const [res, setRes] = useState(null);
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState("");
+  const [regErr, setRegErr] = useState("");
+  const [saving, setSaving] = useState(false);
   const [open, setOpen] = useState(false);
   const [form, setForm] = useState(BLANK);
 
@@ -31,12 +33,14 @@ export default function ClinicalSearchView() {
 
   async function register(e) {
     e.preventDefault();
+    if (saving) return;
+    setSaving(true); setRegErr("");
     try {
       const { mrn, national_id, ...demo } = form;
       const r = await clinicalApi.register({ demographics: demo, mrn: mrn || null, national_id: national_id || null }, token);
       setOpen(false);
       router.push(`/ehr/chart?id=${r.person_id}`);
-    } catch (e2) { setErr(e2.message); }
+    } catch (e2) { setRegErr(e2.message); } finally { setSaving(false); }
   }
   const f = (k) => (e) => setForm((x) => ({ ...x, [k]: e.target.value }));
 
@@ -60,7 +64,7 @@ export default function ClinicalSearchView() {
           </div>
         </form>
       </Card>
-      {err && <div className="err">{err}</div>}
+      {err && <div className="err" role="alert">{err}</div>}
       {res && (
         <Card data-testid="patient-results">
           <CardHead title={t("cl.results")} right={<span className="muted">{res.results.length + res.remote.length}</span>} />
@@ -94,16 +98,17 @@ export default function ClinicalSearchView() {
           {res.errors?.length > 0 && <div className="warn-banner">{t("cl.unreachable")}: {res.errors.map((e) => e.facility).join(", ")}</div>}
         </Card>
       )}
-      <Modal open={open} title={t("cl.new")} onClose={() => setOpen(false)}>
+      <Modal open={open} title={t("cl.new")} onClose={() => { setOpen(false); setRegErr(""); }}>
         <form className="form-grid" onSubmit={register}>
           <div><Label>{t("cl.family")}</Label><TextInput value={form.family} onChange={f("family")} dir="auto" required /></div>
           <div><Label>{t("cl.given")}</Label><TextInput value={form.given} onChange={f("given")} dir="auto" required /></div>
           <div><Label>{t("cl.birth")}</Label><TextInput type="date" value={form.birth_date} onChange={f("birth_date")} required /></div>
-          <div><Label>{t("cl.sex")}</Label><Select value={form.sex} onChange={f("sex")}><option value="" /><option value="female">female</option><option value="male">male</option><option value="other">other</option></Select></div>
+          <div><Label>{t("cl.sex")}</Label><Select value={form.sex} onChange={f("sex")}><option value="" /><option value="female">{t("cl.sex.female")}</option><option value="male">{t("cl.sex.male")}</option><option value="other">{t("cl.sex.other")}</option></Select></div>
           <div><Label>{t("cl.national")}</Label><TextInput value={form.national_id} onChange={f("national_id")} /></div>
           <div><Label>{t("cl.mrn")}</Label><TextInput value={form.mrn} onChange={f("mrn")} /></div>
           <div className="span-2"><Label>{t("cl.phone")}</Label><TextInput value={form.phone} onChange={f("phone")} /></div>
-          <div className="span-2 toolbar"><Button type="submit">{t("cl.registerBtn")}</Button></div>
+          {regErr && <div className="span-2 err" role="alert">{regErr}</div>}
+          <div className="span-2 toolbar"><Button type="submit" loading={saving}>{t("cl.registerBtn")}</Button></div>
         </form>
       </Modal>
     </div>

@@ -4,10 +4,13 @@ import "../styles/clinical.css";
 import { useRouter } from "next/router";
 import { useEffect } from "react";
 import { AuthProvider, useAuth } from "../lib/auth";
-import { LanguageProvider } from "../lib/i18n";
+import { LanguageProvider, useT } from "../lib/i18n";
+import { ThemeProvider } from "../lib/theme";
+import { ToastProvider } from "../components/ui";
 
 function Gate({ Component, pageProps }) {
   const { user, ready } = useAuth();
+  const { t } = useT();
   const router = useRouter();
   const isPublic = router.pathname === "/login";
 
@@ -17,11 +20,7 @@ function Gate({ Component, pageProps }) {
   }, [ready, user, isPublic, router]);
 
   if (!ready) {
-    return (
-      <div className="boot">
-        Loading…
-      </div>
-    );
+    return <div className="boot" role="status">{t("common.loading")}</div>;
   }
   if (!user && !isPublic) return null;
   return <Component {...pageProps} />;
@@ -30,9 +29,13 @@ function Gate({ Component, pageProps }) {
 export default function App({ Component, pageProps }) {
   return (
     <LanguageProvider>
-      <AuthProvider>
-        <Gate Component={Component} pageProps={pageProps} />
-      </AuthProvider>
+      <ThemeProvider>
+        <ToastProvider>
+          <AuthProvider>
+            <Gate Component={Component} pageProps={pageProps} />
+          </AuthProvider>
+        </ToastProvider>
+      </ThemeProvider>
     </LanguageProvider>
   );
 }

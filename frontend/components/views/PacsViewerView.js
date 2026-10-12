@@ -108,9 +108,9 @@ export default function PacsViewerView() {
               <div className="kv">
                 <span>{t("pacs.accession")}</span><b>{s.AccessionNumber || "—"}</b>
                 <span>{t("pacs.modality")}</span><b>{(s.ModalitiesInStudy || []).join(", ")}</b>
-                <span>Referrer</span><b>{(s.ReferringPhysicianName || "—").replace(/\^/g, " ")}</b>
+                <span>{t("pacs.referrer")}</span><b>{(s.ReferringPhysicianName || "—").replace(/\^/g, " ")}</b>
                 <span>{t("pacs.instances")}</span><b>{s.NumberOfStudyRelatedInstances}</b>
-                <span>Origin</span><b>{s._ext?.origin_facility || "—"}</b>
+                <span>{t("pacs.origin")}</span><b>{s._ext?.origin_facility || "—"}</b>
                 <span>Study UID</span><b className="mono small">{s.StudyInstanceUID}</b>
               </div>
               <StudyObjects studyUid={studyUid} objects={d.objects} token={token} t={t} />

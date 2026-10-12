@@ -4,11 +4,8 @@ import { apiFetch } from "../../lib/api";
 import { useT } from "../../lib/i18n";
 import CriticalAlertsBanner from "../CriticalAlertsBanner";
 import { ConfirmModal } from "../ui";
+import { fmtTs } from "../../lib/format";
 
-function fmtTs(t) {
-  if (!t) return "—";
-  try { return new Date(t * 1000).toLocaleString(); } catch (_) { return String(t); }
-}
 
 export default function EhrView() {
   const { t, lang } = useT();
@@ -104,7 +101,7 @@ export default function EhrView() {
             <span className="step">1</span>
             <h2>{t("ehr.input")}</h2>
           </div>
-          <textarea className="textarea" dir="auto"
+          <textarea className="textarea" dir="auto" aria-label={t("ehr.input")}
                     value={info} onChange={(e) => setInfo(e.target.value)}
                     style={{ minHeight: 180 }}
                     placeholder={
@@ -117,7 +114,7 @@ export default function EhrView() {
               {busy ? <span className="spinner" /> : null} {t("ehr.build")}
             </button>
           </div>
-          {err && <div className="err">{err}</div>}
+          {err && <div className="err" role="alert">{err}</div>}
         </section>
 
         <section className="card">
@@ -133,7 +130,7 @@ export default function EhrView() {
                 <div>
                   <div className="bold">{r.name || r.id}</div>
                   <div className="muted small">
-                    {r.medications} {t("ehr.medications")} · {fmtTs(r.updated_at)}
+                    {r.medications} {t("ehr.medications")} · {fmtTs(r.updated_at, lang)}
                   </div>
                 </div>
                 <div className="row">
@@ -181,14 +178,15 @@ export default function EhrView() {
               <div className="lbl">{t("ehr.medications")}</div>
               <table className="meds">
                 <thead><tr>
-                  <th>name</th><th>dose</th><th>every</th><th>last</th><th /></tr></thead>
+                  <th>{t("ehr.colName")}</th><th>{t("ehr.colDose")}</th><th>{t("ehr.colEvery")}</th>
+                  <th>{t("ehr.colLast")}</th><th><span className="sr-only">{t("ehr.recordDose")}</span></th></tr></thead>
                 <tbody>
                   {(active.medications || []).map((m, i) => (
                     <tr key={i}>
                       <td>{m.name}</td>
                       <td>{m.dose || "—"}</td>
                       <td>{m.frequency_hours ? `${m.frequency_hours} h` : (m.frequency || "—")}</td>
-                      <td>{fmtTs(m.last_dose_at)}</td>
+                      <td>{fmtTs(m.last_dose_at, lang)}</td>
                       <td>
                         <button className="btn ghost small"
                                 onClick={() => recordDose(m.name)}>
@@ -200,17 +198,18 @@ export default function EhrView() {
                 </tbody>
               </table>
 
-              <div className="lbl" style={{ marginTop: 16 }}>Ask about this EHR</div>
+              <label className="lbl" htmlFor="ehr-ask" style={{ marginTop: 16 }}>{t("ehr.askTitle")}</label>
               <textarea
+                id="ehr-ask"
                 className="textarea"
                 value={askQ}
                 onChange={(e) => setAskQ(e.target.value)}
                 style={{ minHeight: 70 }}
-                placeholder="e.g. Any life-threatening findings in this record?"
+                placeholder={t("ehr.askPlaceholder")}
               />
               <div className="toolbar">
                 <button className="btn" onClick={askEhr} disabled={busy || !askQ.trim()}>
-                  Ask MedicalRAG
+                  {t("ehr.askButton")}
                 </button>
               </div>
               {askAnswer && (
@@ -225,13 +224,13 @@ export default function EhrView() {
 
       <ConfirmModal
         open={pendingDelete != null}
-        title="Delete record?"
+        title={t("ehr.deleteTitle")}
         danger
         confirmLabel={t("ehr.delete")}
         onCancel={() => setPendingDelete(null)}
         onConfirm={() => remove(pendingDelete)}
       >
-        This permanently deletes the EHR record for <strong>{pendingDelete}</strong>.
+        {t("ehr.deleteText")} <strong dir="auto">{pendingDelete}</strong>
       </ConfirmModal>
     </div>
   );

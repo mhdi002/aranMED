@@ -1,5 +1,8 @@
+import { useT } from "../lib/i18n";
+
 /** Warning banner for critical / lethal clinical findings. */
 export default function CriticalAlertsBanner({ alerts }) {
+  const { t } = useT();
   const list = Array.isArray(alerts) ? alerts.filter(Boolean) : [];
   if (!list.length) return null;
 
@@ -10,7 +13,7 @@ export default function CriticalAlertsBanner({ alerts }) {
       aria-live="assertive"
     >
       <div className="critical-alerts-banner__title">
-        Critical clinical finding
+        {t("alert.critical")}
       </div>
       <ul className="critical-alerts-banner__list">
         {list.map((a, i) => (
@@ -18,7 +21,7 @@ export default function CriticalAlertsBanner({ alerts }) {
             <strong>{(a.severity || "critical").toUpperCase()}</strong>
             {a.label ? ` · ${a.label}` : ""}
             {": "}
-            {a.message || a.excerpt || "Review immediately."}
+            {a.message || a.excerpt || t("alert.review")}
           </li>
         ))}
       </ul>
@@ -28,6 +31,7 @@ export default function CriticalAlertsBanner({ alerts }) {
 
 /** Softer banner for spoken-vs-selected template mismatch / naming rules. */
 export function TemplateMismatchBanner({ mismatch }) {
+  const { t } = useT();
   if (!mismatch || (!mismatch.mismatch && !(mismatch.naming_violations || []).length)) {
     return null;
   }
@@ -35,11 +39,10 @@ export function TemplateMismatchBanner({ mismatch }) {
   return (
     <div className="template-mismatch-banner" role="status">
       <div className="template-mismatch-banner__title">
-        Template / naming notice
+        {t("alert.templateNotice")}
       </div>
       <p style={{ margin: "4px 0 0" }}>
-        {mismatch.message ||
-          "Spoken exam name differs from the selected template. Selected template was used for structure."}
+        {mismatch.message || t("alert.templateDefault")}
       </p>
       {violations.length > 0 && (
         <ul style={{ margin: "6px 0 0", paddingInlineStart: 18 }}>

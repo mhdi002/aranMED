@@ -1,6 +1,5 @@
 // Clinical EHR / transfers / EMS / interop API helpers (same-origin /api proxy).
-import { apiFetch, fetchWithTimeout } from "./api";
-import { apiUrl } from "./config";
+import { apiFetch, apiRaw } from "./api";
 import { qs } from "./pacs";
 
 const J = (body) => JSON.stringify(body);
@@ -49,28 +48,14 @@ export const interopApi = {
   mpiLinks: (token) => apiFetch("/api/mpi/links", {}, token),
   resolveLink: (id, accept, token) =>
     apiFetch(`/api/mpi/links/${id}/resolve${qs({ accept })}`, { method: "POST" }, token),
-  async hl7(message, token) {
-    const r = await fetchWithTimeout(apiUrl("/api/interop/hl7"), {
-      method: "POST", body: message,
-      headers: { Authorization: `Bearer ${token}`, "Content-Type": "x-application/hl7-v2+er7" },
-    }, 60000);
-    if (!r.ok) throw new Error(await r.text());
-    return r.text();
-  },
-  async importCda(xml, token) {
-    const r = await fetchWithTimeout(apiUrl("/api/interop/cda"), {
-      method: "POST", body: xml,
-      headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/xml" },
-    }, 60000);
-    if (!r.ok) throw new Error(await r.text());
-    return r.json();
-  },
+  hl7: (message, token) => apiFetch("/api/interop/hl7", {
+    method: "POST", body: message, headers: { "Content-Type": "x-application/hl7-v2+er7" },
+  }, token),
+  importCda: (xml, token) => apiFetch("/api/interop/cda", {
+    method: "POST", body: xml, headers: { "Content-Type": "application/xml" },
+  }, token),
   async exportCda(personId, token) {
-    const r = await fetchWithTimeout(apiUrl(`/api/interop/cda/${personId}`), {
-      headers: { Authorization: `Bearer ${token}` },
-    }, 60000);
-    if (!r.ok) throw new Error(await r.text());
-    return r.blob();
+    return (await apiRaw(`/api/interop/cda/${personId}`, {}, token)).blob();
   },
 };
 

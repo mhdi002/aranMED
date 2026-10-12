@@ -8,10 +8,12 @@
 // shell flips automatically (CSS uses logical properties).
 import { createContext, useCallback, useContext, useEffect, useState } from "react";
 import { CLINICAL_STRINGS } from "./i18n_clinical";
+import { UI_STRINGS } from "./i18n_ui";
 
 export const STRINGS = {
   en: {
     ...CLINICAL_STRINGS.en,
+    ...UI_STRINGS.en,
     "nav.workspace":   "Workspace",
     "nav.models":      "Models",
     "nav.education":   "Education",
@@ -108,6 +110,7 @@ export const STRINGS = {
   },
   fa: {
     ...CLINICAL_STRINGS.fa,
+    ...UI_STRINGS.fa,
     "nav.workspace":   "میز کار",
     "nav.models":      "مدل‌ها",
     "nav.education":   "آموزش",
@@ -227,9 +230,11 @@ export function LanguageProvider({ children }) {
     if (typeof window !== "undefined") window.localStorage.setItem("asr.lang", l);
   }, []);
 
-  const t = useCallback((key) => {
+  // t("key") or t("key", { n: 3 }) -> "{n}" placeholders are filled in.
+  const t = useCallback((key, vars) => {
     const dict = STRINGS[lang] || STRINGS.en;
-    return dict[key] ?? STRINGS.en[key] ?? key;
+    const s = dict[key] ?? STRINGS.en[key] ?? key;
+    return vars ? s.replace(/\{(\w+)\}/g, (m, k) => (vars[k] ?? m)) : s;
   }, [lang]);
 
   return (

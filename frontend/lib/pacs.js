@@ -1,7 +1,7 @@
 // PACS client helpers: /api/pacs management calls + DICOMweb (/api/dicom-web).
 // All requests go through the same-origin /api proxy (lib/config.apiUrl) with
 // the user's bearer token; nothing here names a host.
-import { apiFetch, fetchWithTimeout } from "./api";
+import { apiFetch, apiRaw } from "./api";
 import { apiUrl } from "./config";
 
 export const DICOMWEB = process.env.NEXT_PUBLIC_DICOMWEB_PREFIX || "/api/dicom-web";
@@ -71,18 +71,14 @@ export function uploadDicom(files, token, onProgress) {
 
 /** Authenticated fetch of a DICOMweb resource as a Blob object URL (thumbnails). */
 export async function dicomwebObjectUrl(path, token, accept = "image/jpeg") {
-  const r = await fetchWithTimeout(apiUrl(`${DICOMWEB}${path}`), {
-    headers: { Authorization: `Bearer ${token}`, Accept: accept },
-  }, 60000);
-  if (!r.ok) throw new Error(`HTTP ${r.status}`);
+  const r = await apiRaw(`${DICOMWEB}${path}`, { headers: { Accept: accept } }, token);
   return URL.createObjectURL(await r.blob());
 }
 
 export async function dicomwebJson(path, token) {
-  const r = await fetchWithTimeout(apiUrl(`${DICOMWEB}${path}`), {
-    headers: { Authorization: `Bearer ${token}`, Accept: "application/dicom+json" },
-  }, 120000);
-  if (!r.ok) throw new Error(`HTTP ${r.status}`);
+  const r = await apiRaw(`${DICOMWEB}${path}`, {
+    headers: { Accept: "application/dicom+json" }, timeoutMs: 120000,
+  }, token);
   return r.json();
 }
 

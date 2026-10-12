@@ -13,6 +13,7 @@ export default function StudyPanel({ studyUid, token, user, onClose, onChanged, 
   const [target, setTarget] = useState("");
   const [msg, setMsg] = useState("");
   const [confirmDelete, setConfirmDelete] = useState(false);
+  const [deleting, setDeleting] = useState(false);
   const isAdmin = user?.role === "admin";
 
   const load = useCallback(async () => {
@@ -23,33 +24,42 @@ export default function StudyPanel({ studyUid, token, user, onClose, onChanged, 
     if (isAdmin) pacsApi.nodes(token).then((n) => setNodes(n.federation_targets || [])).catch(() => {});
   }, [isAdmin, token]);
 
-  if (err) return <Card className="study-panel"><div className="err">{err}</div></Card>;
-  if (!d) return <Card className="study-panel"><span className="spinner" /></Card>;
+  if (err) return <Card className="study-panel"><div className="err" role="alert">{err}</div></Card>;
+  if (!d) return <Card className="study-panel"><span className="spinner dark" role="status" aria-label={t("common.loading")} /></Card>;
   const s = d.study;
   const ext = s._ext || {};
 
   async function verify() {
-    const r = await pacsApi.verify(studyUid, token);
-    setMsg(`✓ ${r.ok} ok · ${r.corrupt.length} corrupt · ${r.missing.length} missing`);
+    setMsg("…");
+    try {
+      const r = await pacsApi.verify(studyUid, token);
+      setMsg(t("pacs.verifyResult", { ok: r.ok, corrupt: r.corrupt.length, missing: r.missing.length }));
+    } catch (e) { setMsg(`✗ ${e.message}`); }
   }
   async function send() {
     if (!target) return;
     setMsg("…");
     try {
       const job = await pacsApi.send({ study_uid: studyUid, node_id: target, wait: true }, token);
-      setMsg(job.status === "done" ? `✓ sent ${job.result?.sent}` : `✗ ${job.last_error}`);
+      setMsg(job.status === "done" ? t("pacs.sentN", { n: job.result?.sent ?? 0 }) : `✗ ${job.last_error}`);
     } catch (e) { setMsg(e.message); }
   }
   async function del() {
-    await pacsApi.deleteStudy(studyUid, token);
-    setConfirmDelete(false);
-    onClose?.(); onChanged?.();
+    setDeleting(true);
+    try {
+      await pacsApi.deleteStudy(studyUid, token);
+      setConfirmDelete(false);
+      onClose?.(); onChanged?.();
+    } catch (e) {
+      setConfirmDelete(false);
+      setMsg(`✗ ${e.message}`);
+    } finally { setDeleting(false); }
   }
 
   return (
     <Card className="study-panel" data-testid="study-panel">
       <CardHead title={(s.PatientName || "—").replace(/\^/g, " ")}
-                right={onClose && <Button variant="ghost" iconOnly onClick={onClose} aria-label="Close">✕</Button>} />
+                right={onClose && <Button variant="ghost" iconOnly onClick={onClose} aria-label={t("common.close")}>✕</Button>} />
       <div className="kv">
         <span>{t("pacs.col.study")}</span><b dir="auto">{s.StudyDescription || "—"}</b>
         <span>{t("pacs.col.date")}</span><b>{fmtDicomDate(s.StudyDate)}</b>
@@ -113,8 +123,8 @@ export default function StudyPanel({ studyUid, token, user, onClose, onChanged, 
           </>
         )}
       </div>
-      {msg && <div className="muted small">{msg}</div>}
-      <ConfirmModal open={confirmDelete} title={t("pacs.delete")} danger confirmLabel={t("pacs.delete")}
+      {msg && <div className="muted small" role="status">{msg}</div>}
+      <ConfirmModal open={confirmDelete} title={t("pacs.delete")} danger confirmLabel={t("pacs.delete")} busy={deleting}
                     onCancel={() => setConfirmDelete(false)} onConfirm={del}>
         {s.StudyDescription} — {(s.PatientName || "").replace(/\^/g, " ")}
       </ConfirmModal>

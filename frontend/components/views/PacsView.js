@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useRouter } from "next/router";
 import { useAuth } from "../../lib/auth";
 import { useT } from "../../lib/i18n";
@@ -14,18 +14,29 @@ const EMPTY = { q: "", patient_id: "", accession: "", modality: "", date_from: "
 
 function Thumb({ study, token }) {
   const [src, setSrc] = useState(null);
+  const [visible, setVisible] = useState(false);
+  const ref = useRef(null);
   const local = (study.locations || [{ kind: "local" }]).some((l) => l.kind === "local") || !study.locations;
+  // Fetch thumbnails only as rows scroll into view (a page lists up to 100).
+  useEffect(() => {
+    if (!ref.current || visible) return undefined;
+    if (typeof IntersectionObserver === "undefined") { setVisible(true); return undefined; }
+    const io = new IntersectionObserver((es) => { if (es.some((e) => e.isIntersecting)) setVisible(true); },
+                                        { rootMargin: "200px" });
+    io.observe(ref.current);
+    return () => io.disconnect();
+  }, [visible]);
   useEffect(() => {
     let url;
     let live = true;
-    if (local && token) {
+    if (local && token && visible) {
       dicomwebObjectUrl(`/studies/${study.StudyInstanceUID}/thumbnail?size=96`, token)
         .then((u) => { url = u; if (live) setSrc(u); }).catch(() => {});
     }
     return () => { live = false; if (url) URL.revokeObjectURL(url); };
-  }, [study.StudyInstanceUID, token, local]);
+  }, [study.StudyInstanceUID, token, local, visible]);
   return (
-    <div className="thumb">
+    <div className="thumb" ref={ref}>
       {src ? <img src={src} alt="" /> : <span>{(study.ModalitiesInStudy || []).join("/") || "—"}</span>}
     </div>
   );
@@ -52,7 +63,7 @@ export default function PacsView() {
   }, [token, filters]);
 
   useEffect(() => { search(EMPTY); }, [token]); // eslint-disable-line react-hooks/exhaustive-deps
-  useEffect(() => { if (token) pacsApi.stats(token).then(setStats).catch(() => {}); }, [token, data]);
+  useEffect(() => { if (token) pacsApi.stats(token).then(setStats).catch(() => {}); }, [token]);
 
   const set = (k) => (e) => setFilters((f) => ({ ...f, [k]: e.target.value }));
   const onSubmit = (e) => { e.preventDefault(); search(); };
@@ -93,7 +104,7 @@ export default function PacsView() {
       )}
 
       <Card>
-        <form className="filter-grid" onSubmit={onSubmit} aria-label="Study search">
+        <form className="filter-grid" onSubmit={onSubmit} aria-label={t("pacs.search")}>
           <div><Label>{t("pacs.patient")}</Label><TextInput value={filters.q} onChange={set("q")} dir="auto" name="q" /></div>
           <div><Label>{t("pacs.patientId")}</Label><TextInput value={filters.patient_id} onChange={set("patient_id")} name="patient_id" /></div>
           <div><Label>{t("pacs.accession")}</Label><TextInput value={filters.accession} onChange={set("accession")} /></div>
@@ -153,7 +164,14 @@ export default function PacsView() {
                     return (
                       <tr key={s.StudyInstanceUID}
                           className={selected === s.StudyInstanceUID ? "selected" : ""}
+                          tabIndex={isLocal ? 0 : undefined}
+                          aria-selected={isLocal ? selected === s.StudyInstanceUID : undefined}
                           onClick={() => isLocal && setSelected(s.StudyInstanceUID)}
+                          onKeyDown={(e) => {
+                            if (!isLocal) return;
+                            if (e.key === "Enter") openViewer(s.StudyInstanceUID);
+                            else if (e.key === " ") { e.preventDefault(); setSelected(s.StudyInstanceUID); }
+                          }}
                           onDoubleClick={() => isLocal && openViewer(s.StudyInstanceUID)}>
                         <td><Thumb study={s} token={token} /></td>
                         <td className="nowrap">{fmtDicomDate(s.StudyDate)}</td>

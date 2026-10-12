@@ -6,17 +6,17 @@ function state() {
 }
 
 /** Sign in through the API and seed the token the app reads from localStorage. */
-async function loginAs(page, request, username, password) {
+async function loginAs(page, request, username, password, lang = "en") {
   const st = state();
   const r = await request.post(`${st.backend}/api/auth/login`, {
     form: { username, password },
   });
   if (!r.ok()) throw new Error(`login failed for ${username}: ${r.status()}`);
   const { access_token: token } = await r.json();
-  await page.addInitScript((t) => {
+  await page.addInitScript(([t, l]) => {
     window.localStorage.setItem("asr.token", t);
-    window.localStorage.setItem("asr.lang", "en");
-  }, token);
+    window.localStorage.setItem("asr.lang", l);
+  }, [token, lang]);
   return token;
 }
 

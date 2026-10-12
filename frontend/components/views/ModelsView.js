@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
-import { fetchWithTimeout } from "../../lib/api";
-import { apiUrl } from "../../lib/config";
+import { apiFetch } from "../../lib/api";
+import { useAuth } from "../../lib/auth";
+import { useT } from "../../lib/i18n";
 import { Badge, Card, CardHead, EmptyState } from "../ui";
 
 /**
@@ -16,22 +17,22 @@ const ROLE_META = {
 };
 
 export default function ModelsView({ kind = "asr" }) {
+  const { t } = useT();
+  const { token } = useAuth();
   const [health, setHealth] = useState(null);
   const [registry, setRegistry] = useState(null);
   const [err, setErr] = useState("");
 
   useEffect(() => {
     let alive = true;
-    fetchWithTimeout(apiUrl("/api/health"), {}, 30000)
-      .then((r) => r.json())
+    apiFetch("/api/health", { timeoutMs: 30000 }, token)
       .then((d) => alive && setHealth(d))
       .catch((e) => alive && setErr(String(e.message || e)));
-    fetchWithTimeout(apiUrl("/api/models"), {}, 30000)
-      .then((r) => r.json())
+    apiFetch("/api/models", { timeoutMs: 30000 }, token)
       .then((d) => alive && setRegistry(d))
-      .catch(() => {});
+      .catch((e) => alive && setErr((prev) => prev || String(e.message || e)));
     return () => { alive = false; };
-  }, []);
+  }, [token]);
 
   const meta = ROLE_META[kind] || ROLE_META.asr;
   const providers = registry?.providers || {};
@@ -53,49 +54,49 @@ export default function ModelsView({ kind = "asr" }) {
     <Card style={{ width: "100%" }}>
       <CardHead
         title={resolvedModel || "—"}
-        hint={`${meta.role} role · model status`}
+        hint={t("models.hint", { role: meta.role })}
       />
 
-      {err && <div className="err">{err}</div>}
+      {err && <div className="err" role="alert">{err}</div>}
 
       <div className="kpis" style={{ gridTemplateColumns: "repeat(auto-fit,minmax(160px,1fr))" }}>
         <div className="kpi">
-          <span>Model</span>
-          <b>{resolvedModel || "not configured"}</b>
+          <span>{t("models.model")}</span>
+          <b>{resolvedModel || t("common.notConfigured")}</b>
         </div>
         <div className="kpi">
-          <span>Registry slot</span>
+          <span>{t("models.slot")}</span>
           <b>{activeName || "—"}</b>
         </div>
         <div className="kpi">
-          <span>Provider</span>
+          <span>{t("models.provider")}</span>
           <b>{active?.kind || "—"}</b>
         </div>
         <div className="kpi">
-          <span>Status</span>
+          <span>{t("models.status")}</span>
           <b style={{ color: online ? "var(--ok)" : "var(--danger)" }}>
-            {online ? "Online" : "Offline"}
+            {online ? t("models.online") : t("models.offline")}
           </b>
         </div>
         <div className="kpi">
-          <span>Endpoint</span>
+          <span>{t("models.endpoint")}</span>
           <b>{meta.endpoint}</b>
         </div>
       </div>
 
       {registry?.vram_used_gb != null && (
         <div className="kpis" style={{ gridTemplateColumns: "repeat(auto-fit,minmax(160px,1fr))" }}>
-          <div className="kpi"><span>VRAM in use</span><b>{registry.vram_used_gb} GB</b></div>
-          <div className="kpi"><span>Warm models</span><b>{(registry.warm || []).length}</b></div>
+          <div className="kpi"><span>{t("models.vram")}</span><b>{registry.vram_used_gb} GB</b></div>
+          <div className="kpi"><span>{t("models.warm")}</span><b>{(registry.warm || []).length}</b></div>
         </div>
       )}
 
       <hr className="hr" />
 
-      <label className="lbl">Registered for this role</label>
+      <div className="lbl">{t("models.registered")}</div>
       {entries.length === 0 ? (
         <EmptyState>
-          No provider declares the <code>{meta.role}</code> role in the model registry.
+          {t("models.noneForRole", { role: meta.role })}
         </EmptyState>
       ) : (
         <div className="list">
@@ -106,17 +107,17 @@ export default function ModelsView({ kind = "asr" }) {
                 <div className="row" style={{ justifyContent: "space-between" }}>
                   <b>{entryModel}</b>
                   <div className="row">
-                    {name === defaultName && <Badge tone="info">default</Badge>}
+                    {name === defaultName && <Badge tone="info">{t("models.default")}</Badge>}
                     {(p?.loaded || (registry?.warm || []).includes(name)) && (
-                      <Badge tone="ok">warm</Badge>
+                      <Badge tone="ok">{t("models.warmBadge")}</Badge>
                     )}
                     <Badge tone={p?.health?.ok === false ? "due" : "ok"}>
-                      {p?.health?.ok === false ? "error" : "ready"}
+                      {p?.health?.ok === false ? t("models.error") : t("models.ready")}
                     </Badge>
                   </div>
                 </div>
                 <div className="meta">
-                  slot {name} · provider {p?.kind || "—"}
+                  {t("models.slotProvider", { slot: name, provider: p?.kind || "—" })}
                   {p?.health?.detail ? ` · ${p.health.detail}` : ""}
                 </div>
               </div>
@@ -128,7 +129,7 @@ export default function ModelsView({ kind = "asr" }) {
       {kind === "llm" && (health?.ollama_models || []).length > 0 && (
         <>
           <hr className="hr" />
-          <label className="lbl">Models pulled on the LLM host</label>
+          <div className="lbl">{t("models.pulled")}</div>
           <div className="row">
             {health.ollama_models.map((m) => (
               <Badge key={m} tone="muted">{m}</Badge>
@@ -138,10 +139,7 @@ export default function ModelsView({ kind = "asr" }) {
       )}
 
       <p className="muted" style={{ marginTop: "var(--space-4)", lineHeight: "var(--leading-normal)" }}>
-        Models, providers and defaults come from the backend model registry
-        (<code>backend/models.yaml</code>, path via <code>ASR_AGENT_REGISTRY_YAML</code>).
-        Nothing on this screen is hardcoded — change the registry or the
-        corresponding environment variable and reload.
+        {t("models.note")} <code>backend/models.yaml</code> (<code>ASR_AGENT_REGISTRY_YAML</code>).
       </p>
     </Card>
   );

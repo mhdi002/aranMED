@@ -58,14 +58,15 @@ function McqRunner({ questions }) {
 }
 
 function CasePanel({ data }) {
+  const { t } = useT();
   if (!data) return null;
   return (
     <div className="case-panel">
       <h3>{data.title}</h3>
-      <p><b>Presentation</b> — {data.presentation}</p>
-      <p><b>History</b> — {data.history}</p>
-      <p><b>Exam</b> — {data.exam}</p>
-      <p><b>Investigations</b> — {data.investigations}</p>
+      <p><b>{t("edu.presentation")}</b> — {data.presentation}</p>
+      <p><b>{t("edu.history")}</b> — {data.history}</p>
+      <p><b>{t("edu.exam")}</b> — {data.exam}</p>
+      <p><b>{t("edu.investigations")}</b> — {data.investigations}</p>
       <ul>{(data.questions || []).map((q, i) => (
         <li key={i}>
           <details>
@@ -75,7 +76,7 @@ function CasePanel({ data }) {
         </li>
       ))}</ul>
       {data.teaching_points?.length > 0 && <>
-        <b>Teaching points</b>
+        <b>{t("edu.teaching")}</b>
         <ul>{data.teaching_points.map((p, i) => <li key={i}>{p}</li>)}</ul>
       </>}
     </div>

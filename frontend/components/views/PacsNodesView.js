@@ -2,7 +2,7 @@ import { useCallback, useEffect, useState } from "react";
 import { useAuth } from "../../lib/auth";
 import { useT } from "../../lib/i18n";
 import { pacsApi, STATUS_TONE, fmtDicomDate } from "../../lib/pacs";
-import { Badge, Button, Card, CardHead, Label, Modal, Select, TextInput } from "../ui";
+import { Badge, Button, Card, CardHead, ConfirmModal, Label, Modal, Select, TextInput, useToast } from "../ui";
 
 const BLANK = { name: "", kind: "dimse", ae_title: "", host: "", port: 104, base_url: "", auth_env: "",
                 facility_oid: "", allow_store: true, allow_query: true, allow_retrieve: true,
@@ -11,6 +11,9 @@ const BLANK = { name: "", kind: "dimse", ae_title: "", host: "", port: 104, base
 export default function PacsNodesView() {
   const { t } = useT();
   const { token } = useAuth();
+  const toast = useToast();
+  const [pendingRemove, setPendingRemove] = useState(null);
+  const [removing, setRemoving] = useState(false);
   const [data, setData] = useState({ nodes: [], local: null, federation_targets: [] });
   const [jobs, setJobs] = useState([]);
   const [echo, setEcho] = useState({});
@@ -48,7 +51,12 @@ export default function PacsNodesView() {
     } catch (e2) { setErr(e2.message); }
   }
   async function remove(id) {
-    try { await pacsApi.deleteNode(id, token); load(); } catch (e) { setErr(e.message); }
+    setRemoving(true);
+    try {
+      await pacsApi.deleteNode(id, token);
+      toast.success(t("nodes.removed"));
+      load();
+    } catch (e) { setErr(e.message); } finally { setRemoving(false); setPendingRemove(null); }
   }
   async function query(e) {
     e.preventDefault();
@@ -97,18 +105,22 @@ export default function PacsNodesView() {
             <tbody>
               {data.nodes.map((n) => (
                 <tr key={n.id}>
-                  <td className="bold">{n.name} {!n.active && <Badge>inactive</Badge>}</td>
+                  <td className="bold">{n.name} {!n.active && <Badge>{t("nodes.inactive")}</Badge>}</td>
                   <td><Badge tone="info">{n.kind}</Badge></td>
                   <td className="mono small">{n.kind === "dimse" ? `${n.ae_title}@${n.host}:${n.port}` : n.base_url}</td>
                   <td className="small">
-                    {n.allow_store && "store "}{n.allow_query && "query "}{n.allow_retrieve && "retrieve "}
-                    {n.is_move_destination && "move-dest "}{n.federate && <Badge tone="ok">network</Badge>}
+                    {[n.allow_store && t("nodes.perm.store"), n.allow_query && t("nodes.perm.query"),
+                      n.allow_retrieve && t("nodes.perm.retrieve"), n.is_move_destination && t("nodes.perm.moveDest")]
+                      .filter(Boolean).join(" · ")}{" "}
+                    {n.federate && <Badge tone="ok">{t("nodes.network")}</Badge>}
                   </td>
                   <td className="nowrap">
                     <Button variant="ghost" onClick={() => doEcho(n.id)} data-testid="node-echo">{t("nodes.echo")}</Button>
                     {echo[n.id] && <Badge tone={echo[n.id] === "ok" ? "ok" : echo[n.id] === "fail" ? "err" : "muted"}>{echo[n.id]}</Badge>}
-                    <Button variant="ghost" onClick={() => startEdit(n)}>✎</Button>
-                    <Button variant="ghost" onClick={() => remove(n.id)}>✕</Button>
+                    <Button variant="ghost" onClick={() => startEdit(n)} aria-label={t("nodes.edit", { name: n.name })}
+                            title={t("nodes.edit", { name: n.name })}>✎</Button>
+                    <Button variant="ghost" onClick={() => setPendingRemove(n)} aria-label={t("nodes.remove", { name: n.name })}
+                            title={t("nodes.remove", { name: n.name })}>✕</Button>
                   </td>
                 </tr>
               ))}
@@ -118,9 +130,9 @@ export default function PacsNodesView() {
       </Card>
 
       <Card>
-        <CardHead title={`${t("nodes.query")} — remote`} />
+        <CardHead title={t("nodes.queryRemote")} />
         <form className="filter-grid" onSubmit={query}>
-          <div><Label>Node</Label>
+          <div><Label>{t("nodes.node")}</Label>
             <Select value={q.node} onChange={(e) => setQ({ ...q, node: e.target.value })}>
               <option value="">—</option>
               {data.federation_targets.concat(data.nodes.filter((n) => !n.federate).map((n) => ({ id: n.id, name: n.name })))
@@ -174,6 +186,11 @@ export default function PacsNodesView() {
           <div className="span-2 toolbar"><Button type="submit">{t("nodes.save")}</Button></div>
         </form>
       </Modal>
+      <ConfirmModal open={!!pendingRemove} danger busy={removing}
+                    title={t("nodes.removeTitle")} confirmLabel={t("nodes.removeConfirm")}
+                    onCancel={() => setPendingRemove(null)} onConfirm={() => remove(pendingRemove.id)}>
+        {pendingRemove && t("nodes.removeText", { name: pendingRemove.name })}
+      </ConfirmModal>
     </div>
   );
 }

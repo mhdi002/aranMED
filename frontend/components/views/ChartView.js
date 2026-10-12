@@ -59,20 +59,25 @@ function AddForm({ kind, onSave, t }) {
   }
   return (
     <form className="form-grid add-form" onSubmit={submit} data-testid={`add-${kind}`}>
-      {fields.map(([k, label, opts]) => (
-        <div key={k} className={opts === "textarea" ? "span-2" : ""}>
-          <Label>{label}</Label>
-          {Array.isArray(opts) ? (
-            <Select value={v[k] ?? opts[0]} onChange={(e) => setV({ ...v, [k]: e.target.value })}>
-              {opts.map((o) => <option key={o} value={o}>{o || "—"}</option>)}
-            </Select>
-          ) : opts === "textarea" ? (
-            <TextArea value={v[k] || ""} onChange={(e) => setV({ ...v, [k]: e.target.value })} dir="auto" />
-          ) : (
-            <TextInput value={v[k] || ""} onChange={(e) => setV({ ...v, [k]: e.target.value })} dir="auto" name={k} />
-          )}
-        </div>
-      ))}
+      {fields.map(([k, label, opts]) => {
+        const id = `add-${kind}-${k}`;
+        const key = `ch.f.${k}`;
+        const text = t(key) !== key ? t(key) : label;
+        return (
+          <div key={k} className={opts === "textarea" ? "span-2" : ""}>
+            <Label htmlFor={id}>{text}</Label>
+            {Array.isArray(opts) ? (
+              <Select id={id} value={v[k] ?? opts[0]} onChange={(e) => setV({ ...v, [k]: e.target.value })}>
+                {opts.map((o) => <option key={o} value={o}>{o || "—"}</option>)}
+              </Select>
+            ) : opts === "textarea" ? (
+              <TextArea id={id} value={v[k] || ""} onChange={(e) => setV({ ...v, [k]: e.target.value })} dir="auto" />
+            ) : (
+              <TextInput id={id} value={v[k] || ""} onChange={(e) => setV({ ...v, [k]: e.target.value })} dir="auto" name={k} />
+            )}
+          </div>
+        );
+      })}
       <div className="span-2 toolbar"><Button type="submit">{t("ch.save")}</Button></div>
     </form>
   );
@@ -106,7 +111,7 @@ export default function ChartView() {
       setChart(await clinicalApi.chart(id, { include_remote: remote, purpose: emergency ? "ETREAT" : "TREAT" }, token));
       setRestricted(false);
     } catch (e) {
-      if (String(e.message).includes("break-the-glass")) setRestricted(true);
+      if (e.status === 403 && /break-the-glass/.test(String(e.detail || e.message))) setRestricted(true);
       else setErr(e.message);
     } finally { setBusy(false); }
   }, [id, token, remote, emergency]);
@@ -167,7 +172,7 @@ export default function ChartView() {
     return m;
   }, [sections.observation]);
 
-  if (!id) return <div className="muted">No patient selected.</div>;
+  if (!id) return <div className="muted">{t("ch.noPatient")}</div>;
   if (restricted) {
     return (
       <Card data-testid="restricted">
@@ -259,7 +264,8 @@ export default function ChartView() {
           </Card>
           <Card><CardHead title={t("ch.ask")} />
             <form onSubmit={ask} className="ai-chat">
-              <TextArea value={askQ} onChange={(e) => setAskQ(e.target.value)} dir="auto" style={{ minHeight: 60 }} />
+              <TextArea value={askQ} onChange={(e) => setAskQ(e.target.value)} dir="auto" style={{ minHeight: 60 }}
+                        aria-label={t("ch.ask")} />
               <Button type="submit" loading={busy} disabled={!askQ.trim()}>{t("pacs.send")}</Button>
             </form>
             {answer && <><CriticalAlertsBanner alerts={answer.critical_alerts || []} /><div className="chat-msg assistant" data-testid="chart-answer">{answer.answer}</div></>}
@@ -278,7 +284,7 @@ export default function ChartView() {
       {tab === "results" && (
         <Card><CardHead title={t("ch.tab.results")} right={canWrite && <Button variant="ghost" onClick={() => setAdding("observations")}>+ {t("ch.add")}</Button>} />
           {adding === "observations" && <AddForm kind="observations" onSave={add} t={t} />}
-          <table className="data-table" data-testid="results-table"><thead><tr><th>Test</th><th>Latest</th><th>Range</th><th>Trend</th><th>Date</th><th /></tr></thead><tbody>
+          <table className="data-table" data-testid="results-table"><thead><tr><th>{t("ch.col.test")}</th><th>{t("ch.col.latest")}</th><th>{t("ch.col.range")}</th><th>{t("ch.col.trend")}</th><th>{t("ch.col.date")}</th><th><span className="sr-only">{t("ch.col.actions")}</span></th></tr></thead><tbody>
             {Object.entries(labsByCode).map(([k, arr]) => {
               const last = arr[arr.length - 1];
               const pts = arr.filter((o) => typeof o.value_num === "number").map((o) => ({ v: o.value_num }));
@@ -303,7 +309,7 @@ export default function ChartView() {
           <ul className="mini-list" data-testid="documents">{(sections.document || []).map((dd) => (
             <li key={dd.id}><b dir="auto">{dd.title || dd.doc_type}</b> <span className="muted small">{dd.doc_type} · {fmtDate(dd.effective || dd.created_at)} · {dd.author || ""}</span> <Src s={dd.source} t={t} />
               <Button variant="ghost" onClick={() => viewDoc(dd)}>{t("ch.view")}</Button></li>))}</ul>
-          {(sections.diagnostic_report || []).length > 0 && (<><div className="lbl">Reports</div><ul className="mini-list">
+          {(sections.diagnostic_report || []).length > 0 && (<><div className="lbl">{t("ch.reports")}</div><ul className="mini-list">
             {sections.diagnostic_report.map((r) => <li key={r.id}><Badge tone="info">{r.category}</Badge> <b>{r.display}</b> <Badge>{r.status}</Badge> <span dir="auto">{r.conclusion}</span> <Src s={r.source} t={t} /></li>)}</ul></>)}
         </Card>
       )}
@@ -312,7 +318,7 @@ export default function ChartView() {
         <Card><CardHead title={t("ch.tab.imaging")} />
           <table className="data-table" data-testid="imaging-table"><tbody>{(chart.imaging || []).map((s) => {
             const isLocal = s.source?.held !== "remote";
-            return (<tr key={s.StudyInstanceUID}><td className="nowrap">{fmtDicomDate(s.StudyDate)}</td><td>{(s.ModalitiesInStudy || []).join(", ")}</td><td dir="auto">{s.StudyDescription || "—"}</td><td>{s.NumberOfStudyRelatedInstances ?? "?"} img</td><td><Src s={s.source} t={t} /></td>
+            return (<tr key={s.StudyInstanceUID}><td className="nowrap">{fmtDicomDate(s.StudyDate)}</td><td>{(s.ModalitiesInStudy || []).join(", ")}</td><td dir="auto">{s.StudyDescription || "—"}</td><td>{t("ch.images", { n: s.NumberOfStudyRelatedInstances ?? "?" })}</td><td><Src s={s.source} t={t} /></td>
               <td>{isLocal ? <Button variant="ghost" onClick={() => router.push(`/pacs/viewer?study=${s.StudyInstanceUID}`)}>{t("pacs.open")}</Button>
                 : <Button variant="ghost" onClick={() => retrieve(s)} data-testid="retrieve-remote">{t("ch.retrieve")}</Button>}</td></tr>);
           })}</tbody></table>
@@ -337,7 +343,7 @@ export default function ChartView() {
       {tab === "access" && (
         <div className="chart-grid">
           <Card><CardHead title={t("ch.tab.access")} right={canWrite && <Button variant="ghost" onClick={() => setAdding("consents")}>+ {t("ch.consent")}</Button>} />
-            <div className="small">Access basis: <b>{chart.access?.basis}</b></div>
+            <div className="small">{t("ch.accessBasis")}: <b>{chart.access?.basis}</b></div>
             {adding === "consents" && <AddForm kind="consents" onSave={add} t={t} />}
             <ul className="mini-list">{(sections.consent || []).map((c) => <li key={c.id}><Badge tone={c.category === "permit-sharing" ? "ok" : "err"}>{c.category}</Badge> {c.grantee || "*"} <Badge>{c.status}</Badge> <span className="muted small">{c.text || ""}</span></li>)}</ul>
           </Card>

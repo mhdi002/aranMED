@@ -7,6 +7,7 @@ import TransfersView from "./TransfersView";
 import EmsView from "./EmsView";
 import AlertsView from "./AlertsView";
 import EhrView from "./EhrView";
+import { Tabs } from "../ui";
 
 // Everything about a patient lives here: one EHR section, one tab per area.
 const TABS = {
@@ -30,15 +31,10 @@ export default function EhrHubView() {
 
   return (
     <div data-testid="ehr-hub">
-      <div className="chart-tabs ehr-tabs" role="tablist" aria-label={t("nav.ehr")}>
-        {allowed.map((id) => (
-          <button key={id} type="button" role="tab" aria-selected={tab === id}
-                  className={`tab ${tab === id ? "active" : ""}`} onClick={() => pick(id)} data-ehr-tab={id}>
-            {t(`ehr.tab.${id}`)}
-          </button>
-        ))}
-      </div>
-      {View ? <View key={tab} /> : null}
+      <Tabs className="chart-tabs ehr-tabs" label={t("nav.ehr")} value={tab} onChange={pick}
+            tabAttr="data-ehr-tab" tabs={allowed.map((id) => ({ id, label: t(`ehr.tab.${id}`) }))}>
+        {View ? <View key={tab} /> : null}
+      </Tabs>
     </div>
   );
 }

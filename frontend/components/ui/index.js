@@ -7,3 +7,5 @@ export { default as Badge } from "./Badge";
 export { default as Toolbar } from "./Toolbar";
 export { default as EmptyState } from "./EmptyState";
 export { default as Spinner } from "./Spinner";
+export { ToastProvider, useToast } from "./Toast";
+export { default as Tabs } from "./Tabs";

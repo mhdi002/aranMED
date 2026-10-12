@@ -2,16 +2,13 @@ import { useCallback, useEffect, useState } from "react";
 import { useAuth } from "../../lib/auth";
 import { apiFetch } from "../../lib/api";
 import { useT } from "../../lib/i18n";
+import { fmtTs } from "../../lib/format";
 
 const STATUS_CLASS = {
   due: "due", scheduled: "ok",
   never_administered: "warn", schedule_unknown: "muted",
 };
 
-function fmtTs(t) {
-  if (!t) return "—";
-  try { return new Date(t * 1000).toLocaleString(); } catch (_) { return String(t); }
-}
 
 export default function AlertsView() {
   const { t, lang } = useT();
@@ -35,9 +32,11 @@ export default function AlertsView() {
       ]);
       setRecords(r1.records || []);
       setHistory(r2.alerts || []);
-      if (!pid && r1.records?.[0]) setPid(r1.records[0].id);
+      // Pick the first record once, without making the loader depend on the
+      // selection (that refetched everything on every patient change).
+      setPid((cur) => cur || r1.records?.[0]?.id || "");
     } catch (e) { setErr(e.message); }
-  }, [token, pid]);
+  }, [token]);
 
   useEffect(() => { load(); }, [load]);
 
@@ -81,8 +80,8 @@ export default function AlertsView() {
             <span className="step">1</span>
             <h2>{t("alerts.check")}</h2>
           </div>
-          <label className="lbl">{t("alerts.patient")}</label>
-          <select className="select" value={pid}
+          <label className="lbl" htmlFor="alerts-patient">{t("alerts.patient")}</label>
+          <select className="select" id="alerts-patient" value={pid}
                   onChange={(e) => setPid(e.target.value)}>
             <option value="">—</option>
             {records.map((r) => (
@@ -99,8 +98,8 @@ export default function AlertsView() {
           {check && (
             <>
               <div className="kpis">
-                <div className="kpi"><span>due</span><b>{check.due_count}</b></div>
-                <div className="kpi"><span>total</span>
+                <div className="kpi"><span>{t("alerts.dueCount")}</span><b>{check.due_count}</b></div>
+                <div className="kpi"><span>{t("alerts.total")}</span>
                   <b>{check.medications.length}</b></div>
               </div>
               <ul className="list">
@@ -109,8 +108,8 @@ export default function AlertsView() {
                     <div>
                       <div className="bold">{m.name}</div>
                       <div className="muted small">
-                        {m.dose || "—"} · every {m.frequency_hours || "?"} h ·
-                        last {fmtTs(m.last_dose_at)}
+                        {m.dose || "—"} · {t("alerts.everyHours", { h: m.frequency_hours || "?" })} ·{" "}
+                        {t("alerts.last")} {fmtTs(m.last_dose_at, lang)}
                       </div>
                     </div>
                     <span className={`pill ${STATUS_CLASS[m.status] || ""}`}>
@@ -134,14 +133,14 @@ export default function AlertsView() {
             <span className="step">2</span>
             <h2>{t("alerts.send")}</h2>
           </div>
-          <label className="lbl">{t("alerts.channel")}</label>
-          <select className="select" value={channel}
+          <label className="lbl" htmlFor="alerts-channel">{t("alerts.channel")}</label>
+          <select className="select" id="alerts-channel" value={channel}
                   onChange={(e) => setChannel(e.target.value)}>
-            <option value="email">Email (SMTP)</option>
-            <option value="sms">SMS (Twilio)</option>
+            <option value="email">{t("alerts.email")}</option>
+            <option value="sms">{t("alerts.sms")}</option>
           </select>
-          <label className="lbl">{t("alerts.to")}</label>
-          <input className="input" value={to} onChange={(e) => setTo(e.target.value)}
+          <label className="lbl" htmlFor="alerts-to">{t("alerts.to")}</label>
+          <input className="input" id="alerts-to" value={to} onChange={(e) => setTo(e.target.value)}
                  placeholder={channel === "email" ? "doctor@hospital.org" : "+15551234567"} />
           <div className="toolbar">
             <button className="btn primary" disabled={!pid || !to || busy === "send"}
@@ -174,7 +173,7 @@ export default function AlertsView() {
               <div>
                 <div className="bold">{a.channel} → {a.recipient}</div>
                 <div className="muted small">
-                  {fmtTs(a.sent_at)} · {a.dry_run ? "dry-run" : "delivered"}
+                  {fmtTs(a.sent_at, lang)} · {a.dry_run ? t("alerts.dryRun") : t("alerts.delivered")}
                 </div>
               </div>
               <span className="pill muted">{a.patient_id}</span>

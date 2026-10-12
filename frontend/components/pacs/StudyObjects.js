@@ -1,32 +1,29 @@
 import { useState } from "react";
-import { apiUrl } from "../../lib/config";
+import { apiRaw } from "../../lib/api";
 import { DICOMWEB } from "../../lib/pacs";
 import { Badge, Button, Modal } from "../ui";
 
-const LABEL = { sr: "Structured report", pdf: "PDF document", cda: "CDA document", stl: "3D model (STL)",
-                obj: "3D model (OBJ)", video: "Video", waveform: "Waveform (ECG)", rt: "Radiotherapy object",
-                other: "Object" };
+const KINDS = new Set(["sr", "pdf", "cda", "stl", "obj", "video", "waveform", "rt", "other"]);
 
 /** Non-image objects of a study: SR as text, PDF/video in a viewer, others downloadable. */
 export default function StudyObjects({ studyUid, objects, token, t }) {
   const [open, setOpen] = useState(null);
   const [err, setErr] = useState("");
   if (!objects?.length) return null;
-  const base = (o) => apiUrl(`${DICOMWEB}/studies/${studyUid}/series/${o.SeriesInstanceUID}/instances/${o.SOPInstanceUID}`);
+  const label = (kind) => t(`pacs.obj.${KINDS.has(kind) ? kind : "other"}`);
+  const base = (o) => `${DICOMWEB}/studies/${studyUid}/series/${o.SeriesInstanceUID}/instances/${o.SOPInstanceUID}`;
 
   async function show(o) {
     setErr("");
     try {
       if (o.kind === "sr") {
-        const r = await fetch(`${base(o)}/sr`, { headers: { Authorization: `Bearer ${token}` } });
-        if (!r.ok) throw new Error(`HTTP ${r.status}`);
+        const r = await apiRaw(`${base(o)}/sr`, {}, token);
         setOpen({ o, sr: await r.json() });
         return;
       }
       const tail = o.kind === "video" ? "/video" : ["pdf", "cda", "stl", "obj"].includes(o.kind) ? "/document" : "";
-      const r = await fetch(`${base(o)}${tail}`, {
-        headers: { Authorization: `Bearer ${token}`, ...(tail ? {} : { Accept: "application/dicom" }) } });
-      if (!r.ok) throw new Error(`HTTP ${r.status}`);
+      const r = await apiRaw(`${base(o)}${tail}`, {
+        headers: tail ? {} : { Accept: "application/dicom" }, timeoutMs: 180000 }, token);
       const blob = await r.blob();
       const href = URL.createObjectURL(blob);
       if (o.kind === "pdf" || o.kind === "video") setOpen({ o, href, type: blob.type });
@@ -34,6 +31,7 @@ export default function StudyObjects({ studyUid, objects, token, t }) {
         const a = document.createElement("a");
         a.href = href; a.download = `${o.SOPInstanceUID}.${tail ? (blob.type.split("/")[1] || "bin") : "dcm"}`;
         a.click();
+        setTimeout(() => URL.revokeObjectURL(href), 1000);
       }
     } catch (e) { setErr(e.message); }
   }
@@ -44,15 +42,15 @@ export default function StudyObjects({ studyUid, objects, token, t }) {
       <ul className="mini-list">
         {objects.map((o) => (
           <li key={o.SOPInstanceUID}>
-            <Badge tone="info">{LABEL[o.kind] || o.kind}</Badge> <span dir="auto">{o.SeriesDescription || o.Modality || ""}</span>{" "}
+            <Badge tone="info">{label(o.kind)}</Badge> <span dir="auto">{o.SeriesDescription || o.Modality || ""}</span>{" "}
             <Button variant="ghost" onClick={() => show(o)} data-object-kind={o.kind}>
               {["sr", "pdf", "video"].includes(o.kind) ? t("pacs.openObject") : t("pacs.download")}
             </Button>
           </li>
         ))}
       </ul>
-      {err && <div className="err small">{err}</div>}
-      <Modal open={!!open} title={open ? (open.sr?.title || LABEL[open.o.kind]) : ""}
+      {err && <div className="err small" role="alert">{err}</div>}
+      <Modal open={!!open} title={open ? (open.sr?.title || label(open.o.kind)) : ""}
              onClose={() => { if (open?.href) URL.revokeObjectURL(open.href); setOpen(null); }}>
         {open?.sr && (
           <>

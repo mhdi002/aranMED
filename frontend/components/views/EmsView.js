@@ -1,9 +1,10 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useState } from "react";
 import { useRouter } from "next/router";
 import { useAuth } from "../../lib/auth";
 import { useT } from "../../lib/i18n";
 import { emsApi, fmtDate } from "../../lib/clinical";
-import { Badge, Button, Card, CardHead, EmptyState } from "../ui";
+import usePolling from "../../lib/usePolling";
+import { Badge, Button, Card, CardHead, EmptyState, Spinner } from "../ui";
 
 const NEXT = { inbound: ["acknowledged", "arrived"], acknowledged: ["arrived"], arrived: ["handed_over"] };
 const LABEL = { acknowledged: "ems.ack", arrived: "ems.arrived", handed_over: "ems.handover" };
@@ -15,11 +16,15 @@ export default function EmsView() {
   const router = useRouter();
   const [items, setItems] = useState([]);
   const [err, setErr] = useState("");
+  const [loading, setLoading] = useState(true);
   const load = useCallback(async () => {
     if (!token) return;
-    try { setItems((await emsApi.board({}, token)).notifications); } catch (e) { setErr(e.message); }
+    try {
+      setItems((await emsApi.board({}, token)).notifications);
+      setErr("");
+    } catch (e) { setErr(e.message); } finally { setLoading(false); }
   }, [token]);
-  useEffect(() => { load(); const h = setInterval(load, 10000); return () => clearInterval(h); }, [load]);
+  usePolling(load, 10000, !!token);
   async function set(n, st) {
     try { await emsApi.status(n.id, st, token); await load(); } catch (e) { setErr(e.message); }
   }
@@ -31,8 +36,8 @@ export default function EmsView() {
         <h2 className="page-title">{t("ems.title")}</h2>
         <p className="page-sub">{t("ems.sub")}</p>
       </div>
-      {err && <div className="err">{err}</div>}
-      {items.length === 0 ? <EmptyState>{t("ems.none")}</EmptyState> : (
+      {err && <div className="err" role="alert">{err}</div>}
+      {loading && items.length === 0 ? <Spinner /> : items.length === 0 ? <EmptyState>{t("ems.none")}</EmptyState> : (
         <div className="board" data-testid="ems-board">
           {items.map((n) => {
             const v = n.data?.latest_vitals || {};

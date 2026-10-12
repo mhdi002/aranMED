@@ -1,6 +1,7 @@
 import { useEffect } from "react";
 import { useRouter } from "next/router";
 import { useAuth } from "../lib/auth";
+import { useT } from "../lib/i18n";
 import { defaultViewForRole } from "../lib/roles";
 import { routeForView } from "../lib/viewMeta";
 
@@ -13,6 +14,7 @@ import { routeForView } from "../lib/viewMeta";
  */
 export default function IndexRedirect() {
   const { user, ready } = useAuth();
+  const { t } = useT();
   const router = useRouter();
 
   useEffect(() => {
@@ -21,5 +23,5 @@ export default function IndexRedirect() {
     router.replace(routeForView(defaultViewForRole(user.role || "doctor")));
   }, [ready, user, router]);
 
-  return <div className="boot">Loading…</div>;
+  return <div className="boot" role="status">{t("common.loading")}</div>;
 }

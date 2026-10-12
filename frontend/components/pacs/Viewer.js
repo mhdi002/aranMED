@@ -7,6 +7,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { ensureInit, registerInstance, setToken, metaFor } from "./csSetup";
 import { dicomwebJson, WINDOW_PRESETS } from "../../lib/pacs";
+import { useT } from "../../lib/i18n";
 
 const ENGINE_ID = "aranmed-engine";
 const TOOL_GROUP = "aranmed-tools";
@@ -23,7 +24,8 @@ const TOOLS = [
   { id: "PlanarRotate", label: "Rotate", key: "t" },
 ];
 
-export default function Viewer({ studyUid, series, token, t, onMeasurements, initialSeries }) {
+export default function Viewer({ studyUid, series, token, onMeasurements, initialSeries }) {
+  const { t } = useT();
   const [layout, setLayout] = useState("1x1");
   const [assign, setAssign] = useState([]);           // viewport index -> seriesUid
   const [active, setActive] = useState(0);
@@ -283,9 +285,16 @@ export default function Viewer({ studyUid, series, token, t, onMeasurements, ini
   }, [cine, fps, scroll]);
 
   // keyboard
+  // Handlers read the latest callbacks through a ref, so the listener is
+  // added once instead of on every render.
+  const keyRef = useRef(null);
+  keyRef.current = { scroll, invert, reset };
   useEffect(() => {
     const onKey = (e) => {
+      // Leave browser and OS shortcuts alone (Ctrl+C, Ctrl+R, Cmd+…).
+      if (e.ctrlKey || e.metaKey || e.altKey) return;
       if (["INPUT", "TEXTAREA", "SELECT"].includes(document.activeElement?.tagName)) return;
+      const { scroll, invert, reset } = keyRef.current;
       if (e.key === "ArrowDown" || e.key === "PageDown") { scroll(1); e.preventDefault(); }
       else if (e.key === "ArrowUp" || e.key === "PageUp") { scroll(-1); e.preventDefault(); }
       else if (e.key === "i") invert();
@@ -298,7 +307,7 @@ export default function Viewer({ studyUid, series, token, t, onMeasurements, ini
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  });
+  }, []);
 
   const seriesByUid = useMemo(() => Object.fromEntries((series || []).map((s) => [s.SeriesInstanceUID, s])), [series]);
 
@@ -314,39 +323,40 @@ export default function Viewer({ studyUid, series, token, t, onMeasurements, ini
 
   return (
     <div className="viewer" data-testid="pacs-viewer">
-      <div className="viewer-toolbar" role="toolbar" aria-label="Viewer tools">
+      <div className="viewer-toolbar" role="toolbar" aria-label={t("viewer.tools")}>
         <div className="vt-group">
           {TOOLS.map((x) => (
             <button key={x.id} type="button" className={`vt-btn ${tool === x.id ? "active" : ""}`}
-                    title={`${x.label} (${x.key})`} onClick={() => setTool(x.id)}
-                    data-tool={x.id}>{t ? t(`pacs.tool.${x.id}`) : x.label}</button>
+                    title={`${t(`pacs.tool.${x.id}`)} (${x.key})`} aria-pressed={tool === x.id}
+                    onClick={() => setTool(x.id)} data-tool={x.id}>{t(`pacs.tool.${x.id}`)}</button>
           ))}
         </div>
         <div className="vt-group">
-          <select className="vt-select" aria-label="Window preset" data-testid="wl-preset"
+          <select className="vt-select" aria-label={t("viewer.preset")} data-testid="wl-preset"
                   onChange={(e) => applyPreset(WINDOW_PRESETS.find((p) => p.id === e.target.value))}
                   defaultValue="default">
             {WINDOW_PRESETS.map((p) => <option key={p.id} value={p.id}>{p.label}</option>)}
           </select>
-          <button type="button" className="vt-btn" onClick={invert} title="Invert (i)">Invert</button>
-          <button type="button" className="vt-btn" onClick={rotate} title="Rotate 90°">⟳ 90°</button>
-          <button type="button" className="vt-btn" onClick={() => flip("h")} title="Flip horizontal">⇋</button>
-          <button type="button" className="vt-btn" onClick={() => flip("v")} title="Flip vertical">⇵</button>
-          <button type="button" className="vt-btn" onClick={reset} title="Reset (r)">Reset</button>
+          <button type="button" className="vt-btn" onClick={invert} title={`${t("viewer.invert")} (i)`}>{t("viewer.invert")}</button>
+          <button type="button" className="vt-btn" onClick={rotate} title={t("viewer.rotate")} aria-label={t("viewer.rotate")}>⟳ 90°</button>
+          <button type="button" className="vt-btn" onClick={() => flip("h")} title={t("viewer.flipH")} aria-label={t("viewer.flipH")}>⇋</button>
+          <button type="button" className="vt-btn" onClick={() => flip("v")} title={t("viewer.flipV")} aria-label={t("viewer.flipV")}>⇵</button>
+          <button type="button" className="vt-btn" onClick={reset} title={`${t("viewer.reset")} (r)`}>{t("viewer.reset")}</button>
         </div>
         <div className="vt-group">
           <button type="button" className={`vt-btn ${cine ? "active" : ""}`} onClick={() => setCine((c) => !c)}
-                  title="Cine (c)">{cine ? "❚❚" : "▶"} Cine</button>
-          <input type="range" min="2" max="30" value={fps} aria-label="Cine speed"
+                  title={`${t("viewer.cine")} (c)`} aria-pressed={cine}>{cine ? "❚❚" : "▶"} {t("viewer.cine")}</button>
+          <input type="range" min="2" max="30" value={fps} aria-label={t("viewer.cineSpeed")}
                  onChange={(e) => setFps(parseInt(e.target.value, 10))} className="vt-range" />
           <span className="vt-fps">{fps} fps</span>
         </div>
         <div className="vt-group">
           {Object.keys(LAYOUTS).map((l) => (
             <button key={l} type="button" className={`vt-btn ${layout === l ? "active" : ""}`}
-                    onClick={() => setLayout(l)} data-layout={l}>{l}</button>
+                    onClick={() => setLayout(l)} data-layout={l} aria-pressed={layout === l}
+                    aria-label={t("viewer.layout", { l })}>{l}</button>
           ))}
-          <button type="button" className="vt-btn" onClick={clearMeasurements}>Clear marks</button>
+          <button type="button" className="vt-btn" onClick={clearMeasurements}>{t("viewer.clear")}</button>
         </div>
       </div>
 
@@ -370,32 +380,33 @@ export default function Viewer({ studyUid, series, token, t, onMeasurements, ini
                 {o.zoom && <div>Zoom {o.zoom}×</div>}
                 {o.invert && <div>INV</div>}
               </div>
-              {loading[i] && <div className="vp-loading"><span className="spinner" /></div>}
+              {loading[i] && <div className="vp-loading" role="status" aria-label={t("common.loading")}><span className="spinner" /></div>}
             </div>
           );
         })}
       </div>
 
       <div className="viewer-hint muted small">
-        Left: {tool} · Middle: pan · Right: zoom · Wheel/↑↓: scroll · i invert · r reset · c cine
+        {t("viewer.hint", { tool: t(`pacs.tool.${tool}`) })}
       </div>
 
-      <SeriesPicker series={series} assign={assign} active={active} onPick={showSeries} />
+      <SeriesPicker series={series} assign={assign} active={active} onPick={showSeries} t={t} />
     </div>
   );
 }
 
-function SeriesPicker({ series, assign, active, onPick }) {
+function SeriesPicker({ series, assign, active, onPick, t }) {
   if (!series?.length) return null;
   return (
-    <div className="series-pick" aria-label="Series">
+    <div className="series-pick" role="group" aria-label={t("viewer.series")}>
       {series.map((s) => (
         <button key={s.SeriesInstanceUID} type="button"
                 className={`sp-item ${assign[active] === s.SeriesInstanceUID ? "active" : ""}`}
+                aria-pressed={assign[active] === s.SeriesInstanceUID}
                 onClick={() => onPick(s.SeriesInstanceUID)} data-series={s.SeriesInstanceUID}>
           <b>{s.Modality} #{s.SeriesNumber ?? "?"}</b>
           <span>{s.SeriesDescription || "—"}</span>
-          <span className="muted">{s.NumberOfSeriesRelatedInstances} img</span>
+          <span className="muted">{t("ch.images", { n: s.NumberOfSeriesRelatedInstances })}</span>
         </button>
       ))}
     </div>

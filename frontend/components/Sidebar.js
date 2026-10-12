@@ -1,3 +1,4 @@
+import { useEffect, useRef } from "react";
 import {
   Stethoscope, Mic, Document, Brain, Activity, Folder, Settings,
   Heart, XRay, GradCap, Layers, ListChecks, Upload, Network,
@@ -25,13 +26,32 @@ const NAV = [
 
 export default function Sidebar({ active = "dictate", onSelect, open = false, role = "doctor" }) {
   const { t } = useT();
+  const ref = useRef(null);
+  // On narrow screens the closed drawer is only moved off-screen; make it
+  // inert so keyboard users cannot tab into links they cannot see.
+  useEffect(() => {
+    const mq = window.matchMedia("(max-width: 760px)");
+    const apply = () => {
+      if (!ref.current) return;
+      const hide = mq.matches && !open;
+      ref.current.inert = hide;
+      if (hide) ref.current.setAttribute("aria-hidden", "true");
+      else ref.current.removeAttribute("aria-hidden");
+      if (mq.matches && open) ref.current.querySelector(".nav-item")?.focus();
+    };
+    apply();
+    mq.addEventListener("change", apply);
+    return () => mq.removeEventListener("change", apply);
+  }, [open]);
   const allowed = new Set(viewsForRole(role));
   const items = NAV.filter((n) => allowed.has(n.id));
   const sections = [...new Set(items.map((n) => n.sectionKey))];
   const pick = (id) => { if (typeof onSelect === "function") onSelect(id); };
+  const isActive = (id) => active === id || (id === "pacs" && active === "pacs/viewer")
+    || (id === "ehr" && active === "ehr/chart");
 
   return (
-    <aside className={`sidebar ${open ? "open" : ""}`}>
+    <aside className={`sidebar ${open ? "open" : ""}`} id="app-sidebar" ref={ref}>
       <div className="brand">
         <div className="brand-mark"><Stethoscope size={20} /></div>
         <div>
@@ -40,7 +60,7 @@ export default function Sidebar({ active = "dictate", onSelect, open = false, ro
         </div>
       </div>
 
-      <nav className="nav">
+      <nav className="nav" aria-label={t("a11y.mainNav")}>
         {sections.map((sec) => (
           <div key={sec}>
             <div className="nav-section">{t(sec)}</div>
@@ -50,7 +70,8 @@ export default function Sidebar({ active = "dictate", onSelect, open = false, ro
                 <button
                   key={n.id}
                   type="button"
-                  className={`nav-item ${active === n.id || (n.id === "pacs" && active === "pacs/viewer") || (n.id === "ehr" && active === "ehr/chart") ? "active" : ""}`}
+                  className={`nav-item ${isActive(n.id) ? "active" : ""}`}
+                  aria-current={isActive(n.id) ? "page" : undefined}
                   onClick={() => pick(n.id)}
                 >
                   <span className="ico"><Ico size={16} /></span>
@@ -64,9 +85,9 @@ export default function Sidebar({ active = "dictate", onSelect, open = false, ro
 
       <div className="sidebar-foot">
         <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-          <Heart size={12} /> v2.0 — local-first
+          <Heart size={12} /> {t("nav.footVersion")}
         </div>
-        <div style={{ marginTop: 4 }}>© Radiology AI Workbench</div>
+        <div style={{ marginTop: 4 }}>{t("nav.footName")}</div>
       </div>
     </aside>
   );

@@ -123,10 +123,10 @@ export default function PacsWorklistView() {
           <div><Label>{t("pacs.patient")}</Label><TextInput value={form.patient_name} onChange={f("patient_name")} placeholder="Family^Given" dir="auto" required /></div>
           <div><Label>{t("pacs.patientId")}</Label><TextInput value={form.patient_id} onChange={f("patient_id")} /></div>
           <div><Label>DOB</Label><TextInput type="date" value={form.patient_birth_date} onChange={f("patient_birth_date")} /></div>
-          <div><Label>Sex</Label><Select value={form.patient_sex} onChange={f("patient_sex")}><option value="" /><option>M</option><option>F</option><option>O</option></Select></div>
+          <div><Label htmlFor="wl-sex">{t("pacs.sex")}</Label><Select id="wl-sex" value={form.patient_sex} onChange={f("patient_sex")}><option value="" /><option>M</option><option>F</option><option>O</option></Select></div>
           <div><Label>{t("pacs.modality")}</Label><Select value={form.modality} onChange={f("modality")}>{MODALITIES.map((m) => <option key={m}>{m}</option>)}</Select></div>
           <div><Label>{t("wl.procedure")}</Label><TextInput value={form.procedure_description} onChange={f("procedure_description")} dir="auto" required /></div>
-          <div><Label>Code</Label><TextInput value={form.procedure_code} onChange={f("procedure_code")} /></div>
+          <div><Label htmlFor="wl-code">{t("pacs.code")}</Label><TextInput id="wl-code" value={form.procedure_code} onChange={f("procedure_code")} /></div>
           <div><Label>{t("wl.station")}</Label><TextInput value={form.station_ae} onChange={f("station_ae")} /></div>
           <div><Label>{t("wl.scheduled")}</Label><TextInput type="datetime-local" value={form.scheduled_start} onChange={f("scheduled_start")} /></div>
           <div><Label>{t("wl.priority")}</Label><Select value={form.priority} onChange={f("priority")}><option value="">ROUTINE</option><option>STAT</option><option>HIGH</option></Select></div>
