@@ -89,3 +89,14 @@ aranmed-deploy.tar.gz
 frontend/e2e/.state.json
 frontend/test-results/
 frontend/playwright-report/
+
+# Runtime output written by local runs (logs, process lists, launch helpers,
+# tokens). Verification reports (*.json, *.md) stay tracked.
+reports/*.log
+reports/_*
+# Test and coverage output
+**/test-results/
+!docs/test-results/
+.coverage
+coverage.xml
+htmlcov/

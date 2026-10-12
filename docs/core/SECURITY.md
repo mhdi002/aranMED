@@ -266,7 +266,9 @@ Ten single-use codes are issued at the moment MFA is switched on — the one
 point where the user is guaranteed to be looking, and after which a lost
 authenticator would otherwise need an admin to clear `totp_secret` by hand.
 
-- Stored as salted hashes; shown exactly once.
+- Stored as hashes with a random salt per code (`v2$salt$digest`), so they
+  keep working when `ASR_AGENT_SECRET` changes; codes from older versions
+  (keyed on the secret) are still accepted. Shown exactly once.
 - Accepted in the same `client_secret` slot as a TOTP code at login, so no
   client change is needed.
 - Consuming one is audited, with the remaining count recorded.
@@ -316,7 +318,31 @@ labelled final.
 Not included: MLLP networking and a DICOM C-STORE SCP. Both are listeners
 that belong in their own process with their own lifecycle, not inside the API.
 
-## 18. Known limits
+## 18. Hardening added in round 4
+
+| Area | What changed | Setting |
+| --- | --- | --- |
+| AI endpoints | `/api/transcribe`, `report`, `dictate`, `chat`, `vision`, `templates/suggest`, `sessions/*/reset` require a session. Anonymous agent turns never get patient-record tools. | `ALLOW_ANONYMOUS_AI` (default `false`) |
+| Templates | Template ids are plain stems resolved inside the template directory only. | — |
+| MFA | Re-enrolling while MFA is on needs a current or recovery code. TOTP replay is refused across replicas (shared throttle store). | — |
+| Conversations | Each conversation records its owner; another user's session id is refused (403). Stored history is encrypted with the PHI key. | — |
+| Accounts | Change password (`POST /api/auth/password`); administrators disable/enable, change role and reset passwords (`PATCH /api/auth/users/{id}`, `POST …/reset-password`). A password change or disabled account ends every token. | — |
+| Login | Per-address budget besides the per-account one; anonymous sign-up rate limited. | `LOGIN_THROTTLE_IP_MAX_ATTEMPTS`, `REGISTER_THROTTLE_MAX` |
+| Client address | uvicorn trusts `X-Forwarded-For` only from listed proxies. | `FORWARDED_ALLOW_IPS` |
+| Peer hospitals | Peer tokens must carry a `jti` and live at most a bounded time. Replay protection (optional) is shared. Transfer packages may only create the transferred patient's records; consent rows from peers are ignored. The PACS management API refuses peers (they use DICOMweb, where consent applies). | `PEER_TOKEN_MAX_LIFETIME_SEC`, `PEER_TOKEN_SINGLE_USE` |
+| FHIR transactions | All-or-nothing now covers updates and deletes, not just creates. | — |
+| HL7 listener | Binds loopback by default; a non-loopback bind needs an allowlist, TLS or an explicit opt-in. Idle connections are closed. | `HL7_MLLP_BIND`, `HL7_MLLP_ALLOWED_PEERS`, `HL7_MLLP_ALLOW_ANY_PEER`, `HL7_MLLP_IDLE_SEC` |
+| Restricted records | Study detail in the PACS follows the record's break-the-glass rule. | — |
+| Uploads | Audio, images, DICOM files and STOW bodies are read with a cap (413). | `MAX_AUDIO_MB`, `MAX_IMAGE_MB`, `PACS_MAX_UPLOAD_MB` |
+| Errors and logs | 5xx answers carry a request id, never exception text. Dictation text is not logged. | `LOG_LEVEL`, `LOG_FORMAT` |
+| Exposure | CORS limited to `PUBLIC_BASE_URL`. API docs can be switched off. Compose publishes Qdrant, MedRAG and MLLP on loopback. Containers run as non-root. | `CORS_ALLOW_ORIGINS`, `DOCS_ENABLED` |
+| Frontend | Content-Security-Policy (own scripts plus a hashed pre-paint snippet), `X-Frame-Options`, `Referrer-Policy`, `Permissions-Policy`. | `frontend/next.config.js` |
+| Configuration | `.env.example` is no longer read as live configuration. | `LOAD_ENV_EXAMPLE` (try-outs only) |
+
+Each item has a regression test in `tests/test_security_hardening.py`, or in
+`tests/functional/test_interhospital_records.py` for the peer items.
+
+## 19. Known limits
 
 Bounded and deliberate:
 
@@ -325,9 +351,11 @@ Bounded and deliberate:
   FHIR terminology server for everything else, consulted only on a local miss
   and never on the critical path for a bound term. With no server configured,
   unbound terms stay text-only by design.
-- **No MLLP listener or DICOM C-STORE SCP** (see §17).
-- **FHIR is a read-only projection**, not a FHIR-native store or a RESTful
-  FHIR server.
+- **The browser keeps the session token in `localStorage`.** The CSP stops
+  injected script from running, but an httpOnly cookie session would remove
+  the token from script reach entirely.
+- **HL7 v2 has no authentication of its own.** Restrict it by network,
+  allowlist or TLS (above).
 - **PHI key custody is operational.** The system warns at startup, proves
   every key in use is loaded (`missing_key_ids`), and can verify every record
   decrypts (`verify_all_readable`) — but it cannot verify a backup exists.

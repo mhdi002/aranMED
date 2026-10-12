@@ -124,6 +124,18 @@ key is listed with its default in `.env.example`.
 | Gateway TLS | `GATEWAY_TLS_*`, `GATEWAY_HSTS_MAX_AGE` | Applied by the `docker-compose.tls.yml` overlay (`./deploy.sh --tls`), which also publishes the HTTPS port. |
 | Agent/memory runtime | `runtime.agent_*`, `runtime.memory_*` in `backend/models.yaml` | Loop iteration cap, per-call timeouts, generation budgets, memory window/eviction/purge interval. Not env vars — they live with the model registry they tune. |
 | Prompts | `PROMPTS_DIR` | System prompts are editable data files under `backend/data/prompts/`, with in-code fallbacks. |
+| AI endpoints | `ALLOW_ANONYMOUS_AI` (default `false`) | Dictation, report, chat and vision need a signed-in user unless explicitly opened for a local demo. |
+| Client address / proxies | `FORWARDED_ALLOW_IPS` (default `127.0.0.1`; compose `*` on the private network) | Which proxies may set `X-Forwarded-For`. Lockouts and the audit trail depend on it. |
+| Login and sign-up rate | `LOGIN_THROTTLE_IP_MAX_ATTEMPTS` (30), `REGISTER_THROTTLE_MAX` (10) | Per-address budgets alongside the per-account lockout. |
+| Upload caps | `MAX_AUDIO_MB` (100), `MAX_IMAGE_MB` (50), `PACS_MAX_UPLOAD_MB` | Requests past the cap are refused with 413 without being read into memory. |
+| CORS | `CORS_ALLOW_ORIGINS` (default: `PUBLIC_BASE_URL`'s origin) | The browser normally reaches the API same-origin; list origins (or `*`) only for split deployments. |
+| API docs | `DOCS_ENABLED` (default `true`) | `/api/docs` and `/api/openapi.json`; switch off in production. |
+| Logs and metrics | `LOG_LEVEL`, `LOG_FORMAT` (`text`/`json`), `METRICS_TOKEN`, `LLAMACPP_DEBUG` | Every log line carries the request id; `/api/metrics` (Prometheus) is served only with a token. |
+| Sessions | `SESSION_TOUCH_INTERVAL_SEC` (60) | How often "last seen" is written per session. |
+| PostgreSQL connections | `PG_POOL_MAX_IDLE` (10), `PG_CONNECT_TIMEOUT_SEC` (10), `PG_STATEMENT_TIMEOUT_MS` (0 = off) | Connections are reused from an idle pool. |
+| HL7 MLLP exposure | `HL7_MLLP_BIND` (`127.0.0.1`), `HL7_MLLP_ALLOWED_PEERS`, `HL7_MLLP_ALLOW_ANY_PEER`, `HL7_MLLP_IDLE_SEC` (60) | A non-loopback listener refuses to start without an allowlist, TLS or the explicit opt-in. |
+| Peer tokens | `PEER_TOKEN_MAX_LIFETIME_SEC` (900) | Longer-lived tokens from peers are refused. |
+| Example config | `LOAD_ENV_EXAMPLE` (default `false`) | Read `.env.example` as configuration — for a quick local try-out only. |
 
 
 ## 8. Clinical modules (PACS, EHR, interoperability)

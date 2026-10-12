@@ -25,7 +25,7 @@ def _ip(request: Request) -> Optional[str]:
     return request.client.host if request.client else None
 
 
-@router.get("/interop/capabilities")
+@router.get("/interop/capabilities", tags=["interop"])
 async def capabilities() -> dict:
     """Public, PHI-free description a peer checks before exchanging data."""
     loc = facilities.local()
@@ -61,13 +61,13 @@ class FacilityIn(BaseModel):
     meta: Optional[dict] = None
 
 
-@router.get("/facilities")
+@router.get("/facilities", tags=["facilities"])
 async def list_facilities(user: dict = Depends(rbac.require("clinical.read"))) -> dict:
     facilities.local()
     return {"facilities": facilities.list_all()}
 
 
-@router.post("/facilities")
+@router.post("/facilities", tags=["facilities"])
 async def upsert_facility(body: FacilityIn, request: Request,
                           user: dict = Depends(rbac.require("interop.admin"))) -> dict:
     if body.oid == settings.facility_oid():
@@ -81,7 +81,7 @@ async def upsert_facility(body: FacilityIn, request: Request,
     return f
 
 
-@router.delete("/facilities/{oid}")
+@router.delete("/facilities/{oid}", tags=["facilities"])
 async def delete_facility(oid: str, request: Request,
                           user: dict = Depends(rbac.require("interop.admin"))) -> dict:
     if not facilities.delete(oid):
@@ -99,7 +99,7 @@ class RegisterIn(BaseModel):
     national_id: Optional[str] = None
 
 
-@router.get("/mpi/search")
+@router.get("/mpi/search", tags=["mpi"])
 async def mpi_search(request: Request, q: Optional[str] = None,
                      birth_date: Optional[str] = None, identifier: Optional[str] = None,
                      sex: Optional[str] = None, limit: int = 50,
@@ -113,12 +113,12 @@ async def mpi_search(request: Request, q: Optional[str] = None,
     return {"results": hits}
 
 
-@router.get("/mpi/links")
+@router.get("/mpi/links", tags=["mpi"])
 async def mpi_links(user: dict = Depends(rbac.require("clinical.write"))) -> dict:
     return {"links": mpi.pending_links()}
 
 
-@router.post("/mpi/links/{link_id}/resolve")
+@router.post("/mpi/links/{link_id}/resolve", tags=["mpi"])
 async def mpi_resolve(link_id: str, accept: bool, request: Request,
                       user: dict = Depends(rbac.require("clinical.write"))) -> dict:
     try:
@@ -130,7 +130,7 @@ async def mpi_resolve(link_id: str, accept: bool, request: Request,
     return out
 
 
-@router.get("/mpi/{person_id}")
+@router.get("/mpi/{person_id}", tags=["mpi"])
 async def mpi_get(person_id: str, request: Request,
                   user: dict = Depends(rbac.require("clinical.read"))) -> dict:
     p = mpi.get(person_id)
@@ -140,7 +140,7 @@ async def mpi_get(person_id: str, request: Request,
     return p
 
 
-@router.post("/mpi/register")
+@router.post("/mpi/register", tags=["mpi"])
 async def mpi_register(body: RegisterIn, request: Request,
                        user: dict = Depends(rbac.require("clinical.write"))) -> dict:
     idents = list(body.identifiers)
@@ -163,7 +163,7 @@ class MergeIn(BaseModel):
     reason: str = ""
 
 
-@router.post("/mpi/merge")
+@router.post("/mpi/merge", tags=["mpi"])
 async def mpi_merge(body: MergeIn, request: Request,
                     user: dict = Depends(rbac.require("clinical.write"))) -> dict:
     try:
@@ -177,7 +177,7 @@ async def mpi_merge(body: MergeIn, request: Request,
 
 
 # --- Message log --------------------------------------------------------------
-@router.get("/interop/messages")
+@router.get("/interop/messages", tags=["interop"])
 async def interop_messages(protocol: Optional[str] = None, direction: Optional[str] = None,
                            status: Optional[str] = None, limit: int = 100, offset: int = 0,
                            user: dict = Depends(rbac.require("interop.admin"))) -> dict:

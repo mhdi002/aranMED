@@ -17,7 +17,8 @@ aranmed/
   data/                 # MedRAG working data (local; gitignored corpora)
   qdrant_storage/       # Qdrant persistence (local; gitignored)
   config.yaml           # MedRAG defaults (paths via env overrides)
-  docker-compose.yml    # Ollama + backend + frontend
+  docker-compose.yml    # gateway, backend, frontend, clinical-listeners (DICOM/HL7),
+                        #   triton, medrag, qdrant, postgres; ollama/vllm via profiles
   docker-compose.medrag.yml  # Qdrant + optional vLLM / embed profiles
   .env.example          # All hosts/ports/paths/models — copy to .env
   pyproject.toml        # pip install -e . → medrag-serve
@@ -33,9 +34,11 @@ Beside the radiology AI stack, AranMed is a complete clinical platform that hosp
 - **PACS** — DICOM archive with DIMSE (modalities, other PACS), DICOMweb, worklist/MPPS, a Cornerstone3D viewer and AI draft reads. See [`docs/core/PACS_v1.md`](docs/core/PACS_v1.md).
 - **EHR + interop** — Master Patient Index, relational FHIR-aligned EHR linked to the PACS, FHIR R4 server, HL7 v2 (MLLP), C-CDA, EMS (NEMSIS), cross-hospital chart, transfers, consent and break-the-glass. See [`docs/core/EHR_INTEROP_v1.md`](docs/core/EHR_INTEROP_v1.md) and [`docs/core/CLINICAL_DB_SCHEMA_v1.md`](docs/core/CLINICAL_DB_SCHEMA_v1.md).
 
+**Technical document (Persian):** [`docs/سند فنی.docx`](docs/سند%20فنی.docx) — why the project exists, how it works, its strengths, what is implemented, what needs improving and what is still to be built.
+
 **User guide with screenshots of every page:** [`docs/USER_GUIDE.md`](docs/USER_GUIDE.md). Complete illustrated guides with each section's screenshots and its test results: [English](docs/AranMed_Guide_EN.docx) · [فارسی (RTL)](docs/AranMed_Guide_FA.docx).
 
-Tests:
+Tests (or the Makefile shortcuts `make test`, `make test-pg`, `make test-mixed`, `make e2e`, `make lint`, `make docs`; CI runs the same in `.github/workflows/ci.yml`):
 
 ```bash
 pip install -r requirements-dev.txt
@@ -99,6 +102,22 @@ Stop the compat process before heavy RAG/LLM sessions if VRAM is tight.
 
 ## Quick start
 
+Linux / macOS (bare metal):
+
+```bash
+cp .env.example .env            # set ASR_AGENT_SECRET, FACILITY_*, PHI_ENCRYPTION_KEYS, ...
+python3 -m venv .venv && . .venv/bin/activate
+pip install torch torchaudio --index-url https://download.pytorch.org/whl/cu128   # or /whl/cpu
+pip install -r backend/requirements.txt -r backend/requirements-interop.txt
+pip install -e .                # MedRAG package (src/medrag) → medrag-serve
+cd frontend && npm ci && npm run build && cd ..
+make run                        # backend :8010 + frontend :3000 (or scripts/run_stack.sh)
+```
+
+Docker: `make deploy` (see `deploy.sh` and `docs/core/SERVER_DEPLOYMENT_RUNBOOK.md`).
+
+Windows workstation (PowerShell):
+
 ```powershell
 cd <this-repo>
 Copy-Item .env.example .env
@@ -107,7 +126,7 @@ Copy-Item .env.example .env
 # Python (backend)
 python -m venv .venv
 .\.venv\Scripts\Activate.ps1
-pip install -r backend\requirements.txt   # if present; else install backend deps
+pip install -r backend\requirements.txt -r backend\requirements-interop.txt
 pip install -e .                          # MedRAG package (src/medrag) → medrag-serve
 # Or without install: $env:PYTHONPATH = "src"
 
@@ -168,7 +187,7 @@ $env:BACKEND_URL = "http://127.0.0.1:8010"
 cd frontend; npm run dev
 ```
 
-Docker all-in-one (Ollama + backend + frontend; MedRAG/Triton still external URLs):
+Docker (all services in `docker-compose.yml`; GPU model servers through profiles):
 
 ```powershell
 docker compose up -d --build
@@ -248,6 +267,14 @@ pip install -e .
 
 ---
 
+## Security, contributing, changes
+
+- [`SECURITY.md`](SECURITY.md): how to report a vulnerability; the security model is in [`docs/core/SECURITY.md`](docs/core/SECURITY.md).
+- [`CONTRIBUTING.md`](CONTRIBUTING.md): set-up, tests, lint, pre-commit, regenerating the docs.
+- [`CHANGELOG.md`](CHANGELOG.md): what changed in each round.
+
 ## License / PHI
+
+No open-source licence has been chosen yet; until the owner adds a `LICENSE` file, all rights are reserved.
 
 Treat uploads, transcripts, and local DBs as PHI. Do not commit secrets, `.env`, or vector stores.

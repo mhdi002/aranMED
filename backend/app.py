@@ -327,7 +327,7 @@ async def _shutdown() -> None:
 # ---------------------------------------------------------------------------
 # Health / introspection
 # ---------------------------------------------------------------------------
-@app.get("/api/live")
+@app.get("/api/live", tags=["system"])
 async def live() -> dict:
     """Liveness only — touches no dependency, so it stays fast and truthful
     under load. Load balancers and container healthchecks should probe this;
@@ -336,7 +336,7 @@ async def live() -> dict:
     return {"ok": True, "service": "aranmed"}
 
 
-@app.get("/api/ready")
+@app.get("/api/ready", tags=["system"])
 def ready() -> JSONResponse:
     """Readiness: 503 until this process can serve requests, i.e. its database
     answers. Model servers are not required (the API serves the EHR and PACS
@@ -407,7 +407,7 @@ async def _dependency_health() -> dict:
         return value
 
 
-@app.get("/api/health")
+@app.get("/api/health", tags=["system"])
 async def health() -> dict:
     """Readiness probe for the front-end pills (dependency results cached)."""
     info = registry.list()
@@ -454,7 +454,7 @@ _models_cache: dict[str, Any] = {"at": 0.0, "value": None}
 _models_lock = asyncio.Lock()
 
 
-@app.get("/api/models")
+@app.get("/api/models", tags=["system"])
 async def models() -> dict:
     now = time.monotonic()
     cached = _models_cache["value"]
@@ -476,12 +476,12 @@ async def models() -> dict:
 # ---------------------------------------------------------------------------
 # Templates
 # ---------------------------------------------------------------------------
-@app.get("/api/templates")
+@app.get("/api/templates", tags=["templates"])
 async def templates_list() -> dict:
     return {"templates": templates_mod.list_templates()}
 
 
-@app.get("/api/templates/{template_id}")
+@app.get("/api/templates/{template_id}", tags=["templates"])
 async def template_get(template_id: str) -> dict:
     try:
         body = templates_mod.get_template(template_id)
@@ -493,7 +493,7 @@ async def template_get(template_id: str) -> dict:
 # ---------------------------------------------------------------------------
 # Single-purpose endpoints
 # ---------------------------------------------------------------------------
-@app.post("/api/transcribe", response_model=TranscribeOut)
+@app.post("/api/transcribe", response_model=TranscribeOut, tags=["ai"])
 async def transcribe(
     file: UploadFile = File(...),
     language: Optional[str] = Form(None),
@@ -526,7 +526,7 @@ async def transcribe(
     )
 
 
-@app.post("/api/templates/suggest", response_model=TemplateSuggestOut)
+@app.post("/api/templates/suggest", response_model=TemplateSuggestOut, tags=["templates"])
 async def suggest_template(req: TemplateSuggestIn,
                            user: Optional[dict] = Depends(ai_user)) -> TemplateSuggestOut:
     import template_selection
@@ -535,7 +535,7 @@ async def suggest_template(req: TemplateSuggestIn,
     return TemplateSuggestOut(suggestions=[s.to_dict() for s in suggestions])
 
 
-@app.post("/api/report", response_model=ReportOut)
+@app.post("/api/report", response_model=ReportOut, tags=["ai"])
 async def report(req: ReportIn, user: Optional[dict] = Depends(ai_user)) -> ReportOut:
     template_id = req.template_id
     auto_selected = False
@@ -623,7 +623,7 @@ async def report(req: ReportIn, user: Optional[dict] = Depends(ai_user)) -> Repo
     )
 
 
-@app.post("/api/dictate", response_model=ReportOut)
+@app.post("/api/dictate", response_model=ReportOut, tags=["ai"])
 async def dictate(
     file: UploadFile = File(...),
     template_id: Optional[str] = Form(None),
@@ -662,7 +662,7 @@ async def dictate(
 # ---------------------------------------------------------------------------
 # Generic agent endpoint (modified: uses vision model directly if images present)
 # ---------------------------------------------------------------------------
-@app.post("/api/chat", response_model=ChatOut)
+@app.post("/api/chat", response_model=ChatOut, tags=["ai"])
 async def chat(
     text: str = Form(""),
     session_id: Optional[str] = Form(None),
@@ -815,7 +815,7 @@ async def chat(
     )
 
 
-@app.post("/api/sessions/{session_id}/reset")
+@app.post("/api/sessions/{session_id}/reset", tags=["ai"])
 async def reset_session(session_id: str, user: Optional[dict] = Depends(ai_user)) -> dict:
     if not memory.owned_by(session_id, (user or {}).get("id")):
         raise HTTPException(403, "this conversation belongs to another user")
@@ -826,7 +826,7 @@ async def reset_session(session_id: str, user: Optional[dict] = Depends(ai_user)
 # ---------------------------------------------------------------------------
 # Direct vision endpoint – uses the registered vision model (radiology-infer-mini)
 # ---------------------------------------------------------------------------
-@app.post("/api/vision", response_model=VisionOut)
+@app.post("/api/vision", response_model=VisionOut, tags=["ai"])
 async def vision_endpoint(
     prompt: Optional[str] = Form(None),
     image: UploadFile = File(...),

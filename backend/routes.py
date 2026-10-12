@@ -60,12 +60,12 @@ def self_register_roles() -> list[str]:
     return [r.strip().lower() for r in raw.split(",") if r.strip()]
 
 
-@router.get("/auth/register-policy")
+@router.get("/auth/register-policy", tags=["auth"])
 def register_policy() -> dict:
     return {"self_register_roles": self_register_roles()}
 
 
-@router.post("/auth/register", response_model=TokenOut)
+@router.post("/auth/register", response_model=TokenOut, tags=["auth"])
 def register(request: Request, body: RegisterIn,
                    caller: Optional[dict] = Depends(auth.current_user_optional)) -> TokenOut:
     if not caller:
@@ -111,7 +111,7 @@ def register(request: Request, body: RegisterIn,
     return TokenOut(access_token=token, user=user)
 
 
-@router.get("/auth/users")
+@router.get("/auth/users", tags=["auth"])
 def list_users(user: dict = Depends(rbac.require("users.manage"))) -> dict:
     return {"users": auth.list_users(), "self_register_roles": self_register_roles()}
 
@@ -121,7 +121,7 @@ class PasswordChangeIn(BaseModel):
     new_password: str = Field(min_length=1, max_length=256)
 
 
-@router.post("/auth/password")
+@router.post("/auth/password", tags=["auth"])
 def change_password(request: Request, body: PasswordChangeIn,
                     user: dict = Depends(auth.current_user)) -> dict:
     """Change your own password. Every other session is signed out."""
@@ -156,7 +156,7 @@ def _target_user(user_id: int) -> dict:
     return target
 
 
-@router.patch("/auth/users/{user_id}")
+@router.patch("/auth/users/{user_id}", tags=["auth"])
 def patch_user(user_id: int, body: UserPatchIn, request: Request,
                admin: dict = Depends(rbac.require("users.manage"))) -> dict:
     """Change a user's role or disable/enable the account (administrators)."""
@@ -180,7 +180,7 @@ def patch_user(user_id: int, body: UserPatchIn, request: Request,
     return {"ok": True, "user": updated}
 
 
-@router.post("/auth/users/{user_id}/reset-password")
+@router.post("/auth/users/{user_id}/reset-password", tags=["auth"])
 def reset_password(user_id: int, request: Request,
                    admin: dict = Depends(rbac.require("users.manage"))) -> dict:
     """Set a one-time random password, shown once, and sign the user out."""
@@ -195,7 +195,7 @@ def reset_password(user_id: int, request: Request,
             "note": "Give this to the user through a trusted channel; it is shown once."}
 
 
-@router.post("/auth/login", response_model=TokenOut)
+@router.post("/auth/login", response_model=TokenOut, tags=["auth"])
 def login(request: Request,
                 form: OAuth2PasswordRequestForm = Depends()) -> TokenOut:
     client_ip = _ip(request) or ""
@@ -266,7 +266,7 @@ def login(request: Request,
 
 
 # --- Session management -----------------------------------------------------
-@router.get("/auth/sessions")
+@router.get("/auth/sessions", tags=["auth"])
 def list_sessions(request: Request,
                         include_expired: bool = False,
                         user: dict = Depends(auth.current_user)) -> dict:
@@ -279,7 +279,7 @@ def list_sessions(request: Request,
     return {"count": len(sessions), "sessions": sessions}
 
 
-@router.delete("/auth/sessions/{jti}")
+@router.delete("/auth/sessions/{jti}", tags=["auth"])
 def revoke_session(jti: str, request: Request,
                          user: dict = Depends(auth.current_user)) -> dict:
     ok = auth.revoke_session(jti, user_id=user["id"], reason="user_revoked")
@@ -290,7 +290,7 @@ def revoke_session(jti: str, request: Request,
     return {"ok": True, "revoked": jti}
 
 
-@router.post("/auth/sessions/revoke-all")
+@router.post("/auth/sessions/revoke-all", tags=["auth"])
 def revoke_all_sessions(request: Request,
                               keep_current: bool = True,
                               token: str = Depends(auth.oauth2_scheme),
@@ -307,7 +307,7 @@ def revoke_all_sessions(request: Request,
     return {"ok": True, "revoked": n, "kept_current": bool(current_jti)}
 
 
-@router.post("/auth/logout")
+@router.post("/auth/logout", tags=["auth"])
 def logout(request: Request,
                  token: str = Depends(auth.oauth2_scheme)) -> dict:
     """Revoke the presented token. Without this, a leaked token stays valid
@@ -337,7 +337,7 @@ class MfaEnrollIn(BaseModel):
     code: Optional[str] = Field(default=None, max_length=32)
 
 
-@router.post("/auth/mfa/enroll")
+@router.post("/auth/mfa/enroll", tags=["auth"])
 def mfa_enroll(request: Request, body: Optional[MfaEnrollIn] = None,
                      user: dict = Depends(auth.current_user)) -> dict:
     """Start enrolment: mint a secret and return it plus an otpauth:// URI.
@@ -373,7 +373,7 @@ def mfa_enroll(request: Request, body: Optional[MfaEnrollIn] = None,
     }
 
 
-@router.post("/auth/mfa/verify")
+@router.post("/auth/mfa/verify", tags=["auth"])
 def mfa_verify(request: Request, body: MfaVerifyIn,
                      user: dict = Depends(auth.current_user)) -> dict:
     """Confirm enrolment by proving a valid code, which switches MFA on."""
@@ -398,7 +398,7 @@ def mfa_verify(request: Request, body: MfaVerifyIn,
                                    "each works a single time."}
 
 
-@router.post("/auth/mfa/recovery-codes")
+@router.post("/auth/mfa/recovery-codes", tags=["auth"])
 def regenerate_recovery_codes(request: Request, body: MfaVerifyIn,
                                     user: dict = Depends(auth.current_user)) -> dict:
     """Issue a fresh set, invalidating the old ones. Requires a current TOTP
@@ -415,13 +415,13 @@ def regenerate_recovery_codes(request: Request, body: MfaVerifyIn,
     return {"ok": True, "recovery_codes": codes}
 
 
-@router.get("/auth/mfa/recovery-codes")
+@router.get("/auth/mfa/recovery-codes", tags=["auth"])
 def recovery_code_status(user: dict = Depends(auth.current_user)) -> dict:
     """How many codes remain — the codes themselves are never retrievable."""
     return auth.count_recovery_codes(user["id"])
 
 
-@router.post("/auth/mfa/disable")
+@router.post("/auth/mfa/disable", tags=["auth"])
 def mfa_disable(request: Request, body: MfaVerifyIn,
                       user: dict = Depends(auth.current_user)) -> dict:
     """Turn MFA off. Requires a current code — otherwise anyone holding a
@@ -436,7 +436,7 @@ def mfa_disable(request: Request, body: MfaVerifyIn,
     return {"ok": True, "mfa_enabled": False}
 
 
-@router.get("/auth/me")
+@router.get("/auth/me", tags=["auth"])
 def me(user: dict = Depends(auth.current_user)) -> dict:
     return user
 
@@ -450,7 +450,7 @@ class BuildEHRIn(BaseModel):
     patient_id: Optional[str] = None
 
 
-@router.post("/ehr/build")
+@router.post("/ehr/build", tags=["ehr-intake"])
 async def ehr_build(body: BuildEHRIn,
                     user: dict = Depends(rbac.require("ehr.write"))) -> dict:
     from tools.ehr import _EHR_SYS_EN, _EHR_SYS_FA, _extract_json
@@ -475,7 +475,7 @@ async def ehr_build(body: BuildEHRIn,
     return {"patient_id": record["id"], "record": record}
 
 
-@router.get("/ehr")
+@router.get("/ehr", tags=["ehr-intake"])
 def ehr_list(request: Request, limit: int = 200, offset: int = 0,
              user: dict = Depends(rbac.require("ehr.read"))) -> dict:
     records = store.list_patients(owner_user_id=user["id"], limit=limit, offset=offset)
@@ -484,7 +484,7 @@ def ehr_list(request: Request, limit: int = 200, offset: int = 0,
     return {"records": records}
 
 
-@router.get("/ehr/{patient_id}")
+@router.get("/ehr/{patient_id}", tags=["ehr-intake"])
 def ehr_get(patient_id: str, request: Request,
                   user: dict = Depends(rbac.require("ehr.read"))) -> dict:
     rec = store.get_patient(patient_id, owner_user_id=user["id"])
@@ -500,7 +500,7 @@ def ehr_get(patient_id: str, request: Request,
     return {"patient_id": patient_id, "record": rec}
 
 
-@router.delete("/ehr/{patient_id}")
+@router.delete("/ehr/{patient_id}", tags=["ehr-intake"])
 def ehr_delete(patient_id: str, request: Request,
                      user: dict = Depends(rbac.require("ehr.delete"))) -> dict:
     ok = store.delete_patient(patient_id, owner_user_id=user["id"])
@@ -519,7 +519,7 @@ class RecordDoseIn(BaseModel):
     at: Optional[float] = None
 
 
-@router.post("/ehr/{patient_id}/dose")
+@router.post("/ehr/{patient_id}/dose", tags=["ehr-intake"])
 def ehr_record_dose(patient_id: str, body: RecordDoseIn,
                           user: dict = Depends(rbac.require("ehr.write"))) -> dict:
     import time as _time
@@ -550,7 +550,7 @@ class CheckIn(BaseModel):
     language: str = "en"
 
 
-@router.post("/alerts/check")
+@router.post("/alerts/check", tags=["medication-alerts"])
 def alerts_check(body: CheckIn,
                        user: dict = Depends(rbac.require("alerts.read"))) -> dict:
     from tools.alerts import build_alert_text, compute_due_medications
@@ -572,7 +572,7 @@ class SendAlertIn(BaseModel):
     only_if_due: bool = True
 
 
-@router.post("/alerts/send")
+@router.post("/alerts/send", tags=["medication-alerts"])
 def alerts_send(body: SendAlertIn,
                       user: dict = Depends(rbac.require("alerts.send"))) -> dict:
     from tools.alerts import (build_alert_text, compute_due_medications,
@@ -601,7 +601,7 @@ def alerts_send(body: SendAlertIn,
             "body": msg, "subject": subject}
 
 
-@router.get("/alerts")
+@router.get("/alerts", tags=["medication-alerts"])
 def alerts_list(patient_id: Optional[str] = None,
                       user: dict = Depends(rbac.require("alerts.read"))) -> dict:
     return {"alerts": store.list_alerts(patient_id=patient_id,
@@ -636,7 +636,7 @@ async def _run_edu_tool(name: str, **kwargs) -> dict:
     return {"content": result.content, "data": result.data}
 
 
-@router.post("/education/mcq")
+@router.post("/education/mcq", tags=["education"])
 async def edu_mcq(body: EduIn,
                   user: dict = Depends(rbac.require("education.write"))) -> dict:
     out = await _run_edu_tool("make_mcq", topic=body.topic,
@@ -649,7 +649,7 @@ async def edu_mcq(body: EduIn,
     return out
 
 
-@router.post("/education/case")
+@router.post("/education/case", tags=["education"])
 async def edu_case(body: EduIn,
                    user: dict = Depends(rbac.require("education.write"))) -> dict:
     out = await _run_edu_tool("make_case_study", topic=body.topic,
@@ -662,7 +662,7 @@ async def edu_case(body: EduIn,
     return out
 
 
-@router.post("/education/exam")
+@router.post("/education/exam", tags=["education"])
 async def edu_exam(body: EduIn,
                    user: dict = Depends(rbac.require("education.write"))) -> dict:
     out = await _run_edu_tool("make_mock_exam", topic=body.topic,
@@ -682,7 +682,7 @@ class ExplainIn(BaseModel):
     level: str = "resident"
 
 
-@router.post("/education/explain")
+@router.post("/education/explain", tags=["education"])
 async def edu_explain(body: ExplainIn,
                       user: dict = Depends(rbac.require("education.write"))) -> dict:
     """Prefer MedicalRAG for grounded explanations; fall back to core LLM."""
@@ -732,7 +732,7 @@ class KnowledgeAskIn(BaseModel):
     specialty: Optional[str] = None
 
 
-@router.post("/knowledge/ask")
+@router.post("/knowledge/ask", tags=["knowledge"])
 async def knowledge_ask(body: KnowledgeAskIn,
                         user: dict = Depends(rbac.require("knowledge.read"))) -> dict:
     """Proxy medical knowledge questions to MedicalRAG POST /ask."""
@@ -786,7 +786,7 @@ class EhrAskIn(BaseModel):
     specialty: Optional[str] = None
 
 
-@router.post("/ehr/{patient_id}/ask")
+@router.post("/ehr/{patient_id}/ask", tags=["ehr-intake"])
 async def ehr_ask(patient_id: str, body: EhrAskIn,
                   user: dict = Depends(rbac.require("ehr.read"))) -> dict:
     """Q&A about a stored EHR via MedicalRAG (context prepended into query).
@@ -845,7 +845,7 @@ async def ehr_ask(patient_id: str, body: EhrAskIn,
     }
 
 
-@router.get("/rules")
+@router.get("/rules", tags=["knowledge"])
 def rules_list(user: dict = Depends(rbac.require("knowledge.read"))) -> dict:
     """Read-only Rule Engine introspection — docs/core/RULE_MODEL_SCHEMA_v1.md.
 
@@ -867,7 +867,7 @@ def rules_list(user: dict = Depends(rbac.require("knowledge.read"))) -> dict:
     }
 
 
-@router.get("/medrag/health")
+@router.get("/medrag/health", tags=["knowledge"])
 async def medrag_health(user: dict = Depends(rbac.require("models.read"))) -> dict:
     from integrations.medrag_client import MedragError, get_medrag_client
 
@@ -878,12 +878,12 @@ async def medrag_health(user: dict = Depends(rbac.require("models.read"))) -> di
     return await client.health()
 
 
-@router.get("/education/saved")
+@router.get("/education/saved", tags=["education"])
 def edu_saved(user: dict = Depends(rbac.require("education.read"))) -> dict:
     return {"items": store.list_quizzes(owner_user_id=user["id"])}
 
 
-@router.get("/education/saved/{quiz_id}")
+@router.get("/education/saved/{quiz_id}", tags=["education"])
 def edu_saved_get(quiz_id: int,
                         user: dict = Depends(rbac.require("education.read"))) -> dict:
     q = store.get_quiz(quiz_id, owner_user_id=user["id"])
@@ -895,7 +895,7 @@ def edu_saved_get(quiz_id: int,
 # ===========================================================================
 # Audit trail (governance)
 # ===========================================================================
-@router.get("/audit")
+@router.get("/audit", tags=["audit"])
 def audit_list(
     request: Request,
     limit: int = 100,
@@ -927,7 +927,7 @@ def audit_list(
 # ===========================================================================
 # FHIR R4 export (interoperability)
 # ===========================================================================
-@router.get("/fhir/Patient/{patient_id}")
+@router.get("/fhir/Patient/{patient_id}", tags=["fhir-legacy"])
 def fhir_patient(patient_id: str, request: Request,
                        user: dict = Depends(rbac.require("ehr.read"))) -> dict:
     """The stored record as a FHIR R4 ``Patient`` resource."""
@@ -941,7 +941,7 @@ def fhir_patient(patient_id: str, request: Request,
     return fhir.to_patient(rec, patient_id)
 
 
-@router.get("/fhir/Patient/{patient_id}/$everything")
+@router.get("/fhir/Patient/{patient_id}/$everything", tags=["fhir-legacy"])
 def fhir_everything(patient_id: str, request: Request,
                           user: dict = Depends(rbac.require("ehr.read"))) -> dict:
     """The whole record as a FHIR ``Bundle`` — Patient plus Conditions,
@@ -966,7 +966,7 @@ def fhir_everything(patient_id: str, request: Request,
 # ===========================================================================
 # Imaging & messaging interoperability (DICOM, HL7 v2)
 # ===========================================================================
-@router.post("/dicom/ingest")
+@router.post("/dicom/ingest", tags=["imaging"])
 def dicom_ingest(request: Request,
                        file: UploadFile = File(...),
                        render: bool = True,
@@ -1021,7 +1021,7 @@ class Hl7In(BaseModel):
     message: str = Field(min_length=8)
 
 
-@router.post("/hl7/parse")
+@router.post("/hl7/parse", tags=["hl7"])
 def hl7_parse(request: Request, body: Hl7In,
                     user: dict = Depends(rbac.require("ehr.read"))) -> dict:
     """Parse an inbound HL7 v2 message (ADT/ORM/ORU) into the internal shape."""
@@ -1051,7 +1051,7 @@ class Hl7OruIn(BaseModel):
     final: bool = True
 
 
-@router.post("/hl7/oru")
+@router.post("/hl7/oru", tags=["hl7"])
 def hl7_oru(request: Request, body: Hl7OruIn,
                   user: dict = Depends(rbac.require("report.write"))) -> dict:
     """Build an ORU^R01 carrying a finished report, for the ordering system.
