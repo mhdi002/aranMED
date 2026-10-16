@@ -34,6 +34,7 @@ def _assoc(ae, node: dict, **kw):
     ctx = nodes.tls_context(node)
     if ctx is not None:
         kw.setdefault("tls_args", (ctx, None))
+    kw.setdefault("max_pdu", config.node_max_pdu(node))
     assoc = ae.associate(node["host"], int(node["port"]), ae_title=node["ae_title"], **kw)
     if not assoc.is_established:
         raise ScuError(f"association with {node['ae_title']}@{node['host']}:{node['port']} "

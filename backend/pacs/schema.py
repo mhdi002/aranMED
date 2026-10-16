@@ -210,4 +210,30 @@ def _v3(conn) -> None:
             conn.execute("UPDATE pacs_worklist SET scheduled_start=? WHERE id=?", (fixed, r["id"]))
 
 
-migrate.register(MODULE, [(1, V1), (2, _v2), (3, _v3)])
+def _v4(conn) -> None:
+    # Device compatibility: per-node PDU limit, Storage Commitment report mode
+    # (new association / same association / same-then-new) and romanised
+    # patient names for modalities that only display Latin-1.
+    for col, decl in (("max_pdu", "INTEGER"), ("stgcmt_mode", "TEXT"),
+                      ("name_romanize", "INTEGER NOT NULL DEFAULT 0")):
+        migrate.add_column(conn, "pacs_nodes", col, decl)
+    # Durable Storage Commitment transactions: a report that cannot be
+    # delivered (modality off, network down, restart) is retried, never lost.
+    conn.execute("""
+CREATE TABLE IF NOT EXISTS pacs_stgcmt (
+  transaction_uid  TEXT PRIMARY KEY,
+  calling_ae       TEXT NOT NULL,
+  refs             TEXT NOT NULL,
+  status           TEXT NOT NULL DEFAULT 'pending',
+  attempts         INTEGER NOT NULL DEFAULT 0,
+  committed        INTEGER NOT NULL DEFAULT 0,
+  failed           INTEGER NOT NULL DEFAULT 0,
+  last_error       TEXT,
+  next_attempt_at  DOUBLE PRECISION NOT NULL DEFAULT 0,
+  created_at       DOUBLE PRECISION NOT NULL,
+  updated_at       DOUBLE PRECISION NOT NULL
+)""")
+    conn.execute("CREATE INDEX IF NOT EXISTS ix_pacs_stgcmt_status ON pacs_stgcmt(status)")
+
+
+migrate.register(MODULE, [(1, V1), (2, _v2), (3, _v3), (4, _v4)])

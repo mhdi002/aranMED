@@ -32,6 +32,34 @@ log = logging.getLogger("interop.mllp")
 VT, FS, CR = b"\x0b", b"\x1c", b"\x0d"
 
 
+
+# MSH-18 character set names (HL7 v2 table 0211) -> Python codecs.
+_HL7_CHARSETS = {"UNICODE UTF-8": "utf-8", "UNICODE": "utf-8", "UTF-8": "utf-8",
+                 "ASCII": "ascii", "8859/1": "iso8859-1", "8859/2": "iso8859-2",
+                 "8859/5": "iso8859-5", "8859/6": "iso8859-6", "8859/7": "iso8859-7",
+                 "8859/8": "iso8859-8", "8859/9": "iso8859-9", "8859/15": "iso8859-15",
+                 "WINDOWS-1256": "cp1256", "CP1256": "cp1256"}
+
+
+def decode_hl7(data: bytes) -> str:
+    """Decode an HL7 v2 message using its declared MSH-18 character set,
+    falling back to UTF-8 and then the legacy Persian/Arabic code page."""
+    declared = None
+    try:
+        head = data.split(b"\r", 1)[0].decode("ascii", errors="replace")
+        if head.startswith("MSH") and len(head) > 4:
+            fields = head.split(head[3])
+            if len(fields) > 17 and fields[17].strip():
+                declared = _HL7_CHARSETS.get(fields[17].strip().split(head[4] if len(head) > 4 else "^")[0].upper())
+    except Exception:  # noqa: BLE001
+        declared = None
+    for enc in [e for e in (declared, "utf-8", "cp1256") if e]:
+        try:
+            return data.decode(enc)
+        except (UnicodeDecodeError, LookupError):
+            continue
+    return data.decode("utf-8", errors="replace")
+
 def frame(message: str) -> bytes:
     return VT + message.encode("utf-8") + FS + CR
 
@@ -87,7 +115,7 @@ class MllpServer:
                     end = buf.find(FS + CR, start + 1) if start >= 0 else -1
                     if start < 0 or end < 0:
                         break
-                    raw = bytes(buf[start + 1:end]).decode("utf-8", errors="replace")
+                    raw = decode_hl7(bytes(buf[start + 1:end]))
                     del buf[:end + 2]
                     resp = await asyncio.get_running_loop().run_in_executor(
                         None, lambda r=raw: hl7_handlers.process(r, peer=f"mllp:{peer_ip}"))
@@ -164,7 +192,7 @@ def send(host: str, port: int, message: str, *, timeout: float = 30.0,
         sock.close()
     start = buf.find(VT)
     end = buf.find(FS + CR)
-    resp = buf[start + 1:end].decode("utf-8", errors="replace") if start >= 0 and end > start else ""
+    resp = decode_hl7(bytes(buf[start + 1:end])) if start >= 0 and end > start else ""
     status = "ok" if "MSA|AA" in resp else "error"
     messages.log(direction="out", protocol="hl7v2", message_type=message.split("|")[8] if message.count("|") > 8 else None,
                  peer=f"mllp:{host}:{port}", status=status, payload=message, response=resp)

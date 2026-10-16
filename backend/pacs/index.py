@@ -13,6 +13,7 @@ keyword that :mod:`pacs.dicomjson` turns into datasets or DICOM JSON.
 from __future__ import annotations
 
 import io
+from pathlib import Path
 import logging
 from typing import Any, Callable, Iterable, Optional
 
@@ -133,11 +134,30 @@ def ingest(data, *, source: str = "api", file_meta=None,
            issuer_hint: Optional[str] = None) -> dict[str, Any]:
     """Store one DICOM object and index it.
 
-    *data* is Part 10 bytes or a pydicom Dataset (as C-STORE delivers it).
+    *data* is Part 10 bytes, a pydicom Dataset (as C-STORE delivers it) or
+    a :class:`pathlib.Path` to a Part 10 file (chunked C-STORE, large objects).
     Returns ``{status, study_uid, series_uid, sop_uid, person_id, new_study}``
     where status is ``stored``, ``duplicate`` or ``replaced``.
     """
-    if isinstance(data, (bytes, bytearray)):
+    src_path: Optional[Path] = None
+    raw = b""
+    if isinstance(data, Path):
+        # A file already on disk (chunked C-STORE): index from its header and
+        # stream it into storage, so a multi-GB object never sits in memory.
+        src_path = data
+        with open(src_path, "rb") as f:
+            f.seek(128)
+            is_part10 = f.read(4) == b"DICM"
+        if not is_part10:
+            data = src_path.read_bytes()
+            src_path = None
+        else:
+            try:
+                import pydicom
+                ds = pydicom.dcmread(str(src_path), force=True, stop_before_pixels=True)
+            except Exception as e:  # noqa: BLE001
+                raise IngestError(f"not a readable DICOM object: {e}") from e
+    if src_path is None and isinstance(data, (bytes, bytearray)):
         raw = bytes(data)
         if raw[128:132] != b"DICM":
             # Raw dataset without a Part 10 header (some modalities/exports):
@@ -149,7 +169,7 @@ def ingest(data, *, source: str = "api", file_meta=None,
             except Exception as e:  # noqa: BLE001
                 raise IngestError(f"not a DICOM object: {e}") from e
         ds = _read(raw)
-    else:
+    elif src_path is None:
         ds = data
         try:
             raw = to_part10(ds, file_meta)
@@ -172,14 +192,19 @@ def ingest(data, *, source: str = "api", file_meta=None,
                                  (sop_uid,)).fetchone())
     policy = config.duplicate_policy()
     from pacs.storage import sha256 as _sha
+    from pacs.storage import sha256_file
     if existing:
-        if existing["sha256"] == _sha(raw) or policy == "keep":
+        digest_new = sha256_file(src_path) if src_path is not None else _sha(raw)
+        if existing["sha256"] == digest_new or policy == "keep":
             return {"status": "duplicate", "study_uid": study_uid, "series_uid": series_uid,
                     "sop_uid": sop_uid, "person_id": None, "new_study": False}
         if policy == "reject":
             raise IngestError(f"SOP instance {sop_uid} already stored with different content")
 
-    rel, digest, size = storage.put(study_uid, series_uid, sop_uid, raw)
+    if src_path is not None:
+        rel, digest, size = storage.put_file(study_uid, series_uid, sop_uid, src_path)
+    else:
+        rel, digest, size = storage.put(study_uid, series_uid, sop_uid, raw)
 
     # --- patient identity (only resolved once per study) --------------------
     with db.connect() as c:

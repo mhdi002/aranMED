@@ -22,7 +22,6 @@ exfiltration channel. Optional TLS via ``PACS_DIMSE_TLS_CERT`` /
 from __future__ import annotations
 
 import logging
-import threading
 from typing import Any, Iterable, Optional
 
 from pydicom.dataset import Dataset
@@ -46,6 +45,7 @@ IDENTIFIER_MISMATCH = 0xA900
 PROCESSING_FAILURE = 0x0110
 DUPLICATE_SOP_INSTANCE = 0x0111
 NO_SUCH_OBJECT = 0x0112
+NO_SUCH_SOP_CLASS = 0x0118
 
 _SKIP_FILTER = {"QueryRetrieveLevel", "SpecificCharacterSet", "RetrieveAETitle",
                 "InstanceAvailability"}
@@ -113,6 +113,16 @@ def _allowed_studies(node: Optional[dict], study_uids: Iterable[str]) -> Optiona
 # ---------------------------------------------------------------------------
 # Handlers
 # ---------------------------------------------------------------------------
+def _chunked_path(event):
+    """Path of the on-disk data set when chunked receive is on, else None."""
+    from pathlib import Path
+    try:
+        p = event.dataset_path
+    except AttributeError:
+        return None
+    return p if isinstance(p, Path) and p.is_file() else None
+
+
 def handle_echo(event) -> int:
     return SUCCESS
 
@@ -126,9 +136,13 @@ def handle_store(event) -> int:
                      status="rejected", error="calling AE not authorised to store")
         return NOT_AUTHORIZED
     try:
-        ds = event.dataset
-        ds.file_meta = event.file_meta
-        out = index.ingest(ds, source=f"dimse:{calling}",
+        path = _chunked_path(event)
+        if path is not None:
+            payload: Any = path
+        else:
+            payload = event.dataset
+            payload.file_meta = event.file_meta
+        out = index.ingest(payload, source=f"dimse:{calling}",
                            origin_facility=(node or {}).get("facility_oid"),
                            issuer_hint=(node or {}).get("issuer"))
     except index.IngestError as e:
@@ -155,6 +169,16 @@ def _query(level: str, filters: dict[str, str]) -> tuple[list[dict], list[str]]:
     return index.query_studies(filters, limit=5000), STUDY_RETURN
 
 
+def _fit_for(node: Optional[dict], ds: Dataset) -> Dataset:
+    """Re-encode a response for what the querying device can display
+    (its configured character set; romanised names for Latin-only consoles)."""
+    node = node or {}
+    if node.get("charset") or node.get("name_romanize"):
+        from pacs.romanize import fit_dataset
+        fit_dataset(ds, node.get("charset") or None, bool(node.get("name_romanize")))
+    return ds
+
+
 def handle_find(event):
     from pynetdicom.sop_class import ModalityWorklistInformationFind
 
@@ -165,6 +189,7 @@ def handle_find(event):
     identifier = event.identifier
     if event.request.AffectedSOPClassUID == ModalityWorklistInformationFind:
         for ds in worklist.mwl_query(identifier, charset=(node or {}).get("charset") or None):
+            _fit_for(node, ds)
             if event.is_cancelled:
                 yield CANCEL, None
                 return
@@ -194,6 +219,7 @@ def handle_find(event):
         ds = to_dataset(item, keys)
         ds.QueryRetrieveLevel = level
         ds.RetrieveAETitle = config.ae_title()
+        _fit_for(node, ds)
         yield PENDING, ds
 
 
@@ -277,7 +303,7 @@ def _probe(dest: dict, contexts) -> dict[str, set[str]]:
     for cx in contexts:
         ae.add_requested_context(cx.abstract_syntax, cx.transfer_syntax)
     assoc = ae.associate(dest["host"], int(dest["port"]), ae_title=dest["ae_title"],
-                         tls_args=_tls_args(dest))
+                         tls_args=_tls_args(dest), max_pdu=config.node_max_pdu(dest))
     if not assoc.is_established:
         return {}
     try:
@@ -321,7 +347,8 @@ def handle_move(event):
     instances = _consented(node, _matching_instances(event.identifier))
     contexts = _contexts_for(instances) or None
     accepted = _probe(dest, contexts) if contexts else {}
-    kwargs: dict[str, Any] = {"ae_title": dest["ae_title"], "contexts": contexts}
+    kwargs: dict[str, Any] = {"ae_title": dest["ae_title"], "contexts": contexts,
+                              "max_pdu": config.node_max_pdu(dest)}
     if _tls_args(dest):
         kwargs["tls_args"] = _tls_args(dest)
     yield dest["host"], int(dest["port"]), kwargs
@@ -354,7 +381,7 @@ def handle_get(event):
 def handle_n_create(event):
     from pynetdicom.sop_class import ModalityPerformedProcedureStep
     if event.request.AffectedSOPClassUID != ModalityPerformedProcedureStep:
-        return PROCESSING_FAILURE, None
+        return NO_SUCH_SOP_CLASS, None
     node, ok = _node_for(event, "allow_store")
     if not ok:
         return NOT_AUTHORIZED, None
@@ -376,6 +403,9 @@ def handle_n_create(event):
 
 
 def handle_n_set(event):
+    from pynetdicom.sop_class import ModalityPerformedProcedureStep
+    if event.request.RequestedSOPClassUID != ModalityPerformedProcedureStep:
+        return NO_SUCH_SOP_CLASS, None
     node, ok = _node_for(event, "allow_store")
     if not ok:
         return NOT_AUTHORIZED, None
@@ -392,78 +422,83 @@ def handle_n_set(event):
 
 
 def handle_n_action(event):
-    """Storage Commitment request: acknowledge, then report asynchronously."""
+    """Storage Commitment request: acknowledge, then report (see pacs.stgcmt)."""
     from pynetdicom.sop_class import StorageCommitmentPushModel
+
+    from pacs import stgcmt
     if event.request.RequestedSOPClassUID != StorageCommitmentPushModel:
-        return PROCESSING_FAILURE, None
+        return NO_SUCH_SOP_CLASS, None
+    if int(event.request.ActionTypeID or 0) != 1:
+        return 0x0123, None  # No such action type
     node, ok = _node_for(event, None)
     if not ok:
         return NOT_AUTHORIZED, None
     info = event.action_information
+    txn = str(info.get("TransactionUID") or "")
+    if not txn:
+        return 0x0120, None  # Missing attribute
     refs = [(str(r.ReferencedSOPClassUID), str(r.ReferencedSOPInstanceUID))
             for r in info.get("ReferencedSOPSequence") or []]
-    txn = str(info.get("TransactionUID") or "")
-    calling = _calling(event)
-    threading.Thread(target=_send_commitment_report, args=(calling, txn, refs),
-                     daemon=True, name="pacs-stgcmt").start()
+    stgcmt.on_request(event, txn, refs, node)
     return SUCCESS, None
 
 
-def _send_commitment_report(calling_ae: str, txn: str, refs: list[tuple[str, str]]) -> None:
-    from pynetdicom import AE, build_role
-    from pynetdicom.sop_class import StorageCommitmentPushModel
+def _norm_ae(ae) -> str:
+    ae = ae.decode(errors="replace") if isinstance(ae, (bytes, bytearray)) else str(ae or "")
+    ae = ae.strip()
+    return ae if config.ae_case_sensitive() else ae.upper()
 
-    node = nodes.by_ae(calling_ae)
-    if not node or node.get("kind") != "dimse":
-        log.warning("storage commitment: no node registered for %s; report not sent", calling_ae)
+
+_GET_MODELS = {"1.2.840.10008.5.1.4.1.2.1.3", "1.2.840.10008.5.1.4.1.2.2.3",
+               "1.2.840.10008.5.1.4.1.2.4.3"}
+
+
+def _prefer_uncompressed_for_cget(assoc, rq) -> None:
+    """On a C-GET association *we* send the objects back on the requestor's
+    storage contexts, so accept uncompressed first there: any stored object
+    can then be sent (decompressed if needed). Storage associations keep the
+    compressed-first order (see preferred_storage_syntaxes)."""
+    proposed = {str(cx.abstract_syntax) for cx in (rq.presentation_context_definition_list or [])}
+    if not proposed & _GET_MODELS:
         return
-    present = {i["sop_uid"] for i in index.instance_paths(sop_uids=[r[1] for r in refs])} \
-        if refs else set()
-    ok_refs = [r for r in refs if r[1] in present]
-    bad_refs = [r for r in refs if r[1] not in present]
-    ds = Dataset()
-    ds.TransactionUID = txn
+    from pydicom.uid import ExplicitVRLittleEndian, ImplicitVRLittleEndian
+    first = [ExplicitVRLittleEndian, ImplicitVRLittleEndian]
+    contexts = assoc.acceptor.supported_contexts
+    for cx in contexts:
+        ts = list(cx.transfer_syntax)
+        if ExplicitVRLittleEndian in ts:
+            cx.transfer_syntax = first + [t for t in ts if t not in first]
+    assoc.acceptor.supported_contexts = contexts
 
-    def items(pairs, failed=False):
-        out = []
-        for cls, inst in pairs:
-            it = Dataset()
-            it.ReferencedSOPClassUID = cls
-            it.ReferencedSOPInstanceUID = inst
-            if failed:
-                it.FailureReason = NO_SUCH_OBJECT
-            out.append(it)
-        return out
-    if ok_refs:
-        ds.ReferencedSOPSequence = items(ok_refs)
-    if bad_refs:
-        ds.FailedSOPSequence = items(bad_refs, failed=True)
-    ae = AE(ae_title=config.ae_title())
-    ae.acse_timeout = ae.dimse_timeout = ae.network_timeout = config.network_timeout()
-    ae.add_requested_context(StorageCommitmentPushModel)
-    role = build_role(StorageCommitmentPushModel, scp_role=True)
-    assoc = ae.associate(node["host"], int(node["port"]), ae_title=node["ae_title"],
-                         ext_neg=[role])
-    if not assoc.is_established:
-        log.warning("storage commitment: could not reach %s", calling_ae)
+
+def check_association(event) -> None:
+    """On A-ASSOCIATE-RQ: verify the called AE is ours and the calling AE is a
+    registered, active node (``PACS_REQUIRE_KNOWN_PEERS``). Titles are
+    compared with surrounding spaces trimmed, case-insensitively when
+    ``PACS_AE_CASE_SENSITIVE`` is off. Rejections are logged with the reason."""
+    assoc = event.assoc
+    rq = assoc.requestor.primitive
+    calling, called = _norm_ae(rq.calling_ae_title), _norm_ae(rq.called_ae_title)
+    reason, diag = None, 0
+    if config.require_called_ae() and called != _norm_ae(config.ae_title()):
+        reason, diag = f"called AE {called!r} is not {config.ae_title()!r}", 0x07
+    elif config.require_known_peers():
+        known = {_norm_ae(n["ae_title"]) for n in nodes.list_nodes(kind="dimse", active_only=True)
+                 if n.get("ae_title")}
+        if calling not in known:
+            reason, diag = f"calling AE {calling!r} is not a registered node", 0x03
+    if not reason:
+        _prefer_uncompressed_for_cget(assoc, rq)
         return
-    try:
-        assoc.send_n_event_report(ds, 1 if not bad_refs else 2, StorageCommitmentPushModel,
-                                  "1.2.840.10008.1.20.1.1")
-    finally:
-        assoc.release()
-
-
-def _refresh_allowlist(event) -> None:
-    """Before negotiation, load the current allow-list of calling AE titles."""
-    if not config.require_known_peers():
-        event.assoc.ae.require_calling_aet = []
-        return
-    titles = [n["ae_title"] for n in nodes.list_nodes(kind="dimse", active_only=True)
-              if n.get("ae_title")]
-    # An empty list means "accept anyone" to pynetdicom, which is the opposite
-    # of what an empty allow-list should mean.
-    event.assoc.ae.require_calling_aet = titles or ["NO-PEERS-ALLOWED"]
+    if reason:
+        log.warning("association from %s (%s) rejected: %s", calling,
+                    getattr(assoc.requestor, "address", "?"), reason)
+        messages.log(direction="in", protocol="dicom", message_type="A-ASSOCIATE-RJ",
+                     peer=calling, status="rejected", error=reason)
+        assoc.acse.send_reject(0x01, 0x01, diag)
+        # As pynetdicom's own reject path: let the DUL flush the A-ASSOCIATE-RJ
+        # before the server closes the socket (otherwise the peer sees an abort).
+        assoc.kill()
 
 
 # ---------------------------------------------------------------------------
@@ -485,13 +520,66 @@ def _register_private_storage(uid: str) -> None:
         log.debug("private SOP class %s already registered", uid)
 
 
+_NOT_STORAGE = ("1.2.840.10008.1.3.10",  # Media Storage Directory (DICOMDIR)
+                "1.2.840.10008.5.1.1.")  # print management
+
+
+def _extra_standard_storage() -> list[str]:
+    """Standard storage SOP classes in pydicom's dictionary that pynetdicom's
+    AllStoragePresentationContexts does not list (mostly retired)."""
+    from pydicom._uid_dict import UID_dictionary
+    from pynetdicom import AllStoragePresentationContexts
+    have = {cx.abstract_syntax for cx in AllStoragePresentationContexts}
+    out = []
+    for uid, (name, typ, *_rest) in UID_dictionary.items():
+        if (typ == "SOP Class" and "Storage" in name and uid not in have
+                and "Commitment" not in name and not uid.startswith(_NOT_STORAGE)):
+            out.append(uid)
+    return sorted(out)
+
+
+_LOSSY = {"1.2.840.10008.1.2.4.50", "1.2.840.10008.1.2.4.51", "1.2.840.10008.1.2.4.81",
+          "1.2.840.10008.1.2.4.91", "1.2.840.10008.1.2.4.93", "1.2.840.10008.1.2.4.203",
+          "1.2.840.10008.1.2.4.111", "1.2.840.10008.1.2.4.112"}
+
+
+def preferred_storage_syntaxes(syntaxes) -> list[str]:
+    """Order in which we accept transfer syntaxes for storage.
+
+    pynetdicom accepts the first syntax in *our* list that the requestor
+    proposed. Devices often propose several in one presentation context
+    ("JPEG Lossless, Explicit LE, Implicit LE"); accepting Implicit VR first
+    would force the device to decompress — which many cannot, so the store
+    fails — and would discard the compression it already did. So: lossless
+    compressed, then lossy compressed (a device proposes lossy because its
+    data is lossy), then Explicit LE, Implicit LE, the rest."""
+    from pydicom.uid import UID
+    def rank(ts: str) -> tuple[int, int]:
+        u = UID(ts)
+        if u.is_compressed and ts not in _LOSSY:
+            group = 0
+        elif u.is_compressed:
+            group = 1
+        elif ts == "1.2.840.10008.1.2.1":
+            group = 2
+        elif ts == "1.2.840.10008.1.2":
+            group = 3
+        else:
+            group = 4
+        return group, list(syntaxes).index(ts)
+    return sorted(syntaxes, key=rank)
+
+
 class DimseServer:
     def __init__(self, *, ae_title: Optional[str] = None, bind: Optional[str] = None,
-                 port: Optional[int] = None) -> None:
+                 port: Optional[int] = None, tls_port: Optional[int] = None) -> None:
         self.ae_title = ae_title or config.ae_title()
         self.bind = bind or config.dimse_bind()
         self.port = port if port is not None else config.dimse_port()
+        cfg_tls = config.dimse_tls_port()
+        self.tls_port = tls_port if tls_port is not None else (cfg_tls or None)
         self._server = None
+        self._tls_server = None
 
     def _ae(self):
         from pynetdicom import (AE, ALL_TRANSFER_SYNTAXES, AllStoragePresentationContexts,
@@ -510,12 +598,17 @@ class DimseServer:
         t = config.network_timeout()
         ae.acse_timeout = ae.dimse_timeout = ae.network_timeout = t
         ae.maximum_associations = settings.env_int("PACS_MAX_ASSOCIATIONS", 32)
-        ae.require_called_aet = config.require_called_ae()
+        ae.maximum_pdu_size = config.max_pdu()
+        # AE titles are checked in check_association (trimmed, optional
+        # case-insensitivity, logged rejections) instead of by pynetdicom.
+        ae.require_called_aet = False
+        ae.require_calling_aet = []
         ae.add_supported_context(Verification)
+        storage_ts = preferred_storage_syntaxes(ALL_TRANSFER_SYNTAXES)
         for cx in AllStoragePresentationContexts:
             # scp_role=True lets a C-GET requestor act as Storage SCP on this
             # association; scu_role keeps ordinary C-STORE working.
-            ae.add_supported_context(cx.abstract_syntax, ALL_TRANSFER_SYNTAXES,
+            ae.add_supported_context(cx.abstract_syntax, storage_ts,
                                      scu_role=True, scp_role=True)
         for sop in (PatientRootQueryRetrieveInformationModelFind,
                     StudyRootQueryRetrieveInformationModelFind,
@@ -528,14 +621,21 @@ class DimseServer:
         ae.add_supported_context(StorageCommitmentPushModel, scu_role=True, scp_role=True)
         # Vendor-private storage SOP classes (e.g. scanner raw data) that some
         # devices push alongside the images.
+        # Storage classes pynetdicom omits: retired ones devices still send
+        # (Philips/GE ultrasound use the retired US and US Multi-frame
+        # classes, older NM/XA biplane) and newer non-image classes.
+        for uid in _extra_standard_storage():
+            _register_private_storage(uid)
+            ae.add_supported_context(uid, storage_ts, scu_role=True, scp_role=True)
         for uid in config.extra_sop_classes():
             _register_private_storage(uid)
-            ae.add_supported_context(uid, ALL_TRANSFER_SYNTAXES, scu_role=True, scp_role=True)
+            ae.add_supported_context(uid, storage_ts, scu_role=True, scp_role=True)
+        from pynetdicom import _config as pyn_config
         if config.accept_any_storage():
-            from pynetdicom import _config as pyn_config
             pyn_config.UNRESTRICTED_STORAGE_SERVICE = True
+        pyn_config.STORE_RECV_CHUNKED_DATASET = config.store_chunked()
         handlers = [
-            (evt.EVT_CONN_OPEN, _refresh_allowlist),
+            (evt.EVT_REQUESTED, check_association),
             (evt.EVT_C_ECHO, handle_echo),
             (evt.EVT_C_STORE, handle_store),
             (evt.EVT_C_FIND, handle_find),
@@ -554,6 +654,8 @@ class DimseServer:
             return None
         import ssl
         ctx = ssl.create_default_context(ssl.Purpose.CLIENT_AUTH)
+        # DICOM TLS profiles (PS3.15 B.12, BCP 195): TLS 1.2 or later only.
+        ctx.minimum_version = ssl.TLSVersion.TLSv1_2
         ctx.load_cert_chain(cert, key)
         ca = settings.env("PACS_DIMSE_TLS_CA", "")
         if ca:
@@ -562,17 +664,36 @@ class DimseServer:
         return ctx
 
     def start(self) -> "DimseServer":
+        from pacs import stgcmt
         ae, handlers = self._ae()
-        self._server = ae.start_server((self.bind, self.port), block=False,
-                                       evt_handlers=handlers, ssl_context=self._ssl_context())
+        ssl_ctx = self._ssl_context()
+        if ssl_ctx is not None and self.tls_port is not None:
+            # Plain DICOM on the main port, TLS on its own (2762) port, as
+            # vendors configure it.
+            self._server = ae.start_server((self.bind, self.port), block=False,
+                                           evt_handlers=handlers)
+            self._tls_server = ae.start_server((self.bind, self.tls_port), block=False,
+                                               evt_handlers=handlers, ssl_context=ssl_ctx)
+            self.tls_port = self._tls_server.server_address[1]
+        else:
+            self._server = ae.start_server((self.bind, self.port), block=False,
+                                           evt_handlers=handlers, ssl_context=ssl_ctx)
+            if ssl_ctx is not None:
+                self.tls_port = None
         self.port = self._server.server_address[1]
-        log.info("DICOM SCP %s listening on %s:%d", self.ae_title, self.bind, self.port)
+        stgcmt.start_worker()
+        log.info("DICOM SCP %s listening on %s:%d%s", self.ae_title, self.bind, self.port,
+                 f" (TLS on {self.tls_port})" if self._tls_server else
+                 (" (TLS)" if ssl_ctx is not None else ""))
         return self
 
     def stop(self) -> None:
-        if self._server is not None:
-            self._server.shutdown()
-            self._server = None
+        from pacs import stgcmt
+        for srv in (self._server, self._tls_server):
+            if srv is not None:
+                srv.shutdown()
+        self._server = self._tls_server = None
+        stgcmt.stop_worker()
 
     @property
     def running(self) -> bool:
@@ -601,4 +722,7 @@ def status() -> dict[str, Any]:
     return {"enabled": config.dimse_enabled(), "running": bool(_server and _server.running),
             "ae_title": config.ae_title(),
             "port": _server.port if _server else config.dimse_port(),
+            "tls_port": (_server.tls_port if _server and _server._tls_server
+                         else config.dimse_tls_port() or None),
+            "max_pdu": config.max_pdu(),
             "require_known_peers": config.require_known_peers()}

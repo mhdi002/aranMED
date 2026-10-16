@@ -82,3 +82,47 @@ def default_charset() -> str:
     """Character set assumed for text in objects that do not declare one
     (older local modalities): tried after UTF-8 when decoding fails."""
     return s.env("PACS_FALLBACK_CHARSET", "cp1256")
+
+
+def max_pdu() -> int:
+    """Largest PDU we accept (0 = unlimited). pynetdicom's 16 KB default
+    makes large studies slow; peers' own limits are always honoured."""
+    return max(0, s.env_int("PACS_MAX_PDU", 0))
+
+
+def store_chunked() -> bool:
+    """Write incoming C-STORE data sets straight to disk instead of memory,
+    so multi-hundred-MB enhanced/tomosynthesis objects don't exhaust RAM."""
+    return s.env_bool("PACS_STORE_CHUNKED", True)
+
+
+def ae_case_sensitive() -> bool:
+    """AE titles are case-sensitive in DICOM; some sites configure devices
+    inconsistently. False matches calling/move-destination AEs ignoring case."""
+    return s.env_bool("PACS_AE_CASE_SENSITIVE", True)
+
+
+def dimse_tls_port() -> int:
+    """Separate DICOM TLS listener (PS3.15 B.12 recommends 2762); 0 = off,
+    in which case a configured certificate turns the main port into TLS."""
+    return s.env_int("PACS_DIMSE_TLS_PORT", 0)
+
+
+def stgcmt_same_assoc_sec() -> float:
+    """How long the requesting association may stay open for the Storage
+    Commitment report to be sent on it (nodes with stgcmt_mode same/auto)."""
+    return s.env_float("PACS_STGCMT_SAME_ASSOC_SEC", 2.0)
+
+
+def stgcmt_max_attempts() -> int:
+    return s.env_int("PACS_STGCMT_MAX_ATTEMPTS", 10)
+
+
+def node_max_pdu(node: dict | None) -> int:
+    """Max PDU we advertise when we open an association to *node*: its own
+    setting (some old devices mishandle 'unlimited'), else PACS_MAX_PDU."""
+    v = (node or {}).get("max_pdu")
+    try:
+        return max(0, int(v)) if v not in (None, "") else max_pdu()
+    except (TypeError, ValueError):
+        return max_pdu()

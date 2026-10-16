@@ -27,6 +27,7 @@ from typing import Optional
 
 from pacs import config
 
+_CHUNK = 1 << 20
 _UID = re.compile(r"^[0-9]+(\.[0-9]+)*$")
 
 
@@ -37,6 +38,11 @@ def valid_uid(uid: Optional[str]) -> bool:
 class Storage:
     def put(self, study: str, series: str, sop: str, data: bytes) -> tuple[str, str, int]:
         raise NotImplementedError
+
+    def put_file(self, study: str, series: str, sop: str, src: Path) -> tuple[str, str, int]:
+        """Store a file already on disk (large C-STORE payloads) without
+        loading it into memory. Backends without a streaming path read it."""
+        return self.put(study, series, sop, Path(src).read_bytes())
 
     def get(self, rel_path: str) -> bytes:
         raise NotImplementedError
@@ -64,17 +70,24 @@ class FileStorage(Storage):
             raise ValueError("path escapes storage root")
         return p
 
-    def put(self, study: str, series: str, sop: str, data: bytes) -> tuple[str, str, int]:
+    def _target(self, study: str, series: str, sop: str) -> tuple[str, Path]:
         for uid in (study, series, sop):
             if not valid_uid(uid):
                 raise ValueError(f"invalid DICOM UID: {uid!r}")
         rel = f"{study}/{series}/{sop}.dcm"
         dest = self._abs(rel)
         dest.parent.mkdir(parents=True, exist_ok=True)
+        return rel, dest
+
+    def _write(self, dest: Path, chunks) -> tuple[str, int]:
         fd, tmp = tempfile.mkstemp(dir=dest.parent, prefix=".incoming-")
+        h, size = hashlib.sha256(), 0
         try:
             with os.fdopen(fd, "wb") as f:
-                f.write(data)
+                for chunk in chunks:
+                    h.update(chunk)
+                    size += len(chunk)
+                    f.write(chunk)
                 f.flush()
                 os.fsync(f.fileno())
             os.replace(tmp, dest)
@@ -84,7 +97,18 @@ class FileStorage(Storage):
             except OSError:
                 pass
             raise
-        return rel, hashlib.sha256(data).hexdigest(), len(data)
+        return h.hexdigest(), size
+
+    def put(self, study: str, series: str, sop: str, data: bytes) -> tuple[str, str, int]:
+        rel, dest = self._target(study, series, sop)
+        digest, size = self._write(dest, [data])
+        return rel, digest, size
+
+    def put_file(self, study: str, series: str, sop: str, src: Path) -> tuple[str, str, int]:
+        rel, dest = self._target(study, series, sop)
+        with open(src, "rb") as f:
+            digest, size = self._write(dest, iter(lambda: f.read(_CHUNK), b""))
+        return rel, digest, size
 
     def get(self, rel_path: str) -> bytes:
         return self._abs(rel_path).read_bytes()
@@ -120,3 +144,11 @@ def set_storage(s: Storage) -> None:
 
 def sha256(data: bytes) -> str:
     return hashlib.sha256(data).hexdigest()
+
+
+def sha256_file(path: Path) -> str:
+    h = hashlib.sha256()
+    with open(path, "rb") as f:
+        for chunk in iter(lambda: f.read(_CHUNK), b""):
+            h.update(chunk)
+    return h.hexdigest()

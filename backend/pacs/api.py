@@ -337,6 +337,9 @@ class NodeIn(BaseModel):
     tls_key_env: Optional[str] = None
     prefer_cget: bool = False
     charset: Optional[str] = None
+    max_pdu: Optional[int] = None
+    stgcmt_mode: Optional[str] = None
+    name_romanize: bool = False
 
 
 @router.get("/nodes")
@@ -513,6 +516,24 @@ def patch_worklist(wid: str, body: WorklistPatch, request: Request, p: dict = WR
 @router.get("/mpps")
 def list_mpps(p: dict = READ) -> dict:
     return {"items": worklist.list_mpps()}
+
+
+@router.get("/stgcmt")
+def list_storage_commitments(status: Optional[str] = None, p: dict = READ) -> dict:
+    """Storage Commitment transactions and whether their reports reached the
+    modality (pending / reported / failed)."""
+    from pacs import stgcmt
+    return {**stgcmt.summary(), "items": stgcmt.list_transactions(200, status)}
+
+
+@router.post("/stgcmt/{transaction_uid}/retry")
+def retry_storage_commitment(transaction_uid: str, p: dict = ADMIN) -> dict:
+    from pacs import stgcmt
+    t = stgcmt.get(transaction_uid)
+    if not t:
+        raise HTTPException(404, "unknown transaction")
+    stgcmt.record(transaction_uid, t["calling_ae"], [tuple(r) for r in t["refs"]])
+    return {"delivered": stgcmt.deliver(transaction_uid), "transaction": stgcmt.get(transaction_uid)}
 
 
 # ---------------------------------------------------------------- status

@@ -6,7 +6,10 @@ import { Badge, Button, Card, CardHead, ConfirmModal, Label, Modal, Select, Text
 
 const BLANK = { name: "", kind: "dimse", ae_title: "", host: "", port: 104, base_url: "", auth_env: "",
                 facility_oid: "", allow_store: true, allow_query: true, allow_retrieve: true,
-                is_move_destination: true, federate: false, active: true };
+                is_move_destination: true, federate: false, active: true,
+                charset: "", max_pdu: "", stgcmt_mode: "new", name_romanize: false, tls: false,
+                prefer_cget: false };
+const CHARSETS = ["", "ISO_IR 192", "ISO_IR 100", "ISO_IR 6", "ISO_IR 127", "ISO_IR 144", "ISO 2022 IR 87"];
 
 export default function PacsNodesView() {
   const { t } = useT();
@@ -44,7 +47,9 @@ export default function PacsNodesView() {
   async function save(e) {
     e.preventDefault();
     try {
-      const body = { ...form, port: form.port ? Number(form.port) : null };
+      const body = { ...form, port: form.port ? Number(form.port) : null,
+                     max_pdu: form.max_pdu === "" || form.max_pdu == null ? null : Number(form.max_pdu),
+                     charset: form.charset || null };
       ["id", "created_at", "updated_at", "last_echo_at", "last_echo_ok", "has_credentials"].forEach((k) => delete body[k]);
       await pacsApi.saveNode(body, edit === "new" ? null : edit, token);
       setEdit(null); load();
@@ -172,6 +177,23 @@ export default function PacsNodesView() {
               <div><Label>{t("nodes.ae")}</Label><TextInput value={form.ae_title} onChange={f("ae_title")} maxLength={16} required /></div>
               <div><Label>{t("nodes.host")}</Label><TextInput value={form.host} onChange={f("host")} required /></div>
               <div><Label>{t("nodes.port")}</Label><TextInput type="number" value={form.port || ""} onChange={f("port")} required /></div>
+              <div><Label>{t("nodes.charset")}</Label>
+                <Select value={form.charset || ""} onChange={f("charset")} data-testid="node-charset">
+                  {CHARSETS.map((c) => <option key={c} value={c}>{c || t("nodes.charsetDefault")}</option>)}
+                </Select></div>
+              <div><Label>{t("nodes.maxPdu")}</Label>
+                <TextInput type="number" min="0" value={form.max_pdu ?? ""} onChange={f("max_pdu")} placeholder="0" /></div>
+              <div><Label>{t("nodes.stgcmt")}</Label>
+                <Select value={form.stgcmt_mode || "new"} onChange={f("stgcmt_mode")} data-testid="node-stgcmt">
+                  <option value="new">{t("nodes.stgcmt.new")}</option>
+                  <option value="same">{t("nodes.stgcmt.same")}</option>
+                  <option value="auto">{t("nodes.stgcmt.auto")}</option>
+                </Select></div>
+              <div className="checks">
+                <label><input type="checkbox" checked={!!form.name_romanize} onChange={f("name_romanize")} /> {t("nodes.romanize")}</label>
+                <label><input type="checkbox" checked={!!form.tls} onChange={f("tls")} /> TLS</label>
+                <label><input type="checkbox" checked={!!form.prefer_cget} onChange={f("prefer_cget")} /> C-GET</label>
+              </div>
             </>
           ) : (
             <div className="span-2"><Label>{t("nodes.url")}</Label><TextInput value={form.base_url} onChange={f("base_url")} placeholder="https://pacs.example/dicom-web" required /></div>

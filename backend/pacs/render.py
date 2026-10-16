@@ -330,19 +330,43 @@ VIDEO_MIME = {
 }
 
 
+_H264 = ("1.2.840.10008.1.2.4.102", "1.2.840.10008.1.2.4.103", "1.2.840.10008.1.2.4.104",
+         "1.2.840.10008.1.2.4.105", "1.2.840.10008.1.2.4.106")
+_HEVC = ("1.2.840.10008.1.2.4.107", "1.2.840.10008.1.2.4.108")
+
+
+def _remux_mp4(data: bytes, fmt: str) -> Optional[bytes]:
+    """Wrap an H.264/HEVC elementary stream (what DICOM encapsulates) in a
+    fragmented MP4 container browsers can play. Stream copy only, no
+    re-encoding; None when ffmpeg is unavailable or fails."""
+    import shutil
+    import subprocess
+    exe = shutil.which("ffmpeg")
+    if not exe:
+        return None
+    try:
+        out = subprocess.run(
+            [exe, "-hide_banner", "-loglevel", "error", "-f", fmt, "-i", "pipe:0", "-c", "copy",
+             "-movflags", "frag_keyframe+empty_moov", "-f", "mp4", "pipe:1"],
+            input=data, capture_output=True, timeout=120, check=False)
+    except (OSError, subprocess.SubprocessError):
+        return None
+    return out.stdout if out.returncode == 0 and out.stdout else None
+
+
 def video_stream(ds) -> tuple[bytes, str]:
-    """The encoded video bitstream (MPEG-2 / H.264 / HEVC) and its MIME type."""
+    """The video (MPEG-2 / H.264 / HEVC) and its MIME type. H.264/HEVC
+    elementary streams are remuxed to MP4 when ffmpeg is present; otherwise
+    they are returned raw with an honest ``video/h264`` / ``video/h265`` type."""
     if not is_video(ds):
         raise RenderError("not a video object")
     from pydicom.encaps import generate_fragments
     data = b"".join(generate_fragments(ds.PixelData))
     ts = transfer_syntax(ds)
-    mime = VIDEO_MIME.get(ts) or ("video/mp4" if ts.startswith(("1.2.840.10008.1.2.4.102",
-                                                                  "1.2.840.10008.1.2.4.103",
-                                                                  "1.2.840.10008.1.2.4.104",
-                                                                  "1.2.840.10008.1.2.4.105",
-                                                                  "1.2.840.10008.1.2.4.106",
-                                                                  "1.2.840.10008.1.2.4.107",
-                                                                  "1.2.840.10008.1.2.4.108"))
-                                  else "application/octet-stream")
-    return data, mime
+    if ts in VIDEO_MIME:
+        return data, VIDEO_MIME[ts]
+    for prefixes, fmt, raw_mime in ((_H264, "h264", "video/h264"), (_HEVC, "hevc", "video/h265")):
+        if ts in prefixes:
+            mp4 = _remux_mp4(data, fmt)
+            return (mp4, "video/mp4") if mp4 else (data, raw_mime)
+    return data, "application/octet-stream"

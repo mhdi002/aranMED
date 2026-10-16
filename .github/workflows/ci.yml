@@ -79,6 +79,29 @@ jobs:
         if: always()
         with: { name: postgres-reports, path: "pytest-*.xml" }
 
+  interop-devices:
+    # AranMed's DICOM services against independent implementations (dcmtk,
+    # Orthanc) emulating vendor device profiles, plus a real-file corpus.
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: { python-version: "${{ env.PYTHON_VERSION }}", cache: pip }
+      - run: sudo apt-get update && sudo apt-get install -y --no-install-recommends dcmtk orthanc ffmpeg libsndfile1
+      - run: |
+          pip install torch torchaudio --index-url "$TORCH_INDEX"
+          pip install -r requirements-dev.txt
+      - name: Real-file corpus (pydicom-data)
+        run: git clone --depth 1 https://github.com/pydicom/pydicom-data.git /tmp/pydicom-data
+      - name: Interop suite
+        env:
+          DICOM_CORPUS_DIR: /tmp/pydicom-data/data_store/data
+          INTEROP_MATRIX_OUT: device-compatibility.md
+        run: pytest tests/interop_devices --junitxml=pytest-interop-devices.xml
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with: { name: interop-reports, path: "pytest-interop-devices.xml\ndevice-compatibility.md" }
+
   e2e:
     runs-on: ubuntu-latest
     steps:

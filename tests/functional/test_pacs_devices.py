@@ -328,7 +328,9 @@ def test_sr_pdf_video_and_private_objects(pacs, monkeypatch):
     vid = stored(pacs["port"], vid_src)
     r = c.get(url(vid, "/video"), headers=h)
     from pydicom.encaps import generate_fragments
-    assert r.status_code == 200 and r.headers["content-type"] == "video/mp4"
+    # The synthetic H.264 bytes are not a decodable stream, so they cannot be
+    # remuxed to MP4: served raw under the honest elementary-stream type.
+    assert r.status_code == 200 and r.headers["content-type"] == "video/h264"
     assert r.content == b"".join(generate_fragments(vid_src.PixelData))
     assert c.get(url(vid, "/rendered"), headers=h).status_code == 406   # not a 500
     assert c.get(url(vid, "/frames/1?normalize=1"), headers=h).status_code == 406

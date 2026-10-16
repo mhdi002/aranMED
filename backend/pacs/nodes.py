@@ -27,9 +27,10 @@ from pacs import schema  # noqa: F401
 FIELDS = ("name", "kind", "ae_title", "host", "port", "base_url", "auth_env", "facility_oid",
           "issuer", "allow_store", "allow_query", "allow_retrieve", "is_move_destination",
           "active", "federate", "tls", "tls_ca_env", "tls_cert_env", "tls_key_env", "prefer_cget",
-          "charset")
+          "charset", "max_pdu", "stgcmt_mode", "name_romanize")
 _BOOL = ("allow_store", "allow_query", "allow_retrieve", "is_move_destination", "active",
-         "federate", "tls", "prefer_cget")
+         "federate", "tls", "prefer_cget", "name_romanize")
+STGCMT_MODES = ("new", "same", "auto")
 
 
 def _out(r) -> Optional[dict]:
@@ -63,10 +64,14 @@ def get(node_id: str) -> Optional[dict]:
 
 
 def by_ae(ae_title: str) -> Optional[dict]:
+    from pacs import config
     ae = (ae_title or "").strip()
+    if not ae:
+        return None
+    col, val = ("ae_title", ae) if config.ae_case_sensitive() else ("UPPER(TRIM(ae_title))", ae.upper())
     with db.connect() as c:
-        return _out(c.execute("SELECT * FROM pacs_nodes WHERE ae_title=? AND active=1 "
-                              "ORDER BY kind='dimse' DESC LIMIT 1", (ae,)).fetchone())
+        return _out(c.execute(f"SELECT * FROM pacs_nodes WHERE {col}=? AND active=1 "
+                              "ORDER BY kind='dimse' DESC LIMIT 1", (val,)).fetchone())
 
 
 def save(data: dict[str, Any], node_id: Optional[str] = None) -> dict:
@@ -79,6 +84,15 @@ def save(data: dict[str, Any], node_id: Optional[str] = None) -> dict:
         raise ValueError("a DIMSE node needs ae_title, host and port")
     if kind in ("dicomweb", "orthanc") and not data.get("base_url"):
         raise ValueError(f"a {kind} node needs base_url")
+    if data.get("stgcmt_mode") and data["stgcmt_mode"] not in STGCMT_MODES:
+        raise ValueError("stgcmt_mode must be new, same or auto")
+    if data.get("max_pdu") not in (None, ""):
+        try:
+            data = {**data, "max_pdu": max(0, int(data["max_pdu"]))}
+        except (TypeError, ValueError):
+            raise ValueError("max_pdu must be a number of bytes (0 = unlimited)") from None
+    if data.get("ae_title"):
+        data = {**data, "ae_title": str(data["ae_title"]).strip()[:16]}
     values = {k: data[k] for k in FIELDS if k in data}
     for k in _BOOL:
         if k in values:
